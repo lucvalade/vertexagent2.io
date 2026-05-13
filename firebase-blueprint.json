@@ -7,12 +7,43 @@
       "properties": {
         "email": { "type": "string" },
         "name": { "type": "string" },
-        "brokerageName": { "type": "string" },
+        "brokerage": { "type": "string" },
         "role": { "type": "string", "enum": ["AGENT", "ADMIN"] },
+        "defaultVoiceId": { "type": "string" },
         "createdAt": { "type": "number" },
         "updatedAt": { "type": "number" }
       },
       "required": ["email", "name", "role", "createdAt", "updatedAt"]
+    },
+    "Voice": {
+      "title": "Voice",
+      "description": "AI Voice model",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["Active", "Inactive", "Processing"] },
+        "type": { "type": "string", "enum": ["Cloned", "Synthetic"] },
+        "rating": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "isDefault": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "status", "type"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Invitation to join a brokerage",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "brokerage": { "type": "string" },
+        "inviterId": { "type": "string" },
+        "inviterName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "email", "brokerage", "status"]
     },
     "Listing": {
       "title": "Listing",
@@ -26,6 +57,11 @@
         "province": { "type": "string" },
         "postalCode": { "type": "string" },
         "price": { "type": "number" },
+        "tourDescriptors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of up to 16 features or rooms visitors can ask about"
+        },
         "beds": { "type": "number" },
         "baths": { "type": "number" },
         "sqft": { "type": "number" },
@@ -64,12 +100,57 @@
         "createdAt": { "type": "number" }
       },
       "required": ["name", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A transcript of an AI-agent tour call",
+      "type": "object",
+      "properties": {
+        "property": { "type": "string" },
+        "lang": { "type": "string" },
+        "duration": { "type": "string" },
+        "qs": { "type": "number" },
+        "date": { "type": "number" },
+        "transcript": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "speaker": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["property", "lang", "date", "transcript"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "maintenanceMode": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["maintenanceMode"]
     }
   },
   "firestore": {
+    "settings/{settingId}": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Global application configuration"
+    },
     "users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "Agent profiles"
+    },
+    "users/{userId}/voices/{voiceId}": {
+      "schema": { "$ref": "#/entities/Voice" },
+      "description": "Custom voice models for the agent"
+    },
+    "invitations/{inviteId}": {
+      "schema": { "$ref": "#/entities/Invitation" },
+      "description": "Team invitations"
     },
     "listings/{listingId}": {
       "schema": { "$ref": "#/entities/Listing" },
@@ -78,6 +159,10 @@
     "listings/{listingId}/leads/{leadId}": {
       "schema": { "$ref": "#/entities/Lead" },
       "description": "Leads generated for a specific listing"
+    },
+    "conversations/{convoId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Conversation transcripts and call analytics"
     }
   }
 }

@@ -3,6 +3,8 @@ import { ArrowLeft, Save, User, Mail, Building2, ExternalLink, Shield, Key, Data
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +20,17 @@ export default function EditMember() {
   const { memberId } = useParams();
   const navigate = useNavigate();
 
+  const DUMMY_AGENTS = [
+    { id: '1', name: 'Luc Valade', email: 'luc@vertexrealty.ca', role: 'ADMIN', status: 'Active', listings: 12 },
+    { id: '2', name: 'Sarah Jenkins', email: 'sarah@vertexrealty.ca', role: 'AGENT', status: 'Active', listings: 8 },
+    { id: '3', name: 'Michael Chen', email: 'mchen@vertexrealty.ca', role: 'AGENT', status: 'Pending', listings: 0 },
+    { id: '4', name: 'Emma Watson', email: 'emma@vertexrealty.ca', role: 'AGENT', status: 'Inactive', listings: 5 },
+    { id: '5', name: 'David Miller', email: 'dmiller@vertexrealty.ca', role: 'AGENT', status: 'Active', listings: 15 },
+  ];
+
   const [formData, setFormData] = useState({
-    name: "Sarah Jenkins",
-    email: "sarah.j@vertexagent.io",
+    name: "",
+    email: "",
     office: "Main Office",
     role: "Agent (Standard)"
   });
@@ -33,17 +43,25 @@ export default function EditMember() {
     // Load persisted data if it exists for this member
     if (memberId) {
       const savedMembers = localStorage.getItem('vertex_team_data');
+      let foundMember = null;
+      
       if (savedMembers) {
         const team = JSON.parse(savedMembers);
-        const member = team.find((m: any) => m.id === memberId);
-        if (member) {
-          setFormData({
-            name: member.name,
-            email: member.email,
-            office: member.office || "Main Office",
-            role: member.role || "Agent (Standard)"
-          });
-        }
+        foundMember = team.find((m: any) => m.id === memberId || m.name.toLowerCase().replace(' ', '-') === memberId);
+      }
+      
+      // Fallback to dummy data
+      if (!foundMember) {
+        foundMember = DUMMY_AGENTS.find(m => m.id === memberId || m.name.toLowerCase().replace(' ', '-') === memberId);
+      }
+
+      if (foundMember) {
+        setFormData({
+          name: foundMember.name,
+          email: foundMember.email,
+          office: (foundMember as any).office || "Main Office",
+          role: (foundMember as any).role || "Agent (Standard)"
+        });
       }
     }
   }, [memberId]);
@@ -96,31 +114,44 @@ export default function EditMember() {
 
     setIsSaving(true);
     
-    // Persist to localStorage to simulate a database update
+    // Persist to Firestore if it's a real user, otherwise fallback to localStorage
     try {
-      const savedMembers = localStorage.getItem('vertex_team_data');
-      let team = savedMembers ? JSON.parse(savedMembers) : [
-        { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", active: true, listings: 4 },
-        { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", active: true, listings: 12 },
-        { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", active: true, listings: 8 },
-        { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", active: true, listings: 0 },
-      ];
-
-      const memberIdx = team.findIndex((m: any) => m.id === memberId);
-      const updatedMember = {
-        id: memberId,
-        ...formData,
-        active: true,
-        listings: memberIdx >= 0 ? team[memberIdx].listings : 0
-      };
-
-      if (memberIdx >= 0) {
-        team[memberIdx] = updatedMember;
+      const userRef = doc(db, "users", memberId!);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        await updateDoc(userRef, {
+          name: formData.name,
+          email: formData.email,
+          brokerage: formData.office,
+          role: formData.role
+        });
       } else {
-        team.push(updatedMember);
-      }
+        // Persist to localStorage to simulate a database update for dummy/offline members
+        const savedMembers = localStorage.getItem('vertex_team_data');
+        let team = savedMembers ? JSON.parse(savedMembers) : [
+          { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", active: true, listings: 4 },
+          { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", active: true, listings: 12 },
+          { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", active: true, listings: 8 },
+          { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", active: true, listings: 0 },
+        ];
 
-      localStorage.setItem('vertex_team_data', JSON.stringify(team));
+        const memberIdx = team.findIndex((m: any) => m.id === memberId);
+        const updatedMember = {
+          id: memberId,
+          ...formData,
+          active: true,
+          listings: memberIdx >= 0 ? team[memberIdx].listings : 0
+        };
+
+        if (memberIdx >= 0) {
+          team[memberIdx] = updatedMember;
+        } else {
+          team.push(updatedMember);
+        }
+
+        localStorage.setItem('vertex_team_data', JSON.stringify(team));
+      }
       
       setTimeout(() => {
         setIsSaving(false);
@@ -147,13 +178,6 @@ export default function EditMember() {
             <p className="text-slate-500 mt-1 text-sm font-medium">Update agent details and permissions.</p>
           </div>
         </div>
-        <Button 
-          disabled={isSaving}
-          onClick={handleSave} 
-          className="bg-blue-600 text-white gap-2 font-bold shadow-lg shadow-blue-100"
-        >
-          {isSaving ? "Saving..." : <><Save className="h-4 w-4" /> Save Changes</>}
-        </Button>
       </div>
 
       <div className="bg-white border text-left border-slate-200 rounded-xl p-8 shadow-sm space-y-8">
@@ -246,6 +270,29 @@ export default function EditMember() {
               className="shrink-0 bg-white border-blue-100 text-blue-600 hover:bg-blue-50 font-bold gap-2"
             >
               Manage Integrations <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6 flex justify-center pointer-events-none">
+        <div className="bg-white/95 backdrop-blur-xl border border-slate-200 p-2 rounded-2xl shadow-2xl flex items-center gap-2 max-w-sm w-full pointer-events-auto ring-1 ring-black/5 animate-in fade-in slide-in-from-bottom-8 duration-500">
+          <div className="flex gap-2 w-full">
+            <Button 
+              type="button" 
+              variant="ghost" 
+              className="flex-1 font-bold text-slate-500 h-10 rounded-xl"
+              onClick={() => navigate(-1)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              disabled={isSaving} 
+              className="flex-2 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 font-bold h-10 rounded-xl text-white"
+              onClick={handleSave}
+            >
+              {isSaving ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>

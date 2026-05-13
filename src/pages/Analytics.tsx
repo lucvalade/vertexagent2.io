@@ -93,7 +93,7 @@ export default function Analytics() {
         </Card>
 
         <Dialog>
-          <DialogTrigger render={
+          <DialogTrigger nativeButton={false} render={
             <Card className="hover:shadow-md transition-shadow border-slate-200 cursor-pointer group">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Top Language</CardTitle>
@@ -146,7 +146,7 @@ export default function Analytics() {
         </Dialog>
 
         <Dialog>
-          <DialogTrigger render={
+          <DialogTrigger nativeButton={false} render={
             <Card className="hover:shadow-md transition-shadow border-slate-200 cursor-pointer group">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Lead Conversion</CardTitle>
@@ -216,7 +216,7 @@ export default function Analytics() {
                 <CardDescription>Daily volume of total interactions across all listings</CardDescription>
               </div>
               <Dialog>
-                <DialogTrigger render={
+                <DialogTrigger nativeButton={true} render={
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600">
                     <Info className="h-4 w-4" />
                   </Button>
@@ -264,7 +264,7 @@ export default function Analytics() {
                 <CardDescription>Where your traffic comes from</CardDescription>
               </div>
               <Dialog>
-                <DialogTrigger render={
+                <DialogTrigger nativeButton={true} render={
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600">
                     <Info className="h-4 w-4" />
                   </Button>

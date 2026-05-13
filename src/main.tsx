@@ -31,6 +31,8 @@ import AdminUsers from './pages/admin/AdminUsers.tsx';
 import AdminListings from './pages/admin/AdminListings.tsx';
 
 import Integrations from './pages/Integrations.tsx';
+import Register from './pages/Register.tsx';
+import Login from './pages/Login.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -39,6 +41,8 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<App />}>
             <Route index element={<PublicSite />} />
+            <Route path="register" element={<Register />} />
+            <Route path="login" element={<Login />} />
             <Route path="tour/:listingId" element={<Tour />} />
             <Route path="app" element={<ProtectedLayout />}>
               <Route index element={<Navigate to="overview" replace />} />

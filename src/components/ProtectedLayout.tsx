@@ -1,20 +1,57 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth, loginWithGoogle, logout } from "@/hooks/useAuth";
+import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield } from "lucide-react";
+import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { toast } from "sonner";
 
 export default function ProtectedLayout() {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+
+  useEffect(() => {
+    if (user?.role === 'ADMIN') {
+      const checkMaintenance = async () => {
+        try {
+          const docRef = doc(db, "settings", "global");
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setMaintenanceMode(data.maintenanceMode);
+            if (data.maintenanceMode) {
+              toast.warning("Maintenance Mode is currently ACTIVE.", {
+                description: "The system is visible only to admins and authorized personnel.",
+                duration: 10000,
+              });
+            } else {
+              toast.info("Maintenance Mode is currently OFF.", {
+                description: "The system is live to all agents and public tours.",
+              });
+            }
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.GET, "settings/global");
+        }
+      };
+      checkMaintenance();
+    }
+  }, [user?.id, user?.role]);
+
+  useEffect(() => {
+    console.log("ProtectedLayout State:", { user: !!user, loading });
+  }, [user, loading]);
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">Loading VertexAgent.io...</p>
+      <div className="flex flex-col h-screen w-full items-center justify-center gap-4">
+        <p className="text-muted-foreground animate-pulse font-medium text-lg">Loading VertexAgent Dashboard...</p>
+        <div className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">Checking authentication state...</div>
       </div>
     );
   }
@@ -24,7 +61,7 @@ export default function ProtectedLayout() {
   }
 
   const navLinks = [
-    { label: "Overview", icon: LayoutDashboard, path: "/app/overview" },
+    { label: "Dashboard", icon: LayoutDashboard, path: "/app/overview" },
     { label: "Listings", icon: List, path: "/app/listings" },
     { label: "Leads", icon: Users, path: "/app/leads" },
     { label: "Conversations", icon: MessageSquare, path: "/app/conversations" },
@@ -153,6 +190,17 @@ export default function ProtectedLayout() {
 
         <main className="flex-1 p-4 md:p-8">
           <div className="mx-auto max-w-5xl">
+            {user?.role === 'ADMIN' && maintenanceMode && (
+              <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-2">
+                <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold">System in Maintenance Mode</p>
+                  <p className="text-xs text-amber-700">All public tours and agent portals are restricted. Toggle this in <Link to="/app/settings" className="underline font-bold">Admin Settings</Link>.</p>
+                </div>
+              </div>
+            )}
             <Outlet />
           </div>
         </main>

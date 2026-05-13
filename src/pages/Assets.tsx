@@ -21,7 +21,7 @@ import {
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { getUserListings, Listing, deleteListingOp } from "@/lib/api";
+import { getUserListings, Listing, deleteListingOp, updateListing } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -119,23 +119,31 @@ export default function Assets() {
     if (listing.images && listing.images.length > 0) {
       listing.images.forEach((img, i) => {
         const url = typeof img === 'string' ? img : img.url;
+        let name = "";
+        if (typeof img === 'object' && img.name) {
+          name = img.name;
+        } else {
+          const fileName = url.split('/').pop()?.split('?')[0] || `photo-${i + 1}.jpg`;
+          name = i === 0 ? `Main_Photo_${fileName}` : fileName;
+        }
+
         assets.push({
-          id: `img-${listing.id}-${i}-${Math.random()}`,
-          name: typeof img === 'string' ? (i === 0 ? "Main_Hero_Photo.jpg" : `Interior_View_${i}.jpg`) : img.name,
+          id: `img-${listing.id}-${i}`, // Stable ID without Math.random()
+          name: name,
           type: 'image',
           url: url,
-          size: "4.2 MB",
-          date: new Date(Date.now() - 86400000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          size: `${(Math.random() * 5 + 1).toFixed(1)} MB`,
+          date: new Date(listing.updatedAt || listing.createdAt || Date.now()).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         });
       });
     }
     assets.push({
-      id: `fp-${listing.id}-${Math.random()}`,
-      name: `Assets for ${listing.address.split(',')[0]}_Level_1_Floorplan.pdf`,
+      id: `fp-${listing.id}`,
+      name: `${listing.address.split(',')[0].replace(/\s+/g, '_')}_Floorplan.pdf`,
       type: 'floorplan',
       url: "https://example.com/floorplan.pdf",
       size: "1.8 MB",
-      date: new Date(Date.now() - 172800000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      date: new Date(listing.createdAt || Date.now()).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     });
     return assets;
   };
@@ -154,26 +162,69 @@ export default function Assets() {
     }
   };
 
-  const handleDeleteAsset = () => {
+  const handleDeleteAsset = async () => {
     if (!selectedListing || !assetToDelete) return;
-    setListingAssetsMap(prev => ({
-      ...prev,
-      [selectedListing.id]: prev[selectedListing.id].filter(a => a.id !== assetToDelete.id)
-    }));
-    setAssetToDelete(null);
-    toast.success("Asset deleted");
+    
+    const updatedImages = (selectedListing.images || []).filter(img => {
+      const url = typeof img === 'string' ? img : img.url;
+      return url !== assetToDelete.url;
+    });
+
+    try {
+      await updateListing(selectedListing.id, { images: updatedImages });
+      
+      setListingAssetsMap(prev => ({
+        ...prev,
+        [selectedListing.id]: prev[selectedListing.id].filter(a => a.id !== assetToDelete.id)
+      }));
+      
+      setListings(prev => prev.map(l => 
+        l.id === selectedListing.id ? { ...l, images: updatedImages } : l
+      ));
+
+      setSelectedListing(prev => prev ? { ...prev, images: updatedImages } : null);
+      
+      setAssetToDelete(null);
+      toast.success("Asset deleted and listing updated");
+    } catch (err) {
+      console.error("Delete asset error:", err);
+      toast.error("Failed to delete asset from listing");
+    }
   };
 
-  const handleRenameAsset = () => {
+  const handleRenameAsset = async () => {
     if (!selectedListing || !activeAsset) return;
-    setListingAssetsMap(prev => ({
-      ...prev,
-      [selectedListing.id]: prev[selectedListing.id].map(a => 
-        a.id === activeAsset.id ? { ...a, name: newName } : a
-      )
-    }));
-    setIsRenameOpen(false);
-    toast.success("Asset renamed");
+    
+    const updatedImages = (selectedListing.images || []).map(img => {
+      const url = typeof img === 'string' ? img : img.url;
+      if (url === activeAsset.url) {
+        return { url, name: newName };
+      }
+      return img;
+    });
+
+    try {
+      await updateListing(selectedListing.id, { images: updatedImages });
+      
+      setListingAssetsMap(prev => ({
+        ...prev,
+        [selectedListing.id]: prev[selectedListing.id].map(a => 
+          a.id === activeAsset.id ? { ...a, name: newName } : a
+        )
+      }));
+
+      setListings(prev => prev.map(l => 
+        l.id === selectedListing.id ? { ...l, images: updatedImages } : l
+      ));
+
+      setSelectedListing(prev => prev ? { ...prev, images: updatedImages } : null);
+
+      setIsRenameOpen(false);
+      toast.success("Asset renamed and synced to listing");
+    } catch (err) {
+      console.error("Rename asset error:", err);
+      toast.error("Failed to rename asset on listing");
+    }
   };
 
   const handleSimulateUpload = () => {

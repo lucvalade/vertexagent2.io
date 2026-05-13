@@ -1,6 +1,10 @@
-import { Zap, Plus, ArrowRight, Activity, ToggleLeft, ToggleRight, MoreVertical, Pencil, Trash2, Globe, MessageSquare, Mail as MailIcon, Database } from "lucide-react";
-import { useState } from "react";
+import { Zap, Plus, ArrowRight, Activity, ToggleLeft, ToggleRight, MoreVertical, Pencil, Trash2, Globe, MessageSquare, Mail as MailIcon, Database, ExternalLink, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +25,9 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export default function Automations() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [integrations, setIntegrations] = useState<any>({});
   const [automations, setAutomations] = useState([
     { id: 1, name: "Send Lead to HubSpot", trigger: "On Lead Captured", action: "Create Contact in CRM", active: true, type: "crm" },
     { id: 2, name: "Text Listing Agent", trigger: "On Hot Lead (Urgent)", action: "Send SMS via Twilio", active: true, type: "sms" },
@@ -28,9 +35,20 @@ export default function Automations() {
     { id: 4, name: "Zapier generic ping", trigger: "On Any Interaction End", action: "Webhook POST", active: true, type: "webhook" },
   ]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    return onSnapshot(doc(db, "users", user.id), (snap) => {
+      if (snap.exists()) {
+        setIntegrations(snap.data()?.integrations || {});
+      }
+    });
+  }, [user?.id]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAuto, setEditingAuto] = useState<any>(null);
   const [formData, setFormData] = useState({ name: "", trigger: "On Lead Captured", action: "" });
+
+  const isHubSpotConnected = integrations.hubspot === true;
 
   const handleOpenModal = (auto?: any) => {
     if (auto) {
@@ -159,8 +177,32 @@ export default function Automations() {
               Configure the trigger and action for this system automation.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
+            <div className="space-y-4 py-4">
+              {formData.name.toLowerCase().includes("hubspot") && !isHubSpotConnected && (
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 flex items-start gap-2 mb-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-amber-900">HubSpot Not Connected</p>
+                    <p className="text-[10px] text-amber-700 leading-relaxed">
+                      You are editing a HubSpot workflow but HubSpot is not connected in your CRM Integrations.
+                    </p>
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0 text-[10px] text-blue-600 font-black uppercase tracking-widest flex items-center gap-1"
+                      onClick={() => navigate("/app/integrations")}
+                    >
+                      Connect in Integrations <ExternalLink className="h-2 w-2" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {formData.name.toLowerCase().includes("hubspot") && isHubSpotConnected && (
+                <div className="bg-green-50 border border-green-100 rounded-lg p-3 flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <p className="text-xs font-bold text-green-900">HubSpot Connected & Verified</p>
+                </div>
+              )}
+              <div className="space-y-2">
               <Label className="font-bold text-slate-700">Workflow Name</Label>
               <Input 
                 value={formData.name} 

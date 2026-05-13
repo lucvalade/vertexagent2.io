@@ -6,11 +6,59 @@ import * as dotenv from "dotenv";
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
+import nodemailer from "nodemailer";
 
 const dotEnvResult = dotenv.config();
 console.log("[DotEnv] Result:", dotEnvResult.error ? "No .env file found" : "Loaded .env file");
 if (dotEnvResult.parsed) {
   console.log("[DotEnv] Keys loaded:", Object.keys(dotEnvResult.parsed));
+}
+
+// SMTP Transporter setup
+let transporter: nodemailer.Transporter | null = null;
+
+function getTransporter() {
+  if (!transporter) {
+    const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
+    const port = 587; // Explicitly use 587 for Hostinger/STARTTLS
+    const user = process.env.SMTP_USER || 'sales@vertexagent.io';
+    const pass = process.env.SMTP_PASS;
+
+    if (!pass) {
+      console.warn("[SMTP] No SMTP_PASS found in environment. Email sending will fail until configured.");
+      return null;
+    }
+
+    console.log(`[SMTP] Initializing for ${user} via ${host}:${port}`);
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: false, // TLS is upgraded via STARTTLS
+      auth: {
+        user,
+        pass,
+      },
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 30000,
+      debug: true,
+      logger: true,
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      }
+    });
+
+    // Verify connection on startup
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error("[SMTP] Connection verification failed:", error);
+      } else {
+        console.log("[SMTP] Connection verified and ready to send messages.");
+      }
+    });
+  }
+  return transporter;
 }
 
 // Placeholder keys to warn about
@@ -125,6 +173,54 @@ async function startServer() {
       aiConfigured: !!discoveredFrom,
       keySource: discoveredFrom
     });
+  });
+
+  /**
+   * API Route for Sending Emails via SMTP
+   */
+  app.post("/api/send-email", async (req, res) => {
+    const { to, subject, html, text } = req.body;
+
+    if (!to || !subject || (!html && !text)) {
+      return res.status(400).json({ error: "Missing required fields (to, subject, and at least one of html or text)" });
+    }
+
+    try {
+      const mailTransporter = getTransporter();
+      if (!mailTransporter) {
+        return res.status(503).json({ error: "Email service is not configured. Please set SMTP_PASS in your environment." });
+      }
+
+      console.log(`[SMTP] Attempting to send email to ${to} with subject: ${subject}`);
+      
+      const info = await mailTransporter.sendMail({
+        from: `"${process.env.SMTP_FROM_NAME || 'Vertex Agent'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'sales@vertexagent.io'}>`,
+        to,
+        subject,
+        text,
+        html,
+      });
+
+      console.log(`[SMTP] Email success! Response: ${info.response}`);
+      console.log(`[SMTP] MessageId: ${info.messageId}`);
+      console.log(`[SMTP] Accepted: ${info.accepted}`);
+      console.log(`[SMTP] Rejected: ${info.rejected}`);
+      
+      res.json({ 
+        success: true, 
+        messageId: info.messageId, 
+        response: info.response,
+        accepted: info.accepted 
+      });
+    } catch (err: any) {
+      console.error("[SMTP] Full Error Object:", JSON.stringify(err, null, 2));
+      console.error("[SMTP] Error Message:", err.message);
+      res.status(500).json({ 
+        error: `Failed to send email: ${err.message}`, 
+        code: err.code,
+        command: err.command
+      });
+    }
   });
 
   /**

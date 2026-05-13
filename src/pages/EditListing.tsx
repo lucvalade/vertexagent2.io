@@ -5,10 +5,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage } from "@/lib/api";
-import { Loader2, Plus, X, Trash2, ArrowLeft, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, X, Trash2, ArrowLeft, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
+import { db } from "@/lib/firebase";
+import { collection, query, getDocs, doc, getDoc, updateDoc, where } from "firebase/firestore";
 import { GoogleGenAI } from "@google/genai";
 import {
   DropdownMenu,
@@ -36,6 +38,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+interface Voice {
+  id: string;
+  name: string;
+  type: string;
+  isDefault?: boolean;
+}
 
 export default function EditListing() {
   const { user } = useAuth();
@@ -66,6 +75,11 @@ export default function EditListing() {
   const [images, setImages] = useState<ListingImage[]>([]);
   const [newImage, setNewImage] = useState("");
   
+  // Voice State
+  const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
+  const [voiceId, setVoiceId] = useState("");
+  const [voiceName, setVoiceName] = useState("");
+
   // Image Rename State
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
@@ -74,6 +88,21 @@ export default function EditListing() {
   const [talkingPoints, setTalkingPoints] = useState<string[]>([]);
   const [newPoint, setNewPoint] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [tourDescriptors, setTourDescriptors] = useState<string[]>(new Array(16).fill(""));
+
+  // Voice Warning Check
+  useEffect(() => {
+    if (!loading && user && !user.defaultVoiceId) {
+      toast.warning("No default AI voice set", {
+        description: "Set a default voice in the Voice Lab to automatically assign it to your tours.",
+        action: {
+          label: "Go to Voice Lab",
+          onClick: () => navigate("/app/voicelab")
+        },
+        duration: 10000,
+      });
+    }
+  }, [loading, user?.defaultVoiceId]);
 
   useEffect(() => {
     if (isEdit && listingId) {
@@ -81,8 +110,58 @@ export default function EditListing() {
     }
   }, [listingId]);
 
+  const handleVoiceSelect = async (vId: string, vName: string) => {
+    setVoiceId(vId);
+    setVoiceName(vName);
+    
+    if (user?.id) {
+      try {
+        // Propagate to User Profile
+        const userRef = doc(db, "users", user.id);
+        await updateDoc(userRef, { defaultVoiceId: vId === 'none' ? null : vId });
+        
+        // Propagate to Voice collection isDefault flags (optimized)
+        const voicesRef = collection(db, "users", user.id, "voices");
+        const q = query(voicesRef, where("isDefault", "==", true));
+        const currentDefaults = await getDocs(q);
+        
+        for (const d of currentDefaults.docs) {
+          if (d.id !== vId) {
+            await updateDoc(d.ref, { isDefault: false });
+          }
+        }
+        
+        if (vId !== 'none') {
+          await updateDoc(doc(db, "users", user.id, "voices", vId), { isDefault: true });
+        }
+        
+        if (vId === 'none') {
+           toast.info("System default voice removed.");
+        } else {
+           toast.success(`"${vName}" set as system default for all new listings.`);
+        }
+      } catch (err) {
+        console.error("Error setting default voice:", err);
+      }
+    }
+  };
+
   async function loadData(id: string) {
     try {
+      // Load voices first to ensure we can match names
+      if (user?.id) {
+        const voicesRef = collection(db, "users", user.id, "voices");
+        const voicesSnap = await getDocs(query(voicesRef));
+        const voicesData = voicesSnap.docs.map(doc => {
+          const d = doc.data() as any;
+          if (d.name && d.name.includes(" (Default)")) {
+            d.name = d.name.replace(" (Default)", "");
+          }
+          return { id: doc.id, ...d } as Voice;
+        });
+        setAvailableVoices(voicesData);
+      }
+
       const data = await getListing(id);
       if (data) {
         const isAdmin = (user as any)?.role === 'ADMIN';
@@ -141,7 +220,18 @@ export default function EditListing() {
         });
         setImages(normalizedImages);
         
+        setVoiceId(data.voiceId || "none");
+        setVoiceName(data.voiceName || (data.voiceId === "none" || !data.voiceId ? "NONE (No AI Voice)" : ""));
         setTalkingPoints(data.talkingPoints || []);
+        
+        // Load tour descriptors, ensuring we have exactly 16 slots
+        const loadedDescriptors = data.tourDescriptors || [];
+        const descriptorsArray = new Array(16).fill("");
+        loadedDescriptors.forEach((val: string, idx: number) => {
+          if (idx < 16) descriptorsArray[idx] = val;
+        });
+        setTourDescriptors(descriptorsArray);
+
         setWebhookUrl(data.webhookUrl || "");
       }
     } catch (err) {
@@ -150,6 +240,41 @@ export default function EditListing() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!isEdit && user?.id) {
+      const fetchDefaults = async () => {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.id));
+          const userData = userDoc.data();
+          
+          const voicesRef = collection(db, "users", user.id, "voices");
+          const voicesSnap = await getDocs(query(voicesRef));
+          const voicesData = voicesSnap.docs.map(doc => {
+            const d = doc.data() as any;
+            if (d.name && d.name.includes(" (Default)")) {
+              d.name = d.name.replace(" (Default)", "");
+            }
+            return { id: doc.id, ...d } as Voice;
+          });
+          setAvailableVoices(voicesData);
+
+          // Use system default if available
+          const defaultVoice = voicesData.find(v => v.id === userData?.defaultVoiceId || v.isDefault);
+          if (defaultVoice) {
+            setVoiceId(defaultVoice.id);
+            setVoiceName(defaultVoice.name);
+          } else {
+            setVoiceId("none");
+            setVoiceName("NONE (No AI Voice)");
+          }
+        } catch (err) {
+          console.error("Error fetching default voice:", err);
+        }
+      };
+      fetchDefaults();
+    }
+  }, [isEdit, user?.id]);
 
   async function handleIngest() {
     if (!urlIngest) {
@@ -289,14 +414,24 @@ export default function EditListing() {
 
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  const saveImageName = () => {
+  const saveImageName = async () => {
     if (editingImageIndex !== null && editingImageName.trim()) {
       const updated = [...images];
       updated[editingImageIndex] = { ...updated[editingImageIndex], name: editingImageName.trim() };
       setImages(updated);
       setIsRenameDialogOpen(false);
       setEditingImageIndex(null);
-      toast.success("Image renamed");
+      
+      if (isEdit && listingId) {
+        try {
+          await updateListing(listingId, { images: updated });
+          toast.success("Image renamed and synced to assets");
+        } catch (err) {
+          toast.error("Renamed locally but failed to sync to assets");
+        }
+      } else {
+        toast.success("Image renamed");
+      }
     }
   };
 
@@ -365,7 +500,10 @@ export default function EditListing() {
         description: description || "",
         images: images || [],
         talkingPoints: talkingPoints || [],
+        tourDescriptors: tourDescriptors.filter(d => d.trim() !== ""),
         webhookUrl: webhookUrl || "",
+        voiceId: voiceId || "",
+        voiceName: voiceName || "",
         updatedAt: Date.now()
       };
 
@@ -463,7 +601,7 @@ export default function EditListing() {
         </Card>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6">
+      <form onSubmit={handleSave} className="space-y-6 pb-32">
         <Card>
           <CardHeader>
             <CardTitle>Basic Details</CardTitle>
@@ -480,11 +618,11 @@ export default function EditListing() {
                 <Input value={city} onChange={e => setCity(e.target.value)} placeholder="City" />
               </div>
               <div className="space-y-2">
-                <Label>State/Province</Label>
+                <Label>Province/State</Label>
                 <Input value={province} onChange={e => setProvince(e.target.value)} placeholder="ST/PR" />
               </div>
               <div className="space-y-2">
-                <Label>Postal Code</Label>
+                <Label>Postal/Zip Code</Label>
                 <Input value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="12345" />
               </div>
             </div>
@@ -559,6 +697,85 @@ export default function EditListing() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4">
+              <div className="flex flex-col gap-1">
+                <Label className="text-base font-bold">Tour Descriptors</Label>
+                <p className="text-xs text-slate-500">Add up to 16 key features or rooms, (Like Living Room / Kitchen / Bedrooms / Bathrooms Key Features / Basement / Front Yard / Back Yard + Pool), that visitors can ask the AI agent about during the tour to trigger specific visuals and voice descriptions.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {tourDescriptors.map((desc, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 w-4">{idx + 1}.</span>
+                    <Input 
+                      value={desc} 
+                      onChange={e => {
+                        const updated = [...tourDescriptors];
+                        updated[idx] = e.target.value.slice(0, 30);
+                        setTourDescriptors(updated);
+                      }} 
+                      placeholder={`Feature ${idx + 1}`}
+                      maxLength={30}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex flex-col gap-1">
+                <Label>AI Tour Voice</Label>
+                <p className="text-xs text-slate-500 mb-2">Select a voice to narrate this tour. The default voice from your Voice Lab is auto-selected for new listings.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* NONE Option */}
+                <div 
+                  onClick={() => handleVoiceSelect("none", "NONE (No AI Voice)")}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${voiceId === 'none' ? 'border-blue-600 bg-blue-50 shadow-blue-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                >
+                  <div className={`p-2 rounded-full ${voiceId === 'none' ? 'bg-slate-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    <Mic2 className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold truncate">NONE</p>
+                    <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">No AI Voice Model</p>
+                  </div>
+                  {voiceId === 'none' && <CheckCircle2 className="h-4 w-4 text-blue-600" />}
+                </div>
+
+                {availableVoices.length > 0 ? (
+                  availableVoices.map((v) => (
+                    v.id !== 'none' && (
+                      <div 
+                        key={v.id}
+                        onClick={() => handleVoiceSelect(v.id, v.name)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${voiceId === v.id ? 'border-blue-600 bg-blue-50 shadow-blue-50' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                      >
+                        <div className={`p-2 rounded-full ${voiceId === v.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                          <Mic2 className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-bold truncate ${voiceId === v.id ? 'text-blue-900' : 'text-slate-900'}`}>{v.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{v.type}</p>
+                            {v.id === user?.defaultVoiceId && <span className="text-[9px] bg-blue-100 text-blue-600 px-1 rounded font-bold uppercase">Default</span>}
+                          </div>
+                        </div>
+                        {voiceId === v.id && (
+                          <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                        )}
+                      </div>
+                    )
+                  ))
+                ) : (
+                  <div className="border border-dashed rounded-xl p-4 text-center">
+                    <p className="text-xs text-slate-500">No custom voices. Go to <Link to="/app/voicelab" className="text-blue-600 font-bold hover:underline">Voice Lab</Link>.</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 italic px-1">Tip: Choose a voice that matches the "vibe" of the architecture and neighborhood.</p>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
               <Label>Listing Images</Label>
               <div className="flex gap-2 mb-2">
                 <Input value={newImage} onChange={e => setNewImage(e.target.value)} placeholder="https://example.com/image.jpg" />
@@ -574,7 +791,7 @@ export default function EditListing() {
                       <img src={img.url} alt={img.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       
                       {/* Menu Overlay */}
-                      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-90 group-hover:scale-100">
+                      <div className="absolute top-3 right-3 transition-all duration-300">
                         <DropdownMenu>
                           <DropdownMenuTrigger render={
                             <Button variant="secondary" size="icon" className="h-9 w-9 bg-white/95 backdrop-blur-md border-0 shadow-xl hover:bg-white text-slate-900 rounded-full">
@@ -678,25 +895,40 @@ export default function EditListing() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-between items-center gap-4 pb-12 sticky bottom-0 bg-slate-50/80 backdrop-blur-sm p-4 -mx-4 border-t border-slate-200 z-10 sm:static sm:bg-transparent sm:border-none sm:p-0">
-          <Link 
-            to="/app/listings" 
-            className="hidden sm:flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" /> View Listings
-          </Link>
-          <div className="flex gap-4 ml-auto">
-            <Button type="button" variant="outline" onClick={() => navigate(isEdit ? `/app/listings/${listingId}` : "/app/listings")}>Cancel</Button>
-            <Button type="submit" disabled={saving} className="min-w-[120px]">
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                isEdit ? "Save Changes" : "Create Listing"
-              )}
-            </Button>
+        {/* Floating Action Bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6 flex justify-center pointer-events-none">
+          <div className="bg-white/95 backdrop-blur-xl border border-slate-200 p-2 rounded-2xl shadow-2xl flex items-center gap-2 max-w-sm w-full pointer-events-auto ring-1 ring-black/5 animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <div className="hidden sm:flex flex-col pl-2 border-r pr-2 border-slate-100">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1 text-center">Status</p>
+              <p className="text-xs font-bold text-slate-500">{isEdit ? "Editing" : "New"}</p>
+            </div>
+            
+            <div className="flex gap-2 ml-auto w-full sm:w-auto">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                size="sm"
+                className="flex-1 sm:flex-none font-bold text-slate-500 h-9"
+                onClick={() => navigate(isEdit ? `/app/listings/${listingId}` : "/app/listings")}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={saving} 
+                size="sm"
+                className="flex-1 sm:flex-none min-w-[120px] bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 font-bold h-9"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  isEdit ? "Save Changes" : "Create Listing"
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </form>

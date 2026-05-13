@@ -1,18 +1,35 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Home, Mic, Globe, BarChart3, Search } from "lucide-react";
+import { ArrowRight, Home, Mic, Globe, BarChart3, Search, Loader2, Menu, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth, loginWithGoogle } from "@/hooks/useAuth";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 
 export default function PublicSite() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      navigate("/app");
+    if (user && !loading) {
+      navigate("/app/overview", { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  const navLinks = [
+    { label: "How It Works", href: "#how-it-works" },
+    { label: "Features", href: "#features" },
+    { label: "Pricing", href: "#pricing" },
+    { label: "Brokerages", href: "#brokerages" },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col font-sans text-slate-900 overflow-x-hidden bg-slate-50">
@@ -24,21 +41,73 @@ export default function PublicSite() {
             </div>
             VertexAgent.io
           </div>
+          
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600">
-            <a href="#how-it-works" className="hover:text-blue-600 transition-colors">How It Works</a>
-            <a href="#features" className="hover:text-blue-600 transition-colors">Features</a>
-            <a href="#pricing" className="hover:text-blue-600 transition-colors">Pricing</a>
-            <a href="#brokerages" className="hover:text-blue-600 transition-colors">Brokerages</a>
+            {navLinks.map((link) => (
+              <a key={link.label} href={link.href} className="hover:text-blue-600 transition-colors">{link.label}</a>
+            ))}
           </nav>
+
           <div className="flex items-center gap-4">
-            {user ? (
-              <Button onClick={() => navigate("/app")}>Go to App</Button>
-            ) : (
-              <>
-                <Button variant="ghost" onClick={loginWithGoogle} className="hidden sm:inline-flex">Log In</Button>
-                <Button onClick={loginWithGoogle}>Start Free Trial</Button>
-              </>
-            )}
+            <div className="hidden sm:flex items-center gap-4">
+              {user ? (
+                <Button onClick={() => navigate("/app")}>Go to App</Button>
+              ) : (
+                <>
+                  <Button variant="ghost" onClick={() => navigate("/login")}>Log In</Button>
+                  <Button onClick={() => navigate("/register")}>Start Free Trial</Button>
+                </>
+              )}
+            </div>
+
+            {/* Mobile Menu Trigger */}
+            <div className="md:hidden flex items-center gap-2">
+              <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                <SheetTrigger 
+                  render={
+                    <Button variant="ghost" size="icon" className="md:hidden">
+                      <Menu className="h-6 w-6" />
+                    </Button>
+                  }
+                />
+                <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                  <div className="flex flex-col gap-8 mt-8">
+                    <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
+                      <div className="h-8 w-8 bg-blue-600 rounded flex items-center justify-center text-white text-lg">
+                        V
+                      </div>
+                      VertexAgent.io
+                    </div>
+                    <nav className="flex flex-col gap-4">
+                      {navLinks.map((link) => (
+                        <SheetClose 
+                          key={link.label}
+                          render={
+                            <a 
+                              href={link.href} 
+                              className="text-lg font-medium text-slate-600 hover:text-blue-600 transition-colors py-2"
+                              onClick={() => setMobileMenuOpen(false)}
+                            >
+                              {link.label}
+                            </a>
+                          }
+                        />
+                      ))}
+                    </nav>
+                    <div className="flex flex-col gap-3 pt-6 border-t">
+                      {user ? (
+                        <Button onClick={() => { navigate("/app"); setMobileMenuOpen(false); }} className="w-full">Go to App</Button>
+                      ) : (
+                        <>
+                          <Button variant="outline" onClick={() => { navigate("/login"); setMobileMenuOpen(false); }} className="w-full">Log In</Button>
+                          <Button onClick={() => { navigate("/register"); setMobileMenuOpen(false); }} className="w-full">Start Free Trial</Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         </div>
       </header>
@@ -53,7 +122,7 @@ export default function PublicSite() {
             VertexAgent.io transforms static properties into live, multilingual, voice-first tours that capture and qualify leads automatically.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Button size="lg" className="h-14 px-8 text-lg rounded-full" onClick={loginWithGoogle}>
+            <Button size="lg" className="h-14 px-8 text-lg rounded-full" onClick={() => navigate("/register")}>
               Start for Free <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
             <Button size="lg" variant="outline" className="h-14 px-8 text-lg rounded-full" onClick={() => navigate("/tour/sample")}>
@@ -164,7 +233,7 @@ export default function PublicSite() {
                   With our V1 brokerage portal, agents instantly inherit your brokerage's branding, CRM mappings, and compliance rules. You control what goes out—they focus on closing the deal. 
                 </p>
               </div>
-              <Button size="lg" className="shrink-0 bg-blue-600 hover:bg-blue-700" onClick={loginWithGoogle}>
+              <Button size="lg" className="shrink-0 bg-blue-600 hover:bg-blue-700" onClick={() => navigate("/register")}>
                 Book a Brokerage Demo
               </Button>
             </div>
@@ -214,7 +283,7 @@ export default function PublicSite() {
                     AI Inference Cost Included
                   </li>
                 </ul>
-                <Button variant="outline" className="w-full" onClick={loginWithGoogle}>Start with 1 Listing</Button>
+                <Button variant="outline" className="w-full" onClick={() => navigate("/register")}>Start with 1 Listing</Button>
               </div>
 
               {/* Hybrid (Pilot) */}
@@ -253,7 +322,7 @@ export default function PublicSite() {
                     Instant lead alerts with CRM Sync
                   </li>
                 </ul>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={loginWithGoogle}>Start Pilot</Button>
+                <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => navigate("/register")}>Start Pilot</Button>
               </div>
 
               {/* Active Agent */}
@@ -288,7 +357,7 @@ export default function PublicSite() {
                     Priority Lead Alerts
                   </li>
                 </ul>
-                <Button variant="outline" className="w-full" onClick={loginWithGoogle}>Start Subscription</Button>
+                <Button variant="outline" className="w-full" onClick={() => navigate("/register")}>Start Subscription</Button>
                 <p className="text-center text-xs text-slate-500 mt-4">Or $1,200/year (save ~30%)</p>
               </div>
             </div>
@@ -300,7 +369,7 @@ export default function PublicSite() {
                 Focusing on high-intent buyers? Pay exactly $5-$10 per "Qualified Lead" instead of a flat service fee. 
                 A lead is only counted when a user bypasses the Lead Gate with a verified phone/email.
               </p>
-              <Button variant="secondary" onClick={loginWithGoogle}>Contact Sales</Button>
+              <Button variant="secondary" onClick={() => navigate("/register")}>Contact Sales</Button>
             </div>
           </div>
         </section>

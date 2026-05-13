@@ -141,6 +141,9 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
 
       // Audio rendering setup (Gemini outputs 24kHz PCM)
       playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
+      if (playbackContextRef.current.state === 'suspended') {
+        await playbackContextRef.current.resume();
+      }
       playbackTimeRef.current = playbackContextRef.current.currentTime;
 
       // Microphone capture setup (Gemini expects 16kHz PCM input)

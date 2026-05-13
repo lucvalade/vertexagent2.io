@@ -1,74 +1,123 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, Mail, Calendar, MapPin, CheckCircle, Clock, Send, Database, ExternalLink } from "lucide-react";
+import { ArrowLeft, Phone, Mail, Calendar, MapPin, CheckCircle, Clock, Send, Database, ExternalLink, Loader2 } from "lucide-react";
+import { getLead, Lead, sendEmail } from "@/lib/api";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const DUMMY_LEADS: Record<string, any> = {
-  "1": { id: "1", name: "Eleanor Rigby", property: "888 Bel Air Rd, Los Angeles", phone: "+1 (555) 123-4567", email: "eleanor@example.com", date: Date.now() - 1000 * 60 * 60 * 2, status: "Hot", notes: "Very interested in the ocean views. Calling back 3pm tomorrow.", lastPushed: null },
-  "2": { id: "2", name: "Jude Lawson", property: "15 Central Park West, NY", phone: "+1 (555) 987-6543", email: "jude.l@example.com", date: Date.now() - 1000 * 60 * 60 * 24, status: "Warm", notes: "Wants to know about parking.", lastPushed: Date.now() - 1000 * 60 * 60 * 48 },
-  "3": { id: "3", name: "Penny Lane", property: "123 VertexAgent Lane", phone: "+1 (555) 456-7890", email: "penny@example.com", date: Date.now() - 1000 * 60 * 60 * 48, status: "Cold", notes: "Bought another property.", lastPushed: null },
-  "4": { id: "4", name: "Maxwell Edison", property: "888 Bel Air Rd, Los Angeles", phone: "+1 (555) 321-0987", email: "maxwell@example.com", date: Date.now() - 1000 * 60 * 60 * 72, status: "New", notes: "Looking for investment properties.", lastPushed: Date.now() - 1000 * 60 * 10 },
-};
-
 export default function LeadDetails() {
   const { leadId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const lead = DUMMY_LEADS[leadId || "1"];
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [loading, setLoading] = useState(true);
   const [pushing, setPushing] = useState(false);
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-  const [recipientEmail, setRecipientEmail] = useState(user?.email || "agent@example.com");
+  const [recipientEmail, setRecipientEmail] = useState(user?.email || "");
   const [sendingEmail, setSendingEmail] = useState(false);
 
+  useEffect(() => {
+    if (leadId) {
+      loadLead(leadId);
+    }
+  }, [leadId]);
+
+  useEffect(() => {
+    if (user?.email && !recipientEmail) {
+      setRecipientEmail(user.email);
+    }
+  }, [user?.email]);
+
+  async function loadLead(id: string) {
+    try {
+      const data = await getLead(id);
+      setLead(data);
+    } catch (err) {
+      console.error("Error loading lead:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-20">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600 mb-4" />
+        <p className="text-slate-500 font-medium">Extracting Prospect Data...</p>
+      </div>
+    );
+  }
+
   if (!lead) {
-    return <div className="p-8">Lead not found</div>;
+    return (
+      <div className="p-8 text-center bg-white border rounded-xl">
+        <p className="text-xl text-slate-500">Lead not found</p>
+        <Button variant="link" onClick={() => navigate("/app/leads")}>Back to Leads</Button>
+      </div>
+    );
   }
 
   const handleEmailInfo = () => {
     setIsEmailDialogOpen(true);
   };
 
-  const confirmSendEmail = (e: React.FormEvent) => {
+  const confirmSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setSendingEmail(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      await sendEmail({
+        to: recipientEmail,
+        subject: `Prospect Insight Report: ${lead.name}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
+            <h1 style="color: #2563eb;">Prospect Insight Report</h1>
+            <p>Here is the detailed information for the lead captured via VertexAgent.</p>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+              <h2 style="margin-top: 0;">Contact Details</h2>
+              <p><strong>Name:</strong> ${lead.name}</p>
+              <p><strong>Email:</strong> ${lead.email || "Not provided"}</p>
+              <p><strong>Phone:</strong> ${lead.phone || "Not provided"}</p>
+              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+              <h2>Interaction History</h2>
+              <p><strong>Property:</strong> ${lead.listingAddress}</p>
+              <p><strong>Status:</strong> ${lead.status || 'New'}</p>
+              <p><strong>Captured On:</strong> ${format(lead.createdAt, "PPP")}</p>
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; margin-top: 20px;">
+              Generated by VertexAgent AI Core. Proprietary and Confidential.
+            </p>
+          </div>
+        `,
+        text: `Prospect Insight Report for ${lead.name}\n\nProperty: ${lead.listingAddress}\nStatus: ${lead.status || 'New'}`
+      });
+
       setSendingEmail(false);
       setIsEmailDialogOpen(false);
       toast.success(`Contact info for ${lead.name} sent to ${recipientEmail}`, {
-        description: "Includes contact details and interaction history."
+        description: "The report has been delivered to your inbox."
       });
-    }, 1200);
+    } catch (error: any) {
+      setSendingEmail(false);
+      toast.error("Failed to send email", {
+        description: error.message || "Please check your Secrets/SMTP configuration."
+      });
+    }
   };
 
   const handlePushCRM = () => {
-    // Mock check for CRM integration
-    // In a real app, we'd check if listing.webhookUrl or global CRM config exists
-    const hasCRM = false; // Mocking "not set up" for now as per user request to show notice
-
-    if (!hasCRM) {
-      toast.error("CRM Integration Not Set Up", {
-        description: "Please configure a CRM webhook in Listing Settings or Integrations page first.",
-        action: {
-          label: "Fix Now",
-          onClick: () => navigate("/app/integrations")
-        }
-      });
-      return;
-    }
-
-    setPushing(true);
-    setTimeout(() => {
-      setPushing(false);
-      toast.success("Lead successfully exported to CRM");
-    }, 1500);
+    toast.error("CRM Integration Not Set Up", {
+      description: "Please configure a CRM webhook in Listing Settings or Integrations page first.",
+      action: {
+        label: "Fix Now",
+        onClick: () => navigate("/app/integrations")
+      }
+    });
   };
 
   return (
@@ -84,57 +133,52 @@ export default function LeadDetails() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          {lead.lastPushed && (
-            <div className="hidden md:flex flex-col items-end mr-2 text-right">
-              <span className="text-[10px] font-bold text-green-600 uppercase flex items-center gap-1 justify-end">
-                <CheckCircle className="h-2.5 w-2.5" /> Synced to CRM
-              </span>
-              <span className="text-[10px] text-slate-400">Last: {format(lead.lastPushed, "MMM d, p")}</span>
-            </div>
-          )}
           <Button variant="outline" size="sm" onClick={handleEmailInfo} className="gap-2 font-bold shadow-sm">
             <Send className="h-4 w-4" /> Email me Info
           </Button>
           <Button variant="secondary" size="sm" onClick={handlePushCRM} disabled={pushing} className="gap-2 font-bold shadow-sm relative group">
             <Database className="h-4 w-4" /> Push to CRM
-            {pushing && (
-              <div className="absolute inset-0 bg-slate-100 flex items-center justify-center rounded-md">
-                <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
           </Button>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-white border rounded-xl p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 border-b pb-2">Contact Details</h2>
+          <h2 className="text-lg font-semibold mb-4 border-b pb-2 text-left">Contact Details</h2>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Phone className="h-5 w-5 text-slate-400" />
-              <div>
+              <div className="text-left">
                 <div className="text-sm text-slate-500">Phone</div>
-                <a href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`} className="font-medium text-blue-600 hover:underline">{lead.phone}</a>
+                {lead.phone ? (
+                  <a href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`} className="font-medium text-blue-600 hover:underline">{lead.phone}</a>
+                ) : (
+                  <span className="text-slate-400 italic">Not provided</span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Mail className="h-5 w-5 text-slate-400" />
-              <div>
+              <div className="text-left">
                 <div className="text-sm text-slate-500">Email</div>
-                <a href={`mailto:${lead.email}`} className="font-medium text-blue-600 hover:underline">{lead.email}</a>
+                {lead.email ? (
+                  <a href={`mailto:${lead.email}`} className="font-medium text-blue-600 hover:underline">{lead.email}</a>
+                ) : (
+                  <span className="text-slate-400 italic">Not provided</span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <CheckCircle className="h-5 w-5 text-slate-400" />
-              <div>
+              <div className="text-left">
                 <div className="text-sm text-slate-500">Status</div>
                 <span className={`px-2.5 py-0.5 mt-1 inline-block rounded-full text-xs font-semibold
                     ${lead.status === 'Hot' ? 'bg-red-100 text-red-700' : ''}
                     ${lead.status === 'Warm' ? 'bg-orange-100 text-orange-700' : ''}
                     ${lead.status === 'Cold' ? 'bg-blue-100 text-blue-700' : ''}
-                    ${lead.status === 'New' ? 'bg-green-100 text-green-700' : ''}
+                    ${lead.status === 'New' || !lead.status ? 'bg-green-100 text-green-700' : ''}
                   `}>
-                  {lead.status}
+                  {lead.status || 'New'}
                 </span>
               </div>
             </div>
@@ -142,20 +186,21 @@ export default function LeadDetails() {
         </div>
 
         <div className="bg-white border rounded-xl p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 border-b pb-2">Interaction History</h2>
+          <h2 className="text-lg font-semibold mb-4 border-b pb-2 text-left">Interaction History</h2>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <MapPin className="h-5 w-5 text-slate-400" />
-              <div>
+              <div className="text-left">
                 <div className="text-sm text-slate-500">Interested Property</div>
-                <div className="font-medium">{lead.property}</div>
+                <div className="font-medium">{lead.listingAddress}</div>
+                <div className="text-[10px] text-slate-400">ID: {lead.listingId}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <Calendar className="h-5 w-5 text-slate-400" />
-              <div>
+              <div className="text-left">
                 <div className="text-sm text-slate-500">Captured On</div>
-                <div className="font-medium">{format(lead.date, "PPP 'at' p")}</div>
+                <div className="font-medium">{format(lead.createdAt, "PPP 'at' p")}</div>
               </div>
             </div>
           </div>
@@ -163,9 +208,9 @@ export default function LeadDetails() {
       </div>
 
       <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 border-b pb-2">Notes</h2>
-        <div className="p-4 bg-slate-50 rounded-lg text-slate-700">
-          {lead.notes}
+        <h2 className="text-lg font-semibold mb-4 border-b pb-2 text-left">Visitor Message</h2>
+        <div className="p-4 bg-slate-50 rounded-lg text-slate-700 text-left whitespace-pre-wrap">
+          {lead.message || "No message provided."}
         </div>
       </div>
 
@@ -194,7 +239,7 @@ export default function LeadDetails() {
             <DialogFooter className="sm:justify-end gap-2 border-t pt-4">
               <Button type="button" variant="ghost" onClick={() => setIsEmailDialogOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={sendingEmail} className="bg-blue-600 hover:bg-blue-500 font-bold px-8">
-                {sendingEmail ? "Generating..." : "Submit & Send"}
+                {sendingEmail ? "Sending..." : "Submit"}
               </Button>
             </DialogFooter>
           </form>

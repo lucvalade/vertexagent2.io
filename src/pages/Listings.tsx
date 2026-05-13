@@ -204,7 +204,7 @@ export default function Dashboard() {
             </DropdownMenu>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => navigate("/app/listings/edit")} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200">
+            <Button onClick={() => navigate("/app/listings/edit")} className="gap-2 bg-[#155dfc] hover:bg-[#155dfc]/90 text-white shadow-md shadow-blue-200 transition-all">
               <Plus className="h-4 w-4" /> New Listing
             </Button>
           </div>
@@ -284,40 +284,44 @@ export default function Dashboard() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1 pb-4 cursor-pointer" onClick={() => navigate(`/app/listings/${listing.id}`)}>
-                   <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
-                      {listing.beds !== undefined && listing.beds !== null && (
-                        <span className="flex items-center gap-1.5"><Bed className="h-4 w-4 text-slate-400"/> {listing.beds} beds</span>
-                      )}
-                      {listing.baths !== undefined && listing.baths !== null && (
-                        <span className="flex items-center gap-1.5"><Bath className="h-4 w-4 text-slate-400"/> {listing.baths} baths</span>
-                      )}
-                   </div>
+                    <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
+                       {listing.beds !== undefined && listing.beds !== null && (
+                         <span className="flex items-center gap-1.5"><Bed className="h-4 w-4 text-slate-400"/> {listing.beds} Beds</span>
+                       )}
+                       {listing.baths !== undefined && listing.baths !== null && (
+                         <span className="flex items-center gap-1.5"><Bath className="h-4 w-4 text-slate-400"/> {listing.baths} Baths</span>
+                       )}
+                    </div>
                 </CardContent>
-                <CardFooter className="bg-slate-50 border-t pt-4 flex gap-2">
+                <CardFooter className="bg-slate-50 border-t py-2.5 px-4 flex items-center justify-between gap-2 overflow-hidden">
                   <Button 
                     variant="outline" 
-                    className="flex-1 bg-white hover:bg-slate-50 border-slate-200 shadow-sm" 
+                    size="sm"
+                    className="flex-1 h-8 min-w-0 bg-white hover:bg-[#155dfc] hover:text-white hover:border-[#155dfc] shadow-sm transition-all group/tour text-[11px] font-bold px-2" 
                     onClick={() => window.open(`/tour/${listing.id}`, '_blank')}
                   >
-                    <ExternalLink className="h-4 w-4 mr-2 text-slate-400" /> Tour
+                    <ExternalLink className="h-3 w-3 mr-1.5 text-slate-400 group-hover/tour:text-white transition-colors shrink-0" /> <span className="truncate">Ai Tour</span>
                   </Button>
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" className="h-10 w-10 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit Listing" onClick={() => navigate(`/app/listings/edit/${listing.id}`)}>
-                      <Edit className="h-4 w-4" />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button 
+                      size="sm"
+                      variant="ghost" 
+                      className="h-8 px-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5 text-[11px] font-bold" 
+                      onClick={() => navigate(`/app/listings/edit/${listing.id}`)}
+                    >
+                      <Edit className="h-3 w-3" /> <span>Edit</span>
                     </Button>
                     
                     <Button 
-                      size="icon" 
+                      size="sm"
                       variant="ghost" 
-                      className="h-10 w-10 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors" 
-                      title="Delete Listing" 
-                      type="button"
+                      className="h-8 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1.5 text-[11px] font-bold" 
                       onClick={() => {
                         setDeleteId(listing.id);
                         setDeleteAddress(listing.address);
                       }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3" /> <span>Delete</span>
                     </Button>
                   </div>
                 </CardFooter>

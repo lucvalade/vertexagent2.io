@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getListing, getAgent, createLead, Listing } from "@/lib/api";
+import { getListing, getAgent, createLead, Listing, sendEmail } from "@/lib/api";
 import { useLiveVoice } from "@/hooks/useLiveVoice";
 import { Type } from "@google/genai";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,7 @@ export default function Tour() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [errors, setErrors] = useState({ name: "", phone: "", email: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -182,18 +183,69 @@ Behavior:
 
   async function handleLeadSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name) { toast.error("Name is required"); return; }
+    if (!name) { 
+      setErrors(prev => ({ ...prev, name: "Name is required" }));
+      return; 
+    }
+    if (!phone) {
+      setErrors(prev => ({ ...prev, phone: "Phone is required" }));
+      return;
+    }
+    if (!email) {
+      setErrors(prev => ({ ...prev, email: "Email is required" }));
+      return;
+    }
+    if (email && !email.includes('@')) {
+      setErrors(prev => ({ ...prev, email: "Must contain @" }));
+      return;
+    }
+    if (message.length < 20) {
+      setErrors(prev => ({ ...prev, message: "Min 20 characters" }));
+      return;
+    }
     
     setSubmitting(true);
     try {
       await createLead(listing!.id, {
         id: crypto.randomUUID(),
+        listingId: listing!.id,
+        listingAddress: listing!.address,
+        agentId: listing!.ownerId,
         name,
         phone,
         email,
         message,
+        status: "New",
         createdAt: Date.now()
       });
+
+      // Send Email Notification to Agent
+      if (agent?.email) {
+        await sendEmail({
+          to: agent.email,
+          subject: `NEW LEAD CAPTURED: ${name} for ${listing!.address}`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
+              <h1 style="color: #2563eb; font-size: 20px; margin-bottom: 20px;">VertexAgent Lead Alert</h1>
+              <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="margin: 4px 0;"><strong>Name:</strong> ${name}</p>
+                <p style="margin: 4px 0;"><strong>Phone:</strong> ${phone || 'Not provided'}</p>
+                <p style="margin: 4px 0;"><strong>Email:</strong> ${email || 'Not provided'}</p>
+                <p style="margin: 4px 0;"><strong>Property:</strong> ${listing!.address}</p>
+              </div>
+              <p style="font-weight: bold; margin-bottom: 8px;">Visitor Message:</p>
+              <p style="font-style: italic; color: #64748b; background: #fff; padding: 12px; border: 1px dashed #cbd5e1; border-radius: 4px;">
+                "${message || 'No message provided.'}"
+              </p>
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; text-align: center;">
+                <a href="${window.location.origin}/app/leads?agent=${listing!.ownerId}&listing=${listing!.id}" style="display: inline-block; background-color: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 14px;">View in Dashboard</a>
+                <p style="margin-top: 12px; font-size: 10px; color: #94a3b8; font-family: monospace;">Agent Identification Code: ${listing!.ownerId}</p>
+              </div>
+            </div>
+          `,
+          text: `New Lead Captured: ${name} for ${listing!.address}. Phone: ${phone}, Email: ${email}`
+        }).catch(err => console.error("Lead email failed:", err));
+      }
 
       if (listing!.webhookUrl) {
          fetch(listing!.webhookUrl, {
@@ -236,7 +288,7 @@ Behavior:
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-black text-white relative overflow-hidden">
       {/* Visual Content - 60% Width */}
-      <div className="w-full md:w-[60%] lg:w-[70%] h-[50vh] md:h-screen relative bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800">
+      <div className="w-full md:w-[60%] lg:w-[65%] h-[50vh] md:h-screen relative bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800">
         {listing.images && listing.images.length > 0 ? (
           <img 
             src={typeof listing.images[activeImageIndex] === 'string' ? listing.images[activeImageIndex] : (listing.images[activeImageIndex] as any).url} 
@@ -256,43 +308,67 @@ Behavior:
         <div className="absolute inset-x-0 bottom-0 p-6 md:p-10 pointer-events-none">
           <div className="flex items-center gap-2 text-white/80 mb-2 font-medium">
              <MapPin className="h-5 w-5 text-blue-400" />
-             <h2 className="text-xl drop-shadow-md">{listing.address}</h2>
+             <h2 className="text-xl drop-shadow-md">
+               {listing.address}{listing.city ? `, ${listing.city}` : ""}{listing.province ? `, ${listing.province}` : ""}
+             </h2>
           </div>
-          <div className="flex gap-4 text-sm md:text-base text-white/90 drop-shadow-md ml-1">
-             {listing.price !== undefined && <span className="font-semibold text-lg">\${listing.price.toLocaleString()}</span>}
-             {listing.beds !== undefined && <span>{listing.beds} beds</span>}
-             {listing.baths !== undefined && <span>{listing.baths} baths</span>}
+          <div className="flex gap-x-2 text-sm md:text-base text-white drop-shadow-lg ml-1 items-baseline">
+             {listing.price !== undefined && <span className="font-bold text-lg">${listing.price.toLocaleString()}</span>}
+             {listing.beds !== undefined && <span className="font-medium">{listing.beds} Beds</span>}
+             {listing.baths !== undefined && <span className="font-medium">{listing.baths} Baths</span>}
           </div>
         </div>
       </div>
 
       {/* Voice Interaction Panel - 40% Width */}
-      <div className="w-full md:w-[40%] lg:w-[30%] flex flex-col h-[50vh] md:h-screen bg-slate-950 p-6 shadow-2xl z-10">
+      <div className="w-full md:w-[40%] lg:w-[35%] flex flex-col h-[50vh] md:h-screen bg-slate-950 p-6 shadow-2xl z-10">
          <div className="flex-1 flex flex-col items-center justify-center">
             {/* Visualizer / Avatar */}
-            <div className="relative mb-8 mt-4">
-              <div className={`absolute inset-0 rounded-full blur-xl transition-all duration-700 ${connected ? 'bg-blue-600/40 opacity-100 scale-150 animate-pulse' : 'bg-transparent opacity-0'}`} />
-              <div className={`relative flex h-32 w-32 items-center justify-center rounded-full border-4 transition-colors ${connected ? 'border-blue-500 bg-slate-900 shadow-[0_0_40px_rgba(59,130,246,0.3)]' : 'border-slate-800 bg-slate-900/50 animate-pulse'}`}>
-                <div className="h-16 w-16 text-slate-300 opacity-90">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+             <div className="relative mb-6 mt-2">
+              <div className={`absolute inset-0 rounded-full blur-3xl transition-all duration-700 ${connected ? 'bg-blue-600/70 opacity-100 scale-150 animate-pulse' : 'bg-white/80 opacity-100 scale-125 animate-pulse'}`} />
+              <div className={`relative flex h-[110px] w-[110px] items-center justify-center rounded-full border-4 transition-colors ${connected ? 'border-blue-500 bg-slate-900 shadow-[0_0_60px_rgba(59,130,246,0.7)]' : 'border-white bg-slate-900 shadow-[0_0_60px_rgba(255,255,255,0.6)]'}`}>
+                <div className="h-[54px] w-[54px] text-white opacity-100 drop-shadow-[0_0_20px_rgba(255,255,255,1)]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.0">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
                   </svg>
                 </div>
               </div>
             </div>
 
-            <div className="text-center space-y-3 mb-10 w-full max-w-sm px-4">
-              <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                {connected ? "Your Digital Guide is Listening" : "Start Voice Tour"}
+            <div className="text-center space-y-3 mb-6 w-full max-w-sm px-4">
+              <h1 className="text-[26px] font-extrabold tracking-tight text-white mb-4">
+                {connected ? "Listening..." : "Start Voice Tour"}
               </h1>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                {connected 
-                  ? "Ask questions naturally. Say 'Tell me about the kitchen' or 'I want to schedule a showing'." 
-                  : "Experience this property with an interactive AI guide."}
-              </p>
+              
+              <div className="space-y-4">
+                <p className="text-slate-300 text-sm leading-relaxed font-medium">
+                  {connected 
+                    ? "Ask questions naturally. Say 'Tell me about the kitchen' or 'I want to schedule a showing'." 
+                    : "Experience this property with an interactive AI guide."}
+                </p>
+                
+                {!connected && (
+                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
+                     <p className="text-white font-black text-sm mb-2 tracking-wide">Ask me About:</p>
+                     <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1.5 text-white font-bold text-[14px] leading-relaxed">
+                        {listing.tourDescriptors && listing.tourDescriptors.length > 0 ? (
+                          listing.tourDescriptors.map((desc, i) => (
+                             <span key={i} className="flex items-center drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]">
+                                {desc}
+                                {i < (listing.tourDescriptors?.length || 0) - 1 && <span className="ml-2 text-white/40 font-normal">/</span>}
+                             </span>
+                          ))
+                        ) : (
+                          <span className="text-white/60 italic font-medium">Bedrooms / Kitchen / Backyard / and more...</span>
+                        )}
+                     </div>
+                   </div>
+                )}
+              </div>
+
               {error && (
                 <div className="p-3 mt-4 text-sm text-red-300 bg-red-950/50 rounded-lg border border-red-900/50">
-                  {error}
+                   {error}
                 </div>
               )}
             </div>
@@ -301,21 +377,21 @@ Behavior:
               {!connected ? (
                 <Button 
                   size="lg" 
-                  className="rounded-full h-16 px-10 text-lg bg-blue-600 hover:bg-blue-500 shadow-[0_0_30px_rgba(37,99,235,0.4)] transition-all font-semibold"
+                  className="rounded-full h-[54px] px-[34px] text-base bg-blue-600 hover:bg-blue-500 shadow-[0_0_30px_rgba(37,99,235,0.4)] transition-all font-semibold"
                   onClick={startSession}
                   disabled={connecting}
                 >
-                  {connecting ? <Loader2 className="mr-3 h-5 w-5 animate-spin" /> : <Mic className="mr-3 h-5 w-5" />}
+                  {connecting ? <Loader2 className="mr-3 h-5 w-5 animate-spin" /> : <Mic className="mr-3 h-4 w-4" />}
                   {connecting ? "Connecting..." : "Tap to Start"}
                 </Button>
               ) : (
                 <Button 
                   size="lg" 
                   variant="destructive"
-                  className="rounded-full h-16 w-16 p-0 shadow-[0_0_30px_rgba(239,68,68,0.4)]"
+                  className="rounded-full h-[54px] w-[54px] p-0 shadow-[0_0_30px_rgba(239,68,68,0.4)]"
                   onClick={stopSession}
                 >
-                  <MicOff className="h-6 w-6" />
+                  <MicOff className="h-5 w-5" />
                   <span className="sr-only">End Tour</span>
                 </Button>
               )}
@@ -323,19 +399,19 @@ Behavior:
          </div>
 
          {/* Bottom Action bar */}
-         <div className="pt-6 mt-auto border-t border-slate-800 space-y-3">
+         <div className="pt-4 mt-auto border-t border-slate-800 space-y-2">
            <DropdownMenu>
-             <DropdownMenuTrigger>
-               <div className="flex w-full justify-between items-center bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white px-4 py-2 rounded-md transition-colors text-sm font-medium">
+             <DropdownMenuTrigger className="w-full">
+               <div className="flex w-full justify-between items-center bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white px-3 py-1.5 rounded-md transition-colors text-xs font-medium">
                  <div className="flex items-center gap-2">
-                   <Globe className="h-4 w-4" />
+                   <Globe className="h-3.5 w-3.5" />
                    {language}
                  </div>
-                 <span className="text-xs text-slate-500 border rounded px-1.5 py-0.5 bg-slate-950 border-slate-800 text-white">Change</span>
+                 <span className="text-[10px] text-slate-500 border rounded px-1 py-0.5 bg-slate-950 border-slate-800 text-white">Change</span>
                </div>
              </DropdownMenuTrigger>
              <DropdownMenuContent className="w-full min-w-[240px] bg-slate-900 border-slate-800 text-slate-200" align="end" side="top">
-               <ScrollArea className="h-64">
+               <ScrollArea className="h-48">
                  {SUPPORTED_LANGUAGES.map(lang => (
                    <DropdownMenuItem 
                      key={lang} 
@@ -349,8 +425,8 @@ Behavior:
              </DropdownMenuContent>
            </DropdownMenu>
 
-           <Button variant="outline" className="w-full text-white border-blue-600/30 bg-blue-600/10 hover:bg-blue-600/20" onClick={() => setShowLeadForm(true)}>
-             <PhoneCall className="mr-2 h-4 w-4" /> Connect with Agent
+           <Button variant="outline" className="w-full h-9 text-xs text-white border-blue-600/30 bg-blue-600/10 hover:bg-blue-600/20" onClick={() => setShowLeadForm(true)}>
+             <PhoneCall className="mr-2 h-3.5 w-3.5" /> Contact Agent
            </Button>
          </div>
       </div>
@@ -365,22 +441,143 @@ Behavior:
           </DialogHeader>
           <form onSubmit={handleLeadSubmit} className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label>Name *</Label>
-              <Input value={name} onChange={e =>setName(e.target.value)} required placeholder="Jane Doe" className="bg-slate-50" />
+              <div className="flex justify-between items-center">
+                <Label>Full Name *</Label>
+                {errors.name && <span className="text-red-600 font-bold text-[10px] uppercase animate-pulse">{errors.name}</span>}
+              </div>
+              <Input 
+                value={name} 
+                onChange={e => {
+                  setName(e.target.value);
+                  if (errors.name) setErrors(prev => ({ ...prev, name: "" }));
+                }} 
+                onBlur={() => {
+                  if (name.trim()) {
+                    const formatted = name.trim().split(/\s+/).map(word => 
+                      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                    ).join(" ");
+                    setName(formatted);
+                    setErrors(prev => ({ ...prev, name: "" }));
+                  } else {
+                    setErrors(prev => ({ ...prev, name: "Name is required" }));
+                  }
+                }}
+                required 
+                placeholder="Jane Doe" 
+                className={`bg-slate-50 ${errors.name ? 'border-red-500' : ''}`} 
+              />
             </div>
             <div className="space-y-2">
-              <Label>Phone</Label>
-              <Input type="tel" value={phone} onChange={e =>setPhone(e.target.value)} placeholder="(555) 123-4567" className="bg-slate-50" />
+              <div className="flex justify-between items-center">
+                <Label>Phone *</Label>
+                {errors.phone && <span className="text-red-600 font-bold text-[10px] uppercase animate-pulse">{errors.phone}</span>}
+              </div>
+              <Input 
+                type="tel" 
+                value={phone} 
+                required
+                onChange={e => {
+                  const x = e.target.value.replace(/\D/g, '').match(/(\d{0,3})(\d{0,3})(\d{0,4})/);
+                  if (x) {
+                    setPhone(!x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : ''));
+                  }
+                  if (errors.phone) setErrors(prev => ({ ...prev, phone: "" }));
+                }} 
+                onBlur={() => {
+                  const digits = phone.replace(/\D/g, '');
+                  if (!phone.trim()) {
+                    setErrors(prev => ({ ...prev, phone: "Phone is required" }));
+                  } else if (digits.length < 10) {
+                    setErrors(prev => ({ ...prev, phone: "Invalid Number" }));
+                  } else {
+                    setErrors(prev => ({ ...prev, phone: "" }));
+                  }
+                }}
+                placeholder="(555) 123-4567" 
+                className={`bg-slate-50 ${errors.phone ? 'border-red-500' : ''}`} 
+              />
             </div>
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input type="email" value={email} onChange={e =>setEmail(e.target.value)} placeholder="jane@example.com" className="bg-slate-50" />
+              <div className="flex justify-between items-center">
+                <Label>Email *</Label>
+                {errors.email && <span className="text-red-600 font-bold text-[10px] uppercase animate-pulse">{errors.email}</span>}
+              </div>
+              <Input 
+                type="email" 
+                value={email} 
+                required
+                onChange={e => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors(prev => ({ ...prev, email: "" }));
+                }} 
+                onBlur={() => {
+                  if (email && !email.includes('@')) {
+                    setErrors(prev => ({ ...prev, email: "Must contain @" }));
+                  } else if (!email) {
+                    setErrors(prev => ({ ...prev, email: "Email is required" }));
+                  } else {
+                    setErrors(prev => ({ ...prev, email: "" }));
+                  }
+                }}
+                placeholder="jane@example.com" 
+                className={`bg-slate-50 ${errors.email ? 'border-red-500' : ''}`} 
+              />
             </div>
             <div className="space-y-2">
-               <Label>Message</Label>
-               <Textarea value={message} onChange={e =>setMessage(e.target.value)} placeholder="I would like to schedule a private tour." rows={3} className="bg-slate-50" />
+               <div className="flex justify-between items-center">
+                 <Label>Message *</Label>
+                 {errors.message && <span className="text-red-600 font-bold text-[10px] uppercase animate-pulse">{errors.message}</span>}
+               </div>
+               <Textarea 
+                value={message} 
+                required
+                onChange={e => {
+                  setMessage(e.target.value);
+                  if (errors.message) setErrors(prev => ({ ...prev, message: "" }));
+                }} 
+                onBlur={() => {
+                  if (message.trim()) {
+                    const formatted = message.trim().charAt(0).toUpperCase() + message.trim().slice(1);
+                    setMessage(formatted);
+                    if (formatted.length < 20) {
+                      setErrors(prev => ({ ...prev, message: "Min 20 chars" }));
+                    } else {
+                      setErrors(prev => ({ ...prev, message: "" }));
+                    }
+                  } else {
+                    setErrors(prev => ({ ...prev, message: "Message is required" }));
+                  }
+                }}
+                placeholder="I would like to schedule a private tour." 
+                rows={3} 
+                className={`bg-slate-50 ${errors.message ? 'border-red-500' : ''}`} 
+               />
             </div>
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={submitting}
+              onClick={(e) => {
+                let hasError = false;
+                const newErrors = { name: "", phone: "", email: "", message: "" };
+
+                if (!name.trim()) { newErrors.name = "Name required"; hasError = true; }
+                if (!phone.replace(/\D/g, '')) { newErrors.phone = "Phone required"; hasError = true; }
+                else if (phone.replace(/\D/g, '').length < 10) { newErrors.phone = "Invalid Phone"; hasError = true; }
+                
+                if (!email.trim()) { newErrors.email = "Email required"; hasError = true; }
+                else if (!email.includes('@')) { newErrors.email = "Must contain @"; hasError = true; }
+                
+                if (!message.trim()) { newErrors.message = "Message required"; hasError = true; }
+                else if (message.trim().length < 20) { newErrors.message = "Min 20 characters"; hasError = true; }
+
+                if (hasError) {
+                  e.preventDefault();
+                  setErrors(newErrors);
+                  toast.error("Please correct the errors before submitting.");
+                }
+              }}
+            >
               {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Submit
             </Button>

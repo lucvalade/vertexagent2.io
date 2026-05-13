@@ -126,7 +126,7 @@ export default function ListingDetails() {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center gap-8 py-4 border-y border-slate-100">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-8 py-4 border-y border-slate-100">
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Bed className="h-5 w-5" /></div>
                   <div>

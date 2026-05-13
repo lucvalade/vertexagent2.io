@@ -3,15 +3,61 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 
+const BillingModal = ({ title, children, onConfirm, confirmText, confirmVariant = "primary", onClose, isProcessing }: any) => (
+  <motion.div 
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+  >
+    <motion.div 
+      initial={{ scale: 0.95, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.95, opacity: 0 }}
+      className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-left"
+    >
+      <div className="flex items-center justify-between p-6 border-b border-slate-100">
+        <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <X className="h-5 w-5 text-slate-400" />
+        </button>
+      </div>
+      <div className="p-6">
+        {children}
+      </div>
+      <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+        <button 
+          disabled={isProcessing}
+          onClick={onClose}
+          className="flex-1 px-4 py-2 border border-slate-200 bg-white rounded-lg text-sm font-bold hover:bg-slate-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button 
+          disabled={isProcessing}
+          onClick={onConfirm}
+          className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold text-white transition-all shadow-sm ${
+            confirmVariant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-slate-800'
+          } disabled:opacity-50`}
+        >
+          {isProcessing ? "Processing..." : confirmText}
+        </button>
+      </div>
+    </motion.div>
+  </motion.div>
+);
+
 export default function Billing() {
   const [activeModal, setActiveModal] = useState<"upgrade" | "payment" | "cancel" | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [cardData, setCardData] = useState({ number: "", expiry: "", cvc: "" });
 
   const handleAction = async (msg: string, isChange: boolean = false) => {
     setIsProcessing(true);
     await new Promise(resolve => setTimeout(resolve, 1500));
     setIsProcessing(false);
     setActiveModal(null);
+    setCardData({ number: "", expiry: "", cvc: "" }); // Reset on success
     
     if (isChange) {
       toast.success(msg, {
@@ -33,50 +79,6 @@ export default function Billing() {
     }
   };
 
-  const Modal = ({ title, children, onConfirm, confirmText, confirmVariant = "primary" }: any) => (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-    >
-      <motion.div 
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
-      >
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-          <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-            <X className="h-5 w-5 text-slate-400" />
-          </button>
-        </div>
-        <div className="p-6">
-          {children}
-        </div>
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-          <button 
-            disabled={isProcessing}
-            onClick={() => setActiveModal(null)}
-            className="flex-1 px-4 py-2 border border-slate-200 bg-white rounded-lg text-sm font-bold hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button 
-            disabled={isProcessing}
-            onClick={onConfirm}
-            className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold text-white transition-all shadow-sm ${
-              confirmVariant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-900 hover:bg-slate-800'
-            } disabled:opacity-50`}
-          >
-            {isProcessing ? "Processing..." : confirmText}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-
   return (
     <div className="space-y-6 text-slate-900">
       <div className="flex justify-between items-center">
@@ -88,7 +90,7 @@ export default function Billing() {
 
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm text-left">
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Active Agent Plan</h2>
@@ -125,7 +127,7 @@ export default function Billing() {
             </div>
           </div>
           
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm text-left">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Payment Method</h2>
             <div className="flex items-center justify-between border rounded-lg p-4">
               <div className="flex items-center gap-4">
@@ -138,7 +140,10 @@ export default function Billing() {
                 </div>
               </div>
               <button 
-                onClick={() => setActiveModal("payment")}
+                onClick={() => {
+                  setCardData({ number: "", expiry: "", cvc: "" });
+                  setActiveModal("payment");
+                }}
                 className="text-blue-600 text-sm font-medium hover:underline"
               >
                 Update
@@ -147,7 +152,7 @@ export default function Billing() {
           </div>
         </div>
         
-        <div className="md:col-span-1 border border-slate-200 rounded-xl bg-slate-50 p-6">
+        <div className="md:col-span-1 border border-slate-200 rounded-xl bg-slate-50 p-6 text-left">
           <h2 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
             <Package className="h-5 w-5 text-slate-500" /> Usage Summary
           </h2>
@@ -177,12 +182,14 @@ export default function Billing() {
 
       <AnimatePresence>
         {activeModal === "upgrade" && (
-          <Modal 
+          <BillingModal 
             title="Upgrade Your Plan" 
             confirmText="Purchase New Tier" 
+            onClose={() => setActiveModal(null)}
+            isProcessing={isProcessing}
             onConfirm={() => handleAction("Success! Your plan has been upgraded to Team Pro.", true)}
           >
-            <div className="space-y-4">
+            <div className="space-y-4 text-left">
               <p className="text-sm text-slate-600 font-medium">Select a new performance tier for your brokerage expansion.</p>
               <div className="space-y-2">
                 <label className="flex items-center justify-between p-4 border-2 border-blue-600 bg-blue-50/30 rounded-xl cursor-pointer shadow-sm">
@@ -207,38 +214,119 @@ export default function Billing() {
                 </label>
               </div>
             </div>
-          </Modal>
+          </BillingModal>
         )}
 
         {activeModal === "payment" && (
-          <Modal title="Update Payment Method" confirmText="Save Card" onConfirm={() => handleAction("Payment method updated successfully.")}>
-            <div className="space-y-4">
+          <BillingModal 
+            title="Update Payment Method" 
+            confirmText="Save Card" 
+            onClose={() => setActiveModal(null)}
+            isProcessing={isProcessing}
+            onConfirm={() => {
+              if (cardData.number.length !== 12) {
+                toast.error("Credit card must be exactly 12 digits");
+                return;
+              }
+              
+              const expiryParts = cardData.expiry.split(' / ');
+              if (expiryParts.length !== 2) {
+                toast.error("Expiry must be in MM / YY format");
+                return;
+              }
+              const month = parseInt(expiryParts[0]);
+              const year = parseInt("20" + expiryParts[1]);
+              const now = new Date();
+              const currentYear = now.getFullYear();
+              const currentMonth = now.getMonth() + 1;
+
+              if (month < 1 || month > 12) {
+                toast.error("Invalid month in expiry");
+                return;
+              }
+
+              if (year < currentYear || (year === currentYear && month < currentMonth)) {
+                toast.error("Card has expired or invalid year");
+                return;
+              }
+
+              if (cardData.cvc.length !== 3) {
+                toast.error("CVC must be exactly 3 digits");
+                return;
+              }
+              handleAction("Payment method updated successfully.");
+            }}>
+            <div className="space-y-4 text-left">
               <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-3 mb-4">
                 <div className="h-4 w-4 bg-blue-600 rounded-full animate-pulse" />
                 <p className="text-xs font-medium text-slate-600 italic">Interim Payment Provider (Simulation Only)</p>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-3 font-sans">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Card Number</label>
-                  <input type="text" placeholder="XXXX XXXX XXXX XXXX" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50" />
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Card Number (Exactly 12 Digits)</label>
+                  <input 
+                    type="text" 
+                    placeholder="XXXX XXXX XXXX" 
+                    maxLength={14}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 font-mono focus:ring-2 focus:ring-slate-900 focus:outline-none" 
+                    value={cardData.number.replace(/(\d{4})(?=\d)/g, '$1 ')}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                      setCardData(prev => ({ ...prev, number: val }));
+                    }}
+                  />
+                  <p className="text-[9px] text-slate-400 font-medium uppercase tracking-widest">Requirement: 12 numeric digits.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Expiry</label>
-                    <input type="text" placeholder="MM/YY" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50" />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Expiry (MM / YY)</label>
+                    <input 
+                      type="text" 
+                      placeholder="MM / YY" 
+                      maxLength={7}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-slate-900 focus:outline-none" 
+                      value={cardData.expiry}
+                      onChange={(e) => {
+                        let val = e.target.value.replace(/[^\d]/g, '');
+                        if (val.length >= 2) {
+                          const month = parseInt(val.slice(0, 2));
+                          if (month > 12) val = '12' + val.slice(2);
+                          if (month === 0 && val.length === 2) val = '01';
+                          val = val.slice(0, 2) + ' / ' + val.slice(2, 4);
+                        }
+                        setCardData(prev => ({ ...prev, expiry: val }));
+                      }}
+                    />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">CVC</label>
-                    <input type="text" placeholder="123" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50" />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">CVC (3 Digits)</label>
+                    <input 
+                      type="text" 
+                      placeholder="123" 
+                      maxLength={3}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-slate-900 focus:outline-none" 
+                      value={cardData.cvc}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 3);
+                        setCardData(prev => ({ ...prev, cvc: val }));
+                      }}
+                    />
                   </div>
                 </div>
               </div>
             </div>
-          </Modal>
+          </BillingModal>
         )}
 
         {activeModal === "cancel" && (
-          <Modal title="Cancel Subscription" confirmText="Confirm Cancellation" confirmVariant="danger" onConfirm={() => handleAction("Your subscription has been cancelled. You have access until June 1.", true)}>
+          <BillingModal 
+            title="Cancel Subscription" 
+            confirmText="Confirm Cancellation" 
+            confirmVariant="danger" 
+            onClose={() => setActiveModal(null)}
+            isProcessing={isProcessing}
+            onConfirm={() => handleAction("Your subscription has been cancelled. You have access until June 1.", true)}
+          >
             <div className="space-y-4 text-center">
               <div className="mx-auto w-12 h-12 bg-red-100 flex items-center justify-center rounded-full text-red-600 mb-2">
                 <AlertTriangle className="h-6 w-6" />
@@ -250,7 +338,7 @@ export default function Billing() {
                 Data preservation: Your existing listings will remain as drafts, but you won't be able to activate new ones.
               </div>
             </div>
-          </Modal>
+          </BillingModal>
         )}
       </AnimatePresence>
     </div>

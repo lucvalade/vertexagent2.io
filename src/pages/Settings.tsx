@@ -1,11 +1,15 @@
-import { Building2, Globe, Shield, Bell, Loader2 } from "lucide-react";
+import { Building2, Globe, Shield, Bell, Loader2, Mic2, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getAgent, updateUser } from "@/lib/api";
 import { toast } from "sonner";
+import { doc, getDoc, setDoc, collection, query, getDocs } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { useNavigate } from "react-router-dom";
 
 export default function Settings() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -20,7 +24,7 @@ export default function Settings() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications" | "preferences">("profile");
 
   // Branding State
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
@@ -41,6 +45,14 @@ export default function Settings() {
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [smsAlerts, setSmsAlerts] = useState(false);
   const [dailyDigest, setDailyDigest] = useState(true);
+
+  // Preferences State
+  const [defaultVoiceId, setDefaultVoiceId] = useState("");
+  const [voices, setVoices] = useState<any[]>([]);
+
+  // Admin Controls State
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [allowRegistrations, setAllowRegistrations] = useState(true);
 
   useEffect(() => {
     if (user?.id) {
@@ -88,6 +100,24 @@ export default function Settings() {
         setEmailAlerts(data.notifications.emailAlerts ?? true);
         setSmsAlerts(data.notifications.smsAlerts ?? false);
         setDailyDigest(data.notifications.dailyDigest ?? true);
+      }
+
+      if (data?.defaultVoiceId) {
+        setDefaultVoiceId(data.defaultVoiceId);
+      }
+
+      // Load available voices
+      const voicesRef = collection(db, "users", user!.id, "voices");
+      const voicesSnap = await getDocs(query(voicesRef));
+      const voicesData = voicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setVoices(voicesData);
+
+      if (data?.role === 'ADMIN') {
+        const adminSettings: any = await getDoc(doc(db, "settings", "global"))
+          .then(d => d.exists() ? d.data() : {})
+          .catch(err => handleFirestoreError(err, OperationType.GET, "settings/global"));
+        setMaintenanceMode(adminSettings.maintenanceMode ?? false);
+        setAllowRegistrations(adminSettings.allowRegistrations ?? true);
       }
     } catch (err) {
       toast.error("Failed to load profile settings");
@@ -227,8 +257,19 @@ export default function Settings() {
           smsAlerts,
           dailyDigest
         },
+        defaultVoiceId,
         updatedAt: Date.now()
       });
+
+      if (user?.role === 'ADMIN' && activeTab === ('admin' as any)) {
+        await setDoc(doc(db, "settings", "global"), {
+          maintenanceMode,
+          allowRegistrations,
+          updatedBy: user.id,
+          updatedAt: Date.now()
+        });
+      }
+
       toast.success("Settings updated successfully");
     } catch (err: any) {
       console.error("Save Error:", err);
@@ -283,6 +324,12 @@ export default function Settings() {
             className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'notifications' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
           >
             <Bell className="h-4 w-4" /> Notifications
+          </button>
+          <button 
+            onClick={() => setActiveTab("preferences")}
+            className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'preferences' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <Mic2 className="h-4 w-4" /> Preferences
           </button>
           
           {user?.role === 'ADMIN' && (
@@ -638,6 +685,65 @@ export default function Settings() {
             </div>
           )}
 
+          {activeTab === "preferences" && (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+              <h2 className="text-lg font-bold mb-4">Application Preferences</h2>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-700">Default AI Voice</label>
+                  <p className="text-xs text-slate-500 mb-3">Select the default voice that will be assigned to all new property tours.</p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Hardcoded NONE option */}
+                    <div 
+                      onClick={() => setDefaultVoiceId("none")}
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${defaultVoiceId === 'none' ? 'border-blue-600 bg-blue-50 shadow-md shadow-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
+                    >
+                      <div className={`p-2 rounded-full ${defaultVoiceId === 'none' ? 'bg-slate-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                        <Mic2 className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold">NONE</p>
+                        <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">No AI Voice Model</p>
+                      </div>
+                      {defaultVoiceId === 'none' && <CheckCircle2 className="h-4 w-4 text-blue-600" />}
+                    </div>
+
+                    {voices.map(v => (
+                      v.id !== 'none' && v.id !== 'n9ne' && (
+                        <div 
+                          key={v.id}
+                          onClick={() => setDefaultVoiceId(v.id)}
+                          className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${defaultVoiceId === v.id ? 'border-blue-600 bg-blue-50 shadow-md shadow-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
+                        >
+                          <div className={`p-2 rounded-full ${defaultVoiceId === v.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <Mic2 className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-bold truncate">{v.name}</p>
+                            <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">{v.type}</p>
+                          </div>
+                          {defaultVoiceId === v.id && <CheckCircle2 className="h-4 w-4 text-blue-600" />}
+                        </div>
+                      )
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t flex justify-end">
+                  <button 
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Save Preferences
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === ("admin" as any) && user?.role === 'ADMIN' && (
             <div className="bg-white border border-red-100 rounded-xl p-6 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="flex items-center gap-2 mb-4">
@@ -651,24 +757,45 @@ export default function Settings() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-red-700">Maintenance Mode</span>
-                      <button className="h-5 w-9 bg-slate-200 rounded-full relative"><div className="absolute left-1 top-0.5 h-4 w-4 bg-white rounded-full"></div></button>
+                      <button 
+                        onClick={() => setMaintenanceMode(!maintenanceMode)}
+                        className={`h-5 w-9 rounded-full relative transition-colors ${maintenanceMode ? 'bg-red-600' : 'bg-slate-300'}`}
+                      >
+                        <div className={`absolute top-0.5 h-4 w-4 bg-white rounded-full transition-all ${maintenanceMode ? 'right-1' : 'left-1'}`} />
+                      </button>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-red-700">Allow New Agent Registrations</span>
-                      <button className="h-5 w-9 bg-green-500 rounded-full relative"><div className="absolute right-1 top-0.5 h-4 w-4 bg-white rounded-full"></div></button>
+                      <button 
+                        onClick={() => setAllowRegistrations(!allowRegistrations)}
+                        className={`h-5 w-9 rounded-full relative transition-colors ${allowRegistrations ? 'bg-green-500' : 'bg-slate-300'}`}
+                      >
+                        <div className={`absolute top-0.5 h-4 w-4 bg-white rounded-full transition-all ${allowRegistrations ? 'right-1' : 'left-1'}`} />
+                      </button>
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 border border-slate-200 rounded-lg hover:border-blue-300 cursor-pointer transition-colors">
+                  <div className="p-4 border border-slate-200 rounded-lg hover:border-blue-300 cursor-pointer transition-colors" onClick={() => toast.info("System logs coming soon")}>
                     <h4 className="font-bold text-sm">System Logs</h4>
                     <p className="text-xs text-slate-500">View all real-time events and errors.</p>
                   </div>
-                  <div className="p-4 border border-slate-200 rounded-lg hover:border-blue-300 cursor-pointer transition-colors">
+                  <div className="p-4 border border-slate-200 rounded-lg hover:border-blue-300 cursor-pointer transition-colors" onClick={() => navigate("/app/billing")}>
                     <h4 className="font-bold text-sm">Billing & Subs</h4>
                     <p className="text-xs text-slate-500">Manage stripe connectivity and plans.</p>
                   </div>
+                </div>
+
+                <div className="pt-4 border-t flex justify-end">
+                  <button 
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-red-600 text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Save Admin Settings
+                  </button>
                 </div>
               </div>
             </div>

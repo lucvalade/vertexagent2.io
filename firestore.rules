@@ -11,6 +11,7 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isVerified() { return isSignedIn(); } // Relaxed verification for this environment
     function isDev() { return true; } // Safety bypass for testing
+    function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN"; }
 
     // User validation
     function isValidUser(data) {
@@ -21,7 +22,7 @@ service cloud.firestore {
         && data.createdAt is number
         && data.updatedAt is number;
       
-      let hasValidBrokerage = !data.keys().hasAny(['brokerageName']) || (data.brokerageName is string && data.brokerageName.size() <= 100);
+      let hasValidBrokerage = !data.keys().hasAny(['brokerage']) || (data.brokerage is string && data.brokerage.size() <= 100);
       let hasValidProfile = !data.keys().hasAny(['brokerageProfile']) || data.brokerageProfile is map;
       let hasValidBranding = !data.keys().hasAny(['branding']) || data.branding is map;
       let hasValidCompliance = !data.keys().hasAny(['compliance']) || data.compliance is map;
@@ -51,9 +52,18 @@ service cloud.firestore {
         && (!data.keys().hasAny(['message']) || (data.message is string && data.message.size() <= 1000));
     }
 
+    // Conversation validation
+    function isValidConversation(data) {
+      return data.keys().hasAll(['property', 'lang', 'date', 'transcript'])
+        && data.property is string
+        && data.lang is string
+        && data.date is number
+        && data.transcript is list;
+    }
+
     match /users/{userId} {
       allow get: if true; 
-      allow list: if false; 
+      allow list: if isSignedIn(); 
       allow create: if isVerified() 
         && isValidId(userId) 
         && request.auth.uid == userId 
@@ -65,8 +75,24 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && (incoming().role == existing().role || request.auth.token.email == "luc.valade@gmail.com")
         && incoming().email == existing().email
-        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'brokerageName', 'updatedAt', 'brokerageProfile', 'branding', 'compliance', 'notifications', 'role']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'brokerage', 'updatedAt', 'brokerageProfile', 'branding', 'compliance', 'notifications', 'role', 'defaultVoiceId']);
       allow delete: if false;
+
+      match /voices/{voiceId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /invitations/{inviteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (incoming().status == "accepted" || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /settings/global {
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
     }
 
     match /listings/{listingId} {
@@ -99,6 +125,12 @@ service cloud.firestore {
           
         allow update, delete: if false;
       }
+    }
+
+    match /conversations/{convoId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidConversation(incoming());
+      allow delete: if isAdmin();
     }
   }
 }

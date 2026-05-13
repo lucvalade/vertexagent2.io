@@ -1,11 +1,21 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+let safeStorage: any = null;
+try {
+  safeStorage = getStorage(app);
+} catch (e) {
+  console.warn("Firebase Storage service is not available or provisioned in this project.");
+}
+
+export const storage = safeStorage;
 
 export enum OperationType {
   CREATE = "create",
