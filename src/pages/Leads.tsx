@@ -1,11 +1,11 @@
-import { Phone, Mail, Calendar, CheckSquare, Square, ChevronRight, Send, Database, Info, X, FileText, Zap, Activity, Loader2, ArrowRight } from "lucide-react";
+import { Phone, Mail, Calendar, CheckSquare, Square, ChevronRight, Send, Database, Info, X, FileText, Zap, Activity, Loader2, ArrowRight, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useState, useMemo, useEffect } from "react";
-import { sendEmail, getUserLeads, Lead } from "@/lib/api";
+import { sendEmail, getUserLeads, createLead, Lead } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, deleteDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -60,13 +60,79 @@ export default function Leads() {
     }
   }
 
+  const handleDeleteLead = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this lead?")) return;
+    
+    const toastId = toast.loading("Deleting lead...");
+    try {
+      // We'll need a deleteLead API or just call deleteDoc from here
+      const lead = leads.find(l => l.id === id);
+      if (lead) {
+        // Paths for delete depend on which collection it is in
+        // Based on firestore.rules, leads are in /listings/{listingId}/leads/{leadId}
+        // or /leads/{leadId}
+        await deleteDoc(doc(db, "leads", id));
+      }
+      setLeads(prev => prev.filter(l => l.id !== id));
+      setSelectedLeads(prev => prev.filter(item => item !== id));
+      toast.success("Lead deleted successfully", { id: toastId });
+    } catch (err) {
+      console.error("Delete lead failed:", err);
+      toast.error("Failed to delete lead. You may not have permission.", { id: toastId });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedLeads.length} leads?`)) return;
+    
+    const toastId = toast.loading(`Deleting ${selectedLeads.length} leads...`);
+    let success = 0;
+    try {
+      for (const id of selectedLeads) {
+        await deleteDoc(doc(db, "leads", id));
+        success++;
+      }
+      setLeads(prev => prev.filter(l => !selectedLeads.includes(l.id)));
+      setSelectedLeads([]);
+      toast.success(`Deleted ${success} leads`, { id: toastId });
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+      toast.error(`Partially deleted (${success} success). Error occurred.`, { id: toastId });
+    }
+  };
+
+  async function generateSampleLeads() {
+    if (!user?.id) return;
+    setIsProcessing(true);
+    try {
+      const sampleLeads: Lead[] = [
+        { id: `sample-1-${Date.now()}`, name: "Eleanor Rigby", listingId: "sample", listingAddress: "888 Bel Air Rd, Los Angeles", agentId: user.id, email: "eleanor@example.com", phone: "(555) 123-4567", status: "Hot", createdAt: Date.now() - 1000 * 60 * 60 * 2, message: "Interested in the garden and kitchen layout." },
+        { id: `sample-2-${Date.now()}`, name: "Jude Lawson", listingId: "sample", listingAddress: "15 Central Park West, NY", agentId: user.id, email: "jude.l@example.com", phone: "(555) 987-6543", status: "Warm", createdAt: Date.now() - 1000 * 60 * 60 * 24, message: "Can we schedule a private tour this weekend?" },
+        { id: `sample-3-${Date.now()}`, name: "Penny Lane", listingId: "sample", listingAddress: "123 VertexAgent Lane", agentId: user.id, email: "penny@example.com", phone: "(555) 456-7890", status: "Cold", createdAt: Date.now() - 1000 * 60 * 60 * 48, message: "Just looking for now, thank you." }
+      ];
+
+      for (const lead of sampleLeads) {
+        await createLead("DEMO_SIGNUP", lead);
+      }
+      
+      toast.success("Sample leads generated successfully!");
+      loadLeads();
+    } catch (err) {
+      console.error("Error generating leads:", err);
+      toast.error("Failed to generate sample leads");
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
   const filteredLeads = useMemo(() => {
     if (!listingIdFilter) return leads;
     return leads.filter(l => l.listingId === listingIdFilter);
   }, [leads, listingIdFilter]);
 
   const toggleSelectAll = () => {
-    if (selectedLeads.length === filteredLeads.length) {
+    if (selectedLeads.length === filteredLeads.length && filteredLeads.length > 0) {
       setSelectedLeads([]);
     } else {
       setSelectedLeads(filteredLeads.map(l => l.id));
@@ -128,7 +194,7 @@ export default function Leads() {
           <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 20px 0;">
             <p style="margin: 0 0 5px 0; font-size: 10px; color: #64748b; font-weight: bold;">PROSPECT ${idx + 1}</p>
             <p style="margin: 0 0 10px 0;"><strong>Name:</strong> ${lead.name}</p>
-            <p style="margin: 10px 0;"><strong>Property:</strong> ${lead.property}</p>
+            <p style="margin: 10px 0;"><strong>Property:</strong> ${lead.listingAddress}</p>
             <p style="margin: 10px 0;"><strong>Email:</strong> ${lead.email}</p>
             <p style="margin: 10px 0;"><strong>Phone:</strong> ${lead.phone}</p>
             <p style="margin: 10px 0 0 0;"><strong>Status:</strong> <span style="color: #ef4444; font-weight: bold;">${lead.status}</span></p>
@@ -170,7 +236,7 @@ export default function Leads() {
                 <div style="padding: 20px;">
                   <p>Requested export for lead: <strong>${lead.name}</strong></p>
                   <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 20px 0;">
-                    <p style="margin: 0 0 10px 0;"><strong>Property:</strong> ${lead.property}</p>
+                    <p style="margin: 0 0 10px 0;"><strong>Property:</strong> ${lead.listingAddress}</p>
                     <p style="margin: 10px 0;"><strong>Email:</strong> ${lead.email}</p>
                     <p style="margin: 10px 0;"><strong>Phone:</strong> ${lead.phone}</p>
                     <p style="margin: 10px 0 0 0;"><strong>Status:</strong> <span style="color: #ef4444; font-weight: bold;">${lead.status}</span></p>
@@ -179,7 +245,7 @@ export default function Leads() {
                 </div>
               </div>
             `,
-            text: `Prospect Report for ${lead.name} - Property: ${lead.property}`
+            text: `Prospect Report for ${lead.name} - Property: ${lead.listingAddress}`
           });
           successCount++;
         }
@@ -218,8 +284,32 @@ export default function Leads() {
       </div>
 
       <div className="border rounded-xl bg-white overflow-hidden shadow-sm relative">
-        {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto">
+        {filteredLeads.length === 0 && !loading ? (
+          <div className="py-20 text-center space-y-6">
+            <div className="h-20 w-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto border-2 border-dashed border-slate-200">
+              <Database className="h-10 w-10 text-slate-300" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-slate-800">No leads captured yet</h3>
+              <p className="text-slate-500 max-w-sm mx-auto text-sm">
+                Share your property tours with visitors to start capturing leads. 
+                They will appear here once they complete the lead gate.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button onClick={() => navigate("/app/listings/edit")} variant="outline" className="gap-2">
+                 Create Your First Listing <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button onClick={generateSampleLeads} className="bg-blue-600 hover:bg-blue-700 gap-2" disabled={isProcessing}>
+                 {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />}
+                 Load Sample Data
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-[#f8fafc] border-b border-slate-200 text-slate-950 uppercase text-[10px] tracking-widest whitespace-nowrap">
               <tr>
@@ -230,7 +320,7 @@ export default function Leads() {
                     className="h-8 w-8 hover:bg-slate-200" 
                     onClick={toggleSelectAll}
                   >
-                    {selectedLeads.length === DUMMY_LEADS.length ? (
+                    {selectedLeads.length === filteredLeads.length && filteredLeads.length > 0 ? (
                       <CheckSquare className="h-4 w-4 text-blue-600" />
                     ) : selectedLeads.length > 0 ? (
                        <div className="h-4 w-4 bg-blue-100 rounded flex items-center justify-center">
@@ -246,6 +336,7 @@ export default function Leads() {
                 <th className="px-6 py-5 font-black">CRM Status</th>
                 <th className="px-6 py-5 font-black">Date info</th>
                 <th className="px-6 py-5 font-black text-right">Label</th>
+                <th className="px-6 py-5 font-black text-right w-10"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -296,6 +387,16 @@ export default function Leads() {
                       {lead.status || 'New'}
                     </span>
                   </td>
+                  <td className="px-6 py-4 text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-slate-300 hover:text-red-600 hover:bg-red-50"
+                      onClick={(e) => handleDeleteLead(lead.id, e)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -334,14 +435,24 @@ export default function Leads() {
                     <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-1">{lead.listingAddress}</div>
                   </div>
                 </div>
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest
-                  ${lead.status === 'Hot' ? 'bg-red-100 text-red-700' : ''}
-                  ${lead.status === 'Warm' ? 'bg-orange-100 text-orange-700' : ''}
-                  ${lead.status === 'Cold' ? 'bg-blue-100 text-blue-700' : ''}
-                  ${lead.status === 'New' || !lead.status ? 'bg-green-100 text-green-700' : ''}
-                `}>
-                  {lead.status || 'New'}
-                </span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest
+                    ${lead.status === 'Hot' ? 'bg-red-100 text-red-700' : ''}
+                    ${lead.status === 'Warm' ? 'bg-orange-100 text-orange-700' : ''}
+                    ${lead.status === 'Cold' ? 'bg-blue-100 text-blue-700' : ''}
+                    ${lead.status === 'New' || !lead.status ? 'bg-green-100 text-green-700' : ''}
+                  `}>
+                    {lead.status || 'New'}
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-slate-300 hover:text-red-600"
+                    onClick={(e) => handleDeleteLead(lead.id, e)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-3 text-[11px] text-slate-500 font-medium">
@@ -374,6 +485,8 @@ export default function Leads() {
              <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Next Page</p>
           </div>
         )}
+          </>
+        )}
       </div>
 
       {/* Floating Action Bar */}
@@ -395,12 +508,23 @@ export default function Leads() {
               </Button>
             </div>
             
-            <Button 
-              className="bg-blue-600 hover:bg-blue-500 gap-2 font-bold" 
-              onClick={() => setIsBulkActionOpen(true)}
-            >
-              Send Me Info <ChevronRight className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-slate-400 hover:text-red-500 hover:bg-red-500/10"
+                onClick={handleBulkDelete}
+                title="Delete Selected"
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
+              <Button 
+                className="bg-blue-600 hover:bg-blue-500 gap-2 font-bold" 
+                onClick={() => setIsBulkActionOpen(true)}
+              >
+                Send Me Info <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

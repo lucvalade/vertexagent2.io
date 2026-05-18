@@ -2,5 +2,5 @@
   "name": "Open House Talking Tour Platform",
   "description": "VertexAgent.io (Powered by Gemini) turns a static property listing into a live, multilingual, voice-first property tour that captures and qualifies leads automatically for agents and brokerages.",
   "requestFramePermissions": ["microphone"],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

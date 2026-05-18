@@ -83,9 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
               setState({ user: docSnap.data() as AppUser, firebaseUser: fUser, loading: false });
+            } else {
+              setState(prev => ({ ...prev, loading: false }));
             }
           }, (err) => {
             console.error("Error listening to user record:", err);
+            setState(prev => ({ ...prev, loading: false }));
           });
         } catch (err) {
           console.error(err);

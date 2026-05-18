@@ -150,6 +150,10 @@ export default function ConversationDetails() {
       });
 
       // 2. SYNTHESIZE
+      if (!convo.transcript || convo.transcript.length === 0) {
+        throw new Error("No transcript data available for synthesis");
+      }
+      
       const promptText = `TTS the following conversation between Sarah (AI Agent) and Mark (Client):
       ${convo.transcript.map((m: any) => `${m.speaker}: ${m.text}`).join('\n')}`;
 
@@ -587,43 +591,51 @@ export default function ConversationDetails() {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 space-y-6 custom-scrollbar bg-slate-50/30" ref={scrollAreaRef}>
-              {convo.transcript.map((msg: any, i: number) => {
-                const isActive = activeIndex === i && isPlaying;
-                const isVisible = isPlaying ? (i <= activeIndex || activeIndex === -1) : (i < visibleMessages);
-                
-                if (!isVisible && !isPlaying) return null;
+              {convo.transcript && convo.transcript.length > 0 ? (
+                convo.transcript.map((msg: any, i: number) => {
+                  const isActive = activeIndex === i && isPlaying;
+                  const isVisible = isPlaying ? (i <= activeIndex || activeIndex === -1) : (i < visibleMessages);
+                  
+                  if (!isVisible && !isPlaying) return null;
 
-                return (
-                  <div 
-                    key={i} 
-                    id={`bubble-${i}`}
-                    className={`flex flex-col ${msg.speaker === 'Client' ? 'items-end ml-auto' : 'items-start mr-auto'} transition-all duration-500 max-w-[85%] ${isPlaying && !isActive ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'} animate-in fade-in slide-in-from-bottom-2`}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5 px-1 text-left w-full">
-                       <div className={`${msg.speaker === 'AI' ? 'bg-[#FF6B35]' : 'bg-blue-600'} w-1.5 h-4 rounded-full mr-1.5 ${isActive ? 'animate-pulse' : ''}`} />
-                       <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${msg.speaker === 'AI' ? 'text-[#FF6B35]' : 'text-blue-600'}`}>
-                        {msg.speaker === 'AI' ? ' Sarah (AI Agent)' : 'Mark (Verified Client)'}
-                        {msg.speaker === 'AI' && <Sparkles className="h-3 w-3" />}
-                      </span>
+                  return (
+                    <div 
+                      key={i} 
+                      id={`bubble-${i}`}
+                      className={`flex flex-col ${msg.speaker === 'Client' ? 'items-end ml-auto' : 'items-start mr-auto'} transition-all duration-500 max-w-[85%] ${isPlaying && !isActive ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'} animate-in fade-in slide-in-from-bottom-2`}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5 px-1 text-left w-full">
+                        <div className={`${msg.speaker === 'AI' ? 'bg-[#FF6B35]' : 'bg-blue-600'} w-1.5 h-4 rounded-full mr-1.5 ${isActive ? 'animate-pulse' : ''}`} />
+                        <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${msg.speaker === 'AI' ? 'text-[#FF6B35]' : 'text-blue-600'}`}>
+                          {msg.speaker === 'AI' ? ' Sarah (AI Agent)' : 'Mark (Verified Client)'}
+                          {msg.speaker === 'AI' && <Sparkles className="h-3 w-3" />}
+                        </span>
+                      </div>
+                      <div className={`p-4 rounded-2xl relative shadow-sm border text-left ${
+                        msg.speaker === 'Client' 
+                          ? 'bg-blue-600 text-white rounded-tr-sm border-blue-700' 
+                          : 'bg-[#FFF8F4] text-slate-800 rounded-tl-sm border-orange-100 shadow-[0_0_15px_rgba(255,107,53,0.05)]'
+                      } ${isActive ? 'ring-4 ring-[#FF6B35] ring-offset-2 scale-[1.02] shadow-xl z-20 !bg-orange-100 !border-orange-300' : ''} ${msg.speaker === 'AI' && !isActive ? 'border-orange-200/50' : ''} transition-all duration-300`}>
+                        <p className="text-sm leading-relaxed font-medium">{msg.text}</p>
+                        
+                        {isActive && (
+                          <div className="absolute -bottom-1 -right-1">
+                            <div className="h-4 w-4 bg-[#FF6B35] rounded-full flex items-center justify-center animate-bounce shadow-md">
+                                <Volume2 className="h-2 w-2 text-white" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className={`p-4 rounded-2xl relative shadow-sm border text-left ${
-                      msg.speaker === 'Client' 
-                        ? 'bg-blue-600 text-white rounded-tr-sm border-blue-700' 
-                        : 'bg-[#FFF8F4] text-slate-800 rounded-tl-sm border-orange-100 shadow-[0_0_15px_rgba(255,107,53,0.05)]'
-                    } ${isActive ? 'ring-4 ring-[#FF6B35] ring-offset-2 scale-[1.02] shadow-xl z-20 !bg-orange-100 !border-orange-300' : ''} ${msg.speaker === 'AI' && !isActive ? 'border-orange-200/50' : ''} transition-all duration-300`}>
-                      <p className="text-sm leading-relaxed font-medium">{msg.text}</p>
-                      
-                      {isActive && (
-                        <div className="absolute -bottom-1 -right-1">
-                           <div className="h-4 w-4 bg-[#FF6B35] rounded-full flex items-center justify-center animate-bounce shadow-md">
-                              <Volume2 className="h-2 w-2 text-white" />
-                           </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-20 text-center opacity-40">
+                  <MessageSquare className="h-12 w-12 mb-4" />
+                  <p className="text-sm font-bold uppercase tracking-widest">No Transcript Data Available</p>
+                  <p className="text-xs mt-1">Wait for neural restoration or contact support if the problem persists.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

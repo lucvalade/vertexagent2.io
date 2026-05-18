@@ -130,15 +130,69 @@
       "type": "object",
       "properties": {
         "maintenanceMode": { "type": "boolean" },
-        "updatedAt": { "type": "number" }
+        "allowRegistrations": { "type": "boolean" },
+        "pricingTitle": { "type": "string" },
+        "pricingDescription": { "type": "string" },
+        "plans": { "type": "array" },
+        "brokerageName": { "type": "string" },
+        "brokerageAddress": { "type": "string" },
+        "brokerageCity": { "type": "string" },
+        "brokerageProvince": { "type": "string" },
+        "brokerageCountry": { "type": "string" },
+        "brokeragePostalCode": { "type": "string" },
+        "brokeragePhone": { "type": "string" },
+        "brokerageEmail": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "socials": {
+          "type": "object",
+          "properties": {
+            "facebook": { "type": "string" },
+            "instagram": { "type": "string" },
+            "youtube": { "type": "string" },
+            "tiktok": { "type": "string" },
+            "x": { "type": "string" },
+            "linkedin": { "type": "string" }
+          }
+        },
+        "stripeConnected": { "type": "boolean" },
+        "webhookSecret": { "type": "string" },
+        "updatedAt": { "type": "number" },
+        "updatedBy": { "type": "string" }
       },
       "required": ["maintenanceMode"]
+    },
+    "LaunchNotification": {
+      "title": "Launch Notification",
+      "description": "Notification signup from the landing page",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "referrals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" },
+              "type": { "type": "string" }
+            }
+          }
+        },
+        "createdAt": { "type": "object" },
+        "source": { "type": "string" }
+      },
+      "required": ["fullName", "email", "createdAt"]
     }
   },
   "firestore": {
     "settings/{settingId}": {
       "schema": { "$ref": "#/entities/Settings" },
       "description": "Global application configuration"
+    },
+    "launch_notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/LaunchNotification" },
+      "description": "Signups from the landing page"
     },
     "users/{userId}": {
       "schema": { "$ref": "#/entities/User" },

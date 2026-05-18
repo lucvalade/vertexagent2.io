@@ -91,7 +91,10 @@ export default function AdminUsers() {
           <h1 className="text-3xl font-black tracking-tighter text-slate-900 italic uppercase">Agent Management</h1>
           <p className="text-slate-500 font-medium">Internal directory and access governance.</p>
         </div>
-        <button className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 self-start md:self-center">
+        <button 
+          onClick={() => navigate("/app/admin/users/invite")}
+          className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 self-start md:self-center"
+        >
           <UserPlus className="h-4 w-4" /> Invite New Agent
         </button>
       </div>
@@ -110,11 +113,6 @@ export default function AdminUsers() {
                 setPage(1);
               }}
             />
-          </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button className="p-2.5 border border-slate-200 bg-white rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-              <Filter className="h-4 w-4 text-slate-600" />
-            </button>
           </div>
         </div>
 

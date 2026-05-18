@@ -11,7 +11,12 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isVerified() { return isSignedIn(); } // Relaxed verification for this environment
     function isDev() { return true; } // Safety bypass for testing
-    function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN"; }
+    function isAdmin() { 
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN") ||
+        request.auth.token.email == "luc.valade@gmail.com"
+      ); 
+    }
 
     // User validation
     function isValidUser(data) {
@@ -95,6 +100,17 @@ service cloud.firestore {
       allow write: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
     }
 
+    match /launch_notifications/{notificationId} {
+      allow create: if true;
+      allow read, delete: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
+    }
+
+    match /system_logs/{logId} {
+      allow create: if true; // allow system and client to log events
+      allow read: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
+      allow delete, update: if false; // immutable logs
+    }
+
     match /listings/{listingId} {
       allow get: if true;
       allow list: if isVerified();
@@ -109,22 +125,24 @@ service cloud.firestore {
       allow delete: if isSignedIn();
         
       match /leads/{leadId} {
-        allow get: if isSignedIn() 
-          && isValidId(listingId)
-          && isValidId(leadId)
-          && get(/databases/$(database)/documents/listings/$(listingId)).data.ownerId == request.auth.uid;
-        
-        allow list: if isSignedIn() 
-          && isValidId(listingId)
-          && get(/databases/$(database)/documents/listings/$(listingId)).data.ownerId == request.auth.uid;
+        allow get, list: if isSignedIn() 
+          && (get(/databases/$(database)/documents/listings/$(listingId)).data.ownerId == request.auth.uid || isAdmin());
 
         allow create: if isValidId(listingId)
           && isValidId(leadId)
-          && isValidLead(incoming())
-          && exists(/databases/$(database)/documents/listings/$(listingId));
+          && isValidLead(incoming());
           
-        allow update, delete: if false;
+        allow update, delete: if isAdmin();
       }
+    }
+
+    match /leads/{leadId} {
+      allow get: if isSignedIn() 
+        && (resource.data.listingOwnerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() 
+        && (resource.data.listingOwnerId == request.auth.uid || isAdmin());
+      allow create: if isValidId(leadId) && isValidLead(incoming());
+      allow update, delete: if isAdmin();
     }
 
     match /conversations/{convoId} {

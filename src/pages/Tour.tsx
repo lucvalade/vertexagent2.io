@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Mic, MicOff, Home, PhoneCall, Loader2, MapPin, Globe } from "lucide-react";
+import { Mic, MicOff, Home, PhoneCall, Loader2, MapPin, Globe, Sparkles } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -312,6 +312,34 @@ Behavior:
                {listing.address}{listing.city ? `, ${listing.city}` : ""}{listing.province ? `, ${listing.province}` : ""}
              </h2>
           </div>
+          {(listing.openHouseDate || listing.openHouseTime) && (
+            <div className="flex items-center gap-2 text-white/90 mb-3 ml-1 bg-blue-600/20 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-blue-400/30 w-fit drop-shadow-lg">
+              <Sparkles className="h-4 w-4 text-orange-400 animate-pulse" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-300 leading-none mb-1">Open House</span>
+                <span className="text-sm font-bold flex items-center gap-2">
+                  {listing.openHouseDate && (
+                    <span>
+                      {new Date(listing.openHouseDate + 'T00:00:00').toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      }).replace(/(\d+)/, (day) => {
+                        const d = parseInt(day);
+                        if (isNaN(d)) return day;
+                        const s = ["th", "st", "nd", "rd"];
+                        const v = d % 100;
+                        return d + (s[(v - 20) % 10] || s[v] || s[0]);
+                      })}
+                    </span>
+                  )}
+                  {listing.openHouseDate && listing.openHouseTime && <span className="opacity-40">|</span>}
+                  {listing.openHouseTime && <span>{listing.openHouseTime}</span>}
+                </span>
+              </div>
+            </div>
+          )}
           <div className="flex gap-x-2 text-sm md:text-base text-white drop-shadow-lg ml-1 items-baseline">
              {listing.price !== undefined && <span className="font-bold text-lg">${listing.price.toLocaleString()}</span>}
              {listing.beds !== undefined && <span className="font-medium">{listing.beds} Beds</span>}

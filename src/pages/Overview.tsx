@@ -79,7 +79,7 @@ export default function Overview() {
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard [Client Mode]</h1>
           <p className="text-slate-500 mt-1">Welcome back, {firstName}. Here's what's happening with your tours.</p>
         </div>
         {!isComplete && (

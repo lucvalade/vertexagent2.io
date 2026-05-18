@@ -32,7 +32,8 @@ export default function AdminListings() {
   ]);
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
-  const [dateFilter, setDateFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [isComplianceInfoOpen, setIsComplianceInfoOpen] = useState(false);
 
   const handleSort = (key: string) => {
@@ -47,7 +48,8 @@ export default function AdminListings() {
     .filter(l => 
       (l.address.toLowerCase().includes(searchTerm.toLowerCase()) || 
        l.agent.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (!dateFilter || l.date.includes(dateFilter))
+      (!startDate || l.date >= startDate) &&
+      (!endDate || l.date <= endDate)
     )
     .sort((a, b) => {
       if (!sortConfig) return 0;
@@ -85,25 +87,48 @@ export default function AdminListings() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Pick Date:</span>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                <input 
-                  type="date"
-                  className="pl-9 pr-8 py-1.5 border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                />
-                {dateFilter && (
-                  <button 
-                    onClick={() => setDateFilter("")}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 bg-slate-900 text-white rounded text-[8px] font-black tracking-widest hover:bg-black transition-all shadow-sm"
-                  >
-                    CLEAR
-                  </button>
-                )}
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Start Date:</span>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input 
+                    type="date"
+                    className="pl-9 pr-14 py-1.5 border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                  {startDate && (
+                    <button 
+                      onClick={() => setStartDate("")}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 bg-slate-200 text-slate-700 rounded text-[8px] font-black tracking-widest hover:bg-slate-300 transition-all shadow-sm"
+                    >
+                      CLEAR
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">End Date:</span>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input 
+                    type="date"
+                    className="pl-9 pr-14 py-1.5 border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                  />
+                  {endDate && (
+                    <button 
+                      onClick={() => setEndDate("")}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 bg-slate-200 text-slate-700 rounded text-[8px] font-black tracking-widest hover:bg-slate-300 transition-all shadow-sm"
+                    >
+                      CLEAR
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
             <button 

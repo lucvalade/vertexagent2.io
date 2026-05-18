@@ -119,6 +119,7 @@ export default function Register() {
                     placeholder="Jane Doe" 
                     value={name}
                     onChange={e => setName(e.target.value)}
+                    maxLength={100}
                     className="pl-10 h-12 bg-slate-50 border-slate-100 focus:bg-white transition-all rounded-xl font-medium"
                     required
                   />
@@ -134,6 +135,7 @@ export default function Register() {
                     placeholder="name@brokerage.com" 
                     value={email}
                     onChange={e => setEmail(e.target.value)}
+                    maxLength={100}
                     className="pl-10 h-12 bg-slate-50 border-slate-100 focus:bg-white transition-all rounded-xl font-medium"
                     required
                   />
@@ -149,6 +151,7 @@ export default function Register() {
                     placeholder="••••••••" 
                     value={password}
                     onChange={e => setPassword(e.target.value)}
+                    maxLength={100}
                     className="pl-10 h-12 bg-slate-50 border-slate-100 focus:bg-white transition-all rounded-xl font-medium"
                     required
                   />

@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from './App.tsx';
+import {ThemeProvider} from 'next-themes';
 import './index.css';
 import { AuthProvider } from './hooks/useAuth.tsx';
 import ProtectedLayout from './components/ProtectedLayout.tsx';
@@ -29,20 +30,26 @@ import Settings from './pages/Settings.tsx';
 import AdminDashboard from './pages/admin/AdminDashboard.tsx';
 import AdminUsers from './pages/admin/AdminUsers.tsx';
 import AdminListings from './pages/admin/AdminListings.tsx';
+import AdminNotifications from './pages/admin/AdminNotifications.tsx';
+import AdminLogs from './pages/admin/AdminLogs.tsx';
+import InviteAgent from './pages/admin/InviteAgent.tsx';
 
 import Integrations from './pages/Integrations.tsx';
 import Register from './pages/Register.tsx';
 import Login from './pages/Login.tsx';
+import Contact from './pages/Contact.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="light">
+      <AuthProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<App />}>
             <Route index element={<PublicSite />} />
             <Route path="register" element={<Register />} />
             <Route path="login" element={<Login />} />
+            <Route path="contact" element={<Contact />} />
             <Route path="tour/:listingId" element={<Tour />} />
             <Route path="app" element={<ProtectedLayout />}>
               <Route index element={<Navigate to="overview" replace />} />
@@ -69,13 +76,18 @@ createRoot(document.getElementById('root')!).render(
               <Route path="admin">
                 <Route index element={<AdminDashboard />} />
                 <Route path="users" element={<AdminUsers />} />
+                <Route path="users/invite" element={<InviteAgent />} />
                 <Route path="listings" element={<AdminListings />} />
+                <Route path="notifications" element={<AdminNotifications />} />
+                <Route path="logs" element={<AdminLogs />} />
+                <Route path="settings" element={<Settings />} />
               </Route>
             </Route>
           </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </ThemeProvider>
   </StrictMode>,
 );
 

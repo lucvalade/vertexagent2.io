@@ -42,6 +42,8 @@ export interface Listing {
   voiceId?: string;
   voiceName?: string;
   tourDescriptors?: string[];
+  openHouseDate?: string;
+  openHouseTime?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -57,6 +59,7 @@ export interface Lead {
   message?: string;
   status?: "New" | "Hot" | "Warm" | "Cold";
   createdAt: number;
+  isLaunchSignup?: boolean;
 }
 
 export async function createListing(listing: Listing) {
@@ -144,15 +147,26 @@ export async function getAllListings(): Promise<Listing[]> {
 }
 
 export async function createLead(listingId: string, lead: Lead) {
-  const subPath = `listings/${listingId}/leads/${lead.id}`;
-  const globalPath = `leads/${lead.id}`;
   try {
-    // Save to subcollection (listing-specific)
-    await setDoc(doc(db, "listings", listingId, "leads", lead.id), lead);
-    // Save to global collection (agent-accessible)
+    if (listingId !== "DEMO_SIGNUP") {
+      // Ensure we have listing details
+      const listingDoc = await getDoc(doc(db, "listings", listingId));
+      if (listingDoc.exists()) {
+        const listingData = listingDoc.data() as Listing;
+        lead.agentId = listingData.ownerId;
+        lead.listingAddress = listingData.address;
+        
+        // Save to listing subcollection
+        await setDoc(doc(db, "listings", listingId, "leads", lead.id), lead);
+      }
+    } else {
+      lead.isLaunchSignup = true;
+    }
+    
+    // Save to global collection (agent/admin-accessible)
     await setDoc(doc(db, "leads", lead.id), lead);
   } catch (err) {
-    handleFirestoreError(err, OperationType.CREATE, globalPath);
+    handleFirestoreError(err, OperationType.CREATE, `leads/${lead.id}`);
   }
 }
 

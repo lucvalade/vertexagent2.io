@@ -88,7 +88,36 @@ export default function EditListing() {
   const [talkingPoints, setTalkingPoints] = useState<string[]>([]);
   const [newPoint, setNewPoint] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [openHouseDate, setOpenHouseDate] = useState("");
+  const [openHouseStartTime, setOpenHouseStartTime] = useState("");
+  const [openHouseEndTime, setOpenHouseEndTime] = useState("");
   const [tourDescriptors, setTourDescriptors] = useState<string[]>(new Array(16).fill(""));
+
+  const times = [
+    "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM"
+  ];
+
+  const getFormattedDateHint = (dateString: string) => {
+    if (!dateString) return "Sun, May 17th, 2026";
+    try {
+      const d = new Date(dateString + 'T00:00:00');
+      return d.toLocaleDateString('en-US', { 
+        weekday: 'short', 
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      }).replace(/(\d+)/, (day, offset, str) => {
+        // Only replace the day number (the one before the year or at the end of the date part)
+        // Check if this digit is followed by a comma or space then year
+        const n = parseInt(day);
+        const s = ["th", "st", "nd", "rd"];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+      });
+    } catch (e) {
+      return "Sun, May 17th, 2026";
+    }
+  };
 
   // Voice Warning Check
   useEffect(() => {
@@ -231,6 +260,15 @@ export default function EditListing() {
           if (idx < 16) descriptorsArray[idx] = val;
         });
         setTourDescriptors(descriptorsArray);
+        setOpenHouseDate(data.openHouseDate || "");
+        if (data.openHouseTime) {
+          const [start, end] = data.openHouseTime.split(" - ");
+          setOpenHouseStartTime(start || "");
+          setOpenHouseEndTime(end || "");
+        } else {
+          setOpenHouseStartTime("");
+          setOpenHouseEndTime("");
+        }
 
         setWebhookUrl(data.webhookUrl || "");
       }
@@ -504,6 +542,8 @@ export default function EditListing() {
         webhookUrl: webhookUrl || "",
         voiceId: voiceId || "",
         voiceName: voiceName || "",
+        openHouseDate: openHouseDate || "",
+        openHouseTime: (openHouseStartTime && openHouseEndTime) ? `${openHouseStartTime} - ${openHouseEndTime}` : "",
         updatedAt: Date.now()
       };
 
@@ -612,7 +652,7 @@ export default function EditListing() {
               <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St, City, ST" required />
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label>City</Label>
                 <Input value={city} onChange={e => setCity(e.target.value)} placeholder="City" />
@@ -624,6 +664,17 @@ export default function EditListing() {
               <div className="space-y-2">
                 <Label>Postal/Zip Code</Label>
                 <Input value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="12345" />
+              </div>
+              <div className="space-y-2">
+                <Label>Country</Label>
+                <select 
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={country} 
+                  onChange={e => setCountry(e.target.value)}
+                >
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                </select>
               </div>
             </div>
 
@@ -642,25 +693,14 @@ export default function EditListing() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>MLS® Number</Label>
                 <Input value={mlsNumber} onChange={e => setMlsNumber(e.target.value.toUpperCase())} placeholder="MLS123456" />
               </div>
               <div className="space-y-2">
-                <Label>Originating System (MLS Board)</Label>
+                <Label>MLS Board</Label>
                 <Input value={originatingSystemName} onChange={e => setOriginatingSystemName(e.target.value)} placeholder="e.g. NAR, CREA" />
-              </div>
-              <div className="space-y-2">
-                <Label>Country</Label>
-                <select 
-                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={country} 
-                  onChange={e => setCountry(e.target.value)}
-                >
-                  <option value="US">United States</option>
-                  <option value="CA">Canada</option>
-                </select>
               </div>
             </div>
             
@@ -683,6 +723,44 @@ export default function EditListing() {
               </div>
             </div>
 
+            <div className="pt-4 border-t space-y-4">
+              <CardTitle className="text-lg">Open House</CardTitle>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input 
+                    type="date" 
+                    value={openHouseDate} 
+                    onChange={e => setOpenHouseDate(e.target.value)} 
+                  />
+                  <p className="text-[10px] text-slate-400 italic">This will be displayed as {getFormattedDateHint(openHouseDate)}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Time Range</Label>
+                  <div className="flex items-center gap-2">
+                    <select 
+                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={openHouseStartTime}
+                      onChange={e => setOpenHouseStartTime(e.target.value)}
+                    >
+                      <option value="">Start</option>
+                      {times.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <span className="text-slate-400">-</span>
+                    <select 
+                      className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={openHouseEndTime}
+                      onChange={e => setOpenHouseEndTime(e.target.value)}
+                    >
+                      <option value="">End</option>
+                      {times.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-slate-400 italic">This will be displayed as {openHouseStartTime && openHouseEndTime ? `${openHouseStartTime} - ${openHouseEndTime}` : "2 PM - 4 PM"}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={5} placeholder="Describe the property..." />
@@ -700,6 +778,7 @@ export default function EditListing() {
               <div className="flex flex-col gap-1">
                 <Label className="text-base font-bold">Tour Descriptors</Label>
                 <p className="text-xs text-slate-500">Add up to 16 key features or rooms, (Like Living Room / Kitchen / Bedrooms / Bathrooms Key Features / Basement / Front Yard / Back Yard + Pool), that visitors can ask the AI agent about during the tour to trigger specific visuals and voice descriptions.</p>
+                <p className="text-xs text-slate-700 mt-1"><strong>These Tour Descriptors names should match the Listing Images names as this is what the AI will use as a reference when talking to the customers.</strong></p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {tourDescriptors.map((desc, idx) => (

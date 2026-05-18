@@ -104,7 +104,14 @@ export default function VoiceLab() {
           }
           return { id: doc.id, ...data } as Voice;
         });
-        setVoices(voicesData);
+
+        // Sort voices so default is at the top
+        const sortedVoices = voicesData.sort((a, b) => {
+          if (a.isDefault) return -1;
+          if (b.isDefault) return 1;
+          return 0;
+        });
+        setVoices(sortedVoices);
       }
       setLoading(false);
     });
