@@ -34,7 +34,7 @@ function base64ToFloat32(base64: string): Float32Array {
   return float32Array;
 }
 
-export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall: (name: string, args: any) => any) {
+export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall: (name: string, args: any) => any, voice: string = "Puck") {
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
           type: "setup",
           systemInstruction,
           tools,
-          voice: "Puck"
+          voice: voice
         }));
       };
 
@@ -140,15 +140,19 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
       };
 
       // Audio rendering setup (Gemini outputs 24kHz PCM)
-      playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
-      if (playbackContextRef.current.state === 'suspended') {
-        await playbackContextRef.current.resume();
-      }
-      playbackTimeRef.current = playbackContextRef.current.currentTime;
+      try {
+        playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
+        if (playbackContextRef.current.state === 'suspended') {
+          await playbackContextRef.current.resume();
+        }
+        playbackTimeRef.current = playbackContextRef.current.currentTime;
 
-      // Microphone capture setup (Gemini expects 16kHz PCM input)
-      audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-      await audioContextRef.current.audioWorklet.addModule("/pcm-processor.js");
+        // Microphone capture setup (Gemini expects 16kHz PCM input)
+        audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+        await audioContextRef.current.audioWorklet.addModule("/pcm-processor.js");
+      } catch (e) {
+        throw e;
+      }
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {

@@ -35,14 +35,17 @@ interface Voice {
 }
 
 const INITIAL_VOICES: Voice[] = [
-  { id: "1", name: "Sarah's Clone (Agent)", status: "Active", type: "Cloned", rating: 4.8, ratingCount: 12, tags: ["Female", "Authoritative"] },
-  { id: "2", name: "Professional Female", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 45, tags: ["Female", "Professional"] },
-  { id: "3", name: "Warm Male", status: "Active", type: "Synthetic", rating: 4.5, ratingCount: 32, tags: ["Male", "Friendly"] },
-  { id: "4", name: "Luc's Clone (Admin)", status: "Active", type: "Cloned", rating: 5.0, ratingCount: 8, tags: ["Male", "Calm"] },
-  { id: "5", name: "Executive British (Female)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 22, tags: ["Female", "British", "Crisp"] },
-  { id: "6", name: "Midwest Neutral (Male)", status: "Active", type: "Synthetic", rating: 4.4, ratingCount: 19, tags: ["Male", "Neutral"] },
-  { id: "7", name: "Dynamic Storyteller", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 56, tags: ["Female", "Energetic"] },
-  { id: "8", name: "Calm Narrator", status: "Active", type: "Synthetic", rating: 4.6, ratingCount: 28, tags: ["Male", "Deep"] },
+  { id: "v1", name: "Sora Welcome (Kore)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 124, tags: ["Female", "Warm", "First Touch"], isDefault: true },
+  { id: "v2", name: "Open House Sign-In (Kore)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 95, tags: ["Female", "Polished", "Front Desk"] },
+  { id: "v3", name: "AI Tour Intro (Aoede)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 202, tags: ["Female", "Tour Guide", "Expressive"] },
+  { id: "v4", name: "Lender Handoff (Kore)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 78, tags: ["Female", "High-Trust", "Financing"] },
+  { id: "v5", name: "Follow-Up Message (Umbriel)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 147, tags: ["Female", "Refined", "Nurture"] },
+  { id: "2", name: "Professional Female (Kore)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 45, tags: ["Female", "Professional"] },
+  { id: "5", name: "Executive British (Zephyr)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 22, tags: ["Female", "British", "Executive"] },
+  { id: "7", name: "Dynamic Storyteller (Aoede)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 56, tags: ["Female", "British", "Expressive"] },
+  { id: "3", name: "Warm Energetic Male (Puck)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 32, tags: ["Male", "Warm", "Energetic"] },
+  { id: "6", name: "Calm Reassuring Male (Charon)", status: "Active", type: "Synthetic", rating: 4.6, ratingCount: 19, tags: ["Male", "Calm", "Warm"] },
+  { id: "8", name: "Deep Narrator (Fenrir)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 28, tags: ["Male", "Deep", "Narrative"] },
 ];
 
 export default function VoiceLab() {
@@ -90,13 +93,19 @@ export default function VoiceLab() {
     const q = query(voicesRef);
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      if (snapshot.empty) {
-        // Bootstrap initial voices if none exist
-        for (const v of INITIAL_VOICES) {
-          await setDoc(doc(voicesRef, v.id), v);
+      // Clean up Sarah's Clone (id: "1") from database if it exists
+      const hasOldSarah = snapshot.docs.some(doc => doc.id === "1");
+      if (hasOldSarah) {
+        try {
+          await deleteDoc(doc(voicesRef, "1"));
+        } catch (e) {
+          console.error("Clean old Sarah voice error in VoiceLab:", e);
         }
-      } else {
-        const voicesData = snapshot.docs.map(doc => {
+      }
+
+      const voicesData = snapshot.docs
+        .filter(doc => doc.id !== "1")
+        .map(doc => {
           const data = doc.data() as any;
           // Strip hardcoded "(Default)" from name to respect global settings UI
           if (data.name && data.name.includes(" (Default)")) {
@@ -104,6 +113,39 @@ export default function VoiceLab() {
           }
           return { id: doc.id, ...data } as Voice;
         });
+
+      if (snapshot.empty) {
+        // Bootstrap initial voices if none exist
+        for (const v of INITIAL_VOICES) {
+          await setDoc(doc(voicesRef, v.id), v);
+        }
+      } else {
+        // Auto synchronize any modified voice name definitions or additions in user's profile
+        let nameUpdated = false;
+        for (const ini of INITIAL_VOICES) {
+          const match = voicesData.find(e => e.id === ini.id);
+          if (!match) {
+            await setDoc(doc(voicesRef, ini.id), ini);
+            nameUpdated = true;
+          } else if (match.name !== ini.name || match.isDefault !== ini.isDefault) {
+            await updateDoc(doc(voicesRef, ini.id), { name: ini.name, isDefault: ini.isDefault || false });
+            nameUpdated = true;
+          }
+        }
+
+        // Clean obsolete ones in user profile
+        for (const exp of voicesData) {
+          if (!INITIAL_VOICES.some(ini => ini.id === exp.id)) {
+            try {
+              await deleteDoc(doc(voicesRef, exp.id));
+              nameUpdated = true;
+            } catch (err) {
+              console.error("Clean old obsolete voice in VoiceLab error:", err);
+            }
+          }
+        }
+
+        if (nameUpdated) return; // This triggers snapshot change event, which will rerun the snapshot listener with correct names
 
         // Sort voices so default is at the top
         const sortedVoices = voicesData.sort((a, b) => {
@@ -139,6 +181,26 @@ export default function VoiceLab() {
     setActiveVoice(voice);
     setPreviewReady(false);
     setUserRating(0); // Ensure rating resets per voice test
+    
+    const lowerName = voice.name.toLowerCase();
+    if (lowerName.includes("welcome")) {
+      setTestText("[slow] Hi, I’m Sora, your AI property assistant. [pause] Welcome to this open house experience. [pause] I’m here to help you explore the home, answer questions, and guide you through the next steps at your own pace.");
+    } else if (lowerName.includes("sign-in")) {
+      setTestText("[slow] Welcome in. [pause] Please take a moment to sign in so we can share property details and help personalize your visit. [pause] If you have any questions during the tour, I’ll be here to help.");
+    } else if (lowerName.includes("tour intro")) {
+      setTestText("[slow] Welcome to the tour. [pause] As you move through the home, I can point out key features, answer questions, and help you learn more about the property. [pause] Take your time, and explore in whatever order feels most natural to you.");
+    } else if (lowerName.includes("lender")) {
+      setTestText("[slow] If you’d like, I can also connect you with a mortgage professional for financing questions. [pause] This is completely optional, but it can be helpful if you’d like to better understand budget, pre-approval, or next steps.");
+    } else if (lowerName.includes("follow-up")) {
+      setTestText("[slow] Thank you for visiting today. [pause] I hope the tour helped you get a better feel for the home. [pause] If you’d like more details, want to revisit the property, or have financing questions, I’m here to help with the next step.");
+    } else if (lowerName.includes("storyteller")) {
+      setTestText("[slow] Let me tell you about the stunning kitchen which was completely renovated in 2025. It boasts professional-grade appliances, quartz countertops, and a massive walk-in pantry.");
+    } else if (lowerName.includes("executive")) {
+      setTestText("[slow] The master suite is a private sanctuary. Highlighted by panoramic sunset views, integrated fireplace, and a massive walk-in wardrobe.");
+    } else {
+      setTestText("Hi, I'm Sora, your AI assistant. How can I help you explore this beautiful property today?");
+    }
+    
     setIsTestOpen(true);
   };
 
@@ -155,15 +217,61 @@ export default function VoiceLab() {
 
     try {
       // Map voices to prebuilt names for variety
-      let voiceName = 'Kore'; // Sarah/Female default
+      let voiceName = 'Kore';
+      let styleInstruction = "";
       const lowerName = activeVoice.name.toLowerCase();
-      if (lowerName.includes('male') || lowerName.includes('luc') || lowerName.includes('william') || lowerName.includes('ethan')) {
-        voiceName = lowerName.includes('warm') || lowerName.includes('friendly') ? 'Puck' : 'Charon';
-      } else if (lowerName.includes('british') || lowerName.includes('executive') || lowerName.includes('crisp')) {
+
+      if (lowerName.includes('welcome') || lowerName.includes('first touch')) {
+        voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Kore.
+Audio Profile: Polished, warm, smooth, stable, and premium female persona. Sounds trustworthy, elegant, and highly professional, fitting a luxury real estate brand.
+Scene: Greeting a guest or guiding an open house experience for the first time.
+Director's Notes: Deliver with a smooth, warm, client-friendly tone. Pacing must be calm, relaxed, and completely natural. Do not sound high-pitched, excited, rushed, or robotic. Speak with absolute confidence and clarity. Use natural breathing pauses.`;
+      } else if (lowerName.includes('sign-in')) {
+        voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Kore.
+Audio Profile: Clear, highly polished, professional female assistant designed for modern transactional/digital environments. Sound articulate, calm, reassuring, and easy to follow.
+Scene: Guiding a visitor through a touchless open house sign-in flow.
+Director's Notes: Prioritize data trust and structural clarity. Delivery must remain polite, concise, low-pressure, informative, and highly approachable.`;
+      } else if (lowerName.includes('tour intro') || lowerName.includes('aoede')) {
         voiceName = 'Aoede';
+        styleInstruction = `Configure Voice: Aoede.
+Audio Profile: Premium, fluid, highly engaging AI tour guide. Possesses an elegant, smooth rhythm with deep conversational inflections.
+Scene: Initiating an interactive, self-guided property tour.
+Director's Notes: Sound warm, highly informative, and confident. Keep the pace completely relaxed. The buyer should feel fluidly guided and educated, never hard-sold.`;
+      } else if (lowerName.includes('lender') || lowerName.includes('financing')) {
+        voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Kore.
+Audio Profile: High-trust, mature, exceptionally composed, warm, and helpful female assistant handling sensitive real estate financing handoffs.
+Scene: Introducing an optional mortgage pre-approval or financing handoff.
+Director's Notes: Maintain a deeply respectful, supportive, steady, trustworthy, and non-pushy tone. Project calm authority and neutral helpfulness.`;
+      } else if (lowerName.includes('follow-up') || lowerName.includes('umbriel') || lowerName.includes('nurture')) {
+        voiceName = 'Umbriel';
+        styleInstruction = `Configure Voice: Umbriel.
+Audio Profile: Warm, deeply refined, thoughtful, friendly, and reassuring assistant handling post-visit real estate operations.
+Scene: Follow-up message engaging a home buyer after their open house visit.
+Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the cadence steady, rhythmic, and natural. Make the message feel personalized, professional, and accessible.`;
+      } else if (lowerName.includes('professional female')) {
+        voiceName = 'Kore';
+        styleInstruction = "Say smoothly, confidently, and professionally without sounding overly excited: ";
+      } else if (lowerName.includes('executive british') || lowerName.includes('zephyr')) {
+        voiceName = 'Zephyr';
+        styleInstruction = "Deliver this slowly and deliberately using a refined, premium British accent with crisp, executive clarity: ";
+      } else if (lowerName.includes('storyteller')) {
+        voiceName = 'Aoede';
+        styleInstruction = "Deliver using an expressive, engaging, story-led British tone. Add natural emotional inflections so it sounds vivid, inviting, and alive: ";
+      } else if (lowerName.includes('warm energetic') || lowerName.includes('puck')) {
+        voiceName = 'Puck';
+        styleInstruction = "Deliver this with an energetic, friendly, and spirited tone: ";
+      } else if (lowerName.includes('calm reassuring') || lowerName.includes('charon')) {
+        voiceName = 'Charon';
+        styleInstruction = "Deliver this with a calm, friendly, reassuring, and highly trustworthy tone: ";
+      } else if (lowerName.includes('deep narrator') || lowerName.includes('fenrir')) {
+        voiceName = 'Fenrir';
+        styleInstruction = "Deliver this in a slow, soothing, deep-narrative cadence: ";
       }
 
-      const promptText = `Generate high-quality speech for the following text as ${activeVoice.name}: "${testText}"`;
+      const promptText = `${styleInstruction}\n\nDeliver the following script with precise pacing:\n${testText}`;
 
       const response = await ai.models.generateContent({
         model: "gemini-3.1-flash-tts-preview",
@@ -321,7 +429,16 @@ export default function VoiceLab() {
           speechConfig: {
             voiceConfig: { 
               prebuiltVoiceConfig: { 
-                voiceName: voice.name.toLowerCase().includes('male') ? 'Charon' : 'Zephyr' 
+                voiceName: (() => {
+                  const lowercaseVoiceName = voice.name.toLowerCase();
+                  if (lowercaseVoiceName.includes('professional female')) return 'Kore';
+                  if (lowercaseVoiceName.includes('executive british')) return 'Zephyr';
+                  if (lowercaseVoiceName.includes('storyteller')) return 'Aoede';
+                  if (lowercaseVoiceName.includes('warm energetic')) return 'Puck';
+                  if (lowercaseVoiceName.includes('calm reassuring')) return 'Charon';
+                  if (lowercaseVoiceName.includes('deep narrator') || lowercaseVoiceName.includes('narrator')) return 'Fenrir';
+                  return 'Kore';
+                })()
               } 
             },
           },
@@ -689,11 +806,11 @@ export default function VoiceLab() {
             <div className="p-6 relative">
               <div className="absolute top-4 right-2 z-10">
                 <DropdownMenu>
-                  <DropdownMenuTrigger>
+                  <DropdownMenuTrigger render={
                     <button type="button" className="p-2 text-slate-400 group-hover:text-blue-600 transition-colors bg-white/80 backdrop-blur-sm rounded-full cursor-pointer inline-block outline-none">
                       <MoreVertical className="h-4 w-4" />
                     </button>
-                  </DropdownMenuTrigger>
+                  } />
                   <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl border-slate-200">
                     <DropdownMenuItem className="gap-2 font-bold" onClick={(e) => {
                       e.stopPropagation();
@@ -861,7 +978,7 @@ export default function VoiceLab() {
               <div className="flex gap-4">
                 {[1,2,3,4,5,6,7].map(i => (
                   <div 
-                    key={i} 
+                    key={'bar-' + i} 
                     className={`w-1.5 rounded-full bg-blue-500 transition-all duration-150 ${isLiveActive ? 'animate-bounce' : 'h-1.5'}`} 
                     style={{ 
                       height: isLiveActive ? `${20 + Math.random() * 60}px` : '6px',
@@ -922,15 +1039,55 @@ export default function VoiceLab() {
               <textarea 
                 value={testText}
                 onChange={e => setTestText(e.target.value)}
-                className="w-full h-32 p-4 rounded-xl border border-slate-200 bg-slate-50 resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed"
+                className="w-full h-28 p-4 rounded-xl border border-slate-200 bg-slate-50 resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed"
               />
+            </div>
+
+            <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Premium Real Estate Presets</span>
+                <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">Google AI Studio</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {[
+                  {
+                    title: "Welcome Message",
+                    script: "[slow] Hi, I’m Sora, your AI property assistant. [pause] Welcome to this open house experience. [pause] I’m here to help you explore the home, answer questions, and guide you through the next steps at your own pace.",
+                  },
+                  {
+                    title: "Kiosk Sign-In",
+                    script: "[slow] Welcome in. [pause] Please take a moment to sign in so we can share property details and help personalize your visit. [pause] If you have any questions during the tour, I’ll be here to help.",
+                  },
+                  {
+                    title: "AI Tour Intro",
+                    script: "[slow] Welcome to the tour. [pause] As you move through the home, I can point out key features, answer questions, and help you learn more about the property. [pause] Take your time, and explore in whatever order feels most natural to you.",
+                  },
+                  {
+                    title: "Lender Handoff",
+                    script: "[slow] If you’d like, I can also connect you with a mortgage professional for financing questions. [pause] This is completely optional, but it can be helpful if you’d like to better understand budget, pre-approval, or next steps.",
+                  },
+                  {
+                    title: "Follow-Up Message",
+                    script: "[slow] Thank you for visiting today. [pause] I hope the tour helped you get a better feel for the home. [pause] If you’d like more details, want to revisit the property, or have financing questions, I’m here to help with the next step.",
+                  },
+                ].map((p, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setTestText(p.script)}
+                    className="p-2 text-xs font-semibold text-center rounded-lg border border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-700 hover:text-blue-700 shadow-sm transition-all cursor-pointer"
+                  >
+                    {p.title}
+                  </button>
+                ))}
+              </div>
             </div>
             
             {isTesting ? (
               <div className="bg-blue-600 rounded-xl p-6 flex flex-col items-center justify-center space-y-4 text-white">
                 <div className="flex gap-1 items-end h-8">
                   {[1,2,3,4,5,6,7,8].map(i => (
-                    <div key={i} className="w-1.5 bg-white/40 rounded-full animate-pulse" style={{ height: `${Math.random()*100}%`, animationDelay: `${i*100}ms` }} />
+                    <div key={'pulse-bar-' + i} className="w-1.5 bg-white/40 rounded-full animate-pulse" style={{ height: `${Math.random()*100}%`, animationDelay: `${i*100}ms` }} />
                   ))}
                 </div>
                 <p className="text-xs font-bold uppercase tracking-widest animate-pulse">Generating Audio...</p>

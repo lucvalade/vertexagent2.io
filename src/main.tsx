@@ -13,6 +13,7 @@ import Listings from './pages/Listings.tsx';
 import ListingDetails from './pages/ListingDetails.tsx';
 import EditListing from './pages/EditListing.tsx';
 import Tour from './pages/Tour.tsx';
+import ListingMicrosite from './pages/ListingMicrosite.tsx';
 import Leads from './pages/Leads.tsx';
 import LeadDetails from './pages/LeadDetails.tsx';
 import Conversations from './pages/Conversations.tsx';
@@ -33,11 +34,29 @@ import AdminListings from './pages/admin/AdminListings.tsx';
 import AdminNotifications from './pages/admin/AdminNotifications.tsx';
 import AdminLogs from './pages/admin/AdminLogs.tsx';
 import InviteAgent from './pages/admin/InviteAgent.tsx';
+import BrokerageSettings from './pages/admin/BrokerageSettings.tsx';
+import Flyers from './pages/Flyers.tsx';
+import Lenders from './pages/Lenders.tsx';
+import AiTours from './pages/AiTours.tsx';
+import OpenHousesAgent from './pages/OpenHousesAgent.tsx';
 
 import Integrations from './pages/Integrations.tsx';
 import Register from './pages/Register.tsx';
 import Login from './pages/Login.tsx';
 import Contact from './pages/Contact.tsx';
+import PrivacyPolicy from './pages/PrivacyPolicy.tsx';
+import TermsOfService from './pages/TermsOfService.tsx';
+import Compliance from './pages/Compliance.tsx';
+
+// Public pages
+import ProductPage from './pages/ProductPage.tsx';
+import OpenHousesPage from './pages/OpenHousesPage.tsx';
+import UrlImportPage from './pages/UrlImportPage.tsx';
+import BrokeragesPage from './pages/BrokeragesPage.tsx';
+import PublicIntegrationsPage from './pages/PublicIntegrationsPage.tsx';
+import PricingPage from './pages/PricingPage.tsx';
+import DemoPage from './pages/DemoPage.tsx';
+import HowItWorksPage from './pages/HowItWorksPage.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -50,7 +69,23 @@ createRoot(document.getElementById('root')!).render(
             <Route path="register" element={<Register />} />
             <Route path="login" element={<Login />} />
             <Route path="contact" element={<Contact />} />
+            <Route path="privacy" element={<PrivacyPolicy />} />
+            <Route path="terms" element={<TermsOfService />} />
+            <Route path="compliance" element={<Compliance />} />
             <Route path="tour/:listingId" element={<Tour />} />
+            <Route path="microsite/:listingId" element={<ListingMicrosite />} />
+            
+            {/* New public subpages */}
+            <Route path="product" element={<ProductPage />} />
+            <Route path="open-houses" element={<OpenHousesPage />} />
+            <Route path="url-import" element={<UrlImportPage />} />
+            <Route path="brokerages" element={<BrokeragesPage />} />
+            <Route path="integrations" element={<PublicIntegrationsPage />} />
+            <Route path="pricing" element={<PricingPage />} />
+            <Route path="demo" element={<DemoPage />} />
+            <Route path="how-it-works" element={<HowItWorksPage />} />
+            <Route path="what-this-software-does" element={<HowItWorksPage />} />
+
             <Route path="app" element={<ProtectedLayout />}>
               <Route index element={<Navigate to="overview" replace />} />
               <Route path="overview" element={<Overview />} />
@@ -59,6 +94,10 @@ createRoot(document.getElementById('root')!).render(
               <Route path="listings/edit/:listingId?" element={<EditListing />} />
               <Route path="leads" element={<Leads />} />
               <Route path="leads/:leadId" element={<LeadDetails />} />
+              <Route path="flyers" element={<Flyers />} />
+              <Route path="lenders" element={<Lenders />} />
+              <Route path="aitours" element={<AiTours />} />
+              <Route path="openhouses" element={<OpenHousesAgent />} />
               <Route path="conversations" element={<Conversations />} />
               <Route path="conversations/:convoId" element={<ConversationDetails />} />
               <Route path="assets" element={<Assets />} />
@@ -80,6 +119,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="listings" element={<AdminListings />} />
                 <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="logs" element={<AdminLogs />} />
+                <Route path="brokerage" element={<BrokerageSettings />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
             </Route>

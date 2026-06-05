@@ -12,9 +12,11 @@ import {
   Trash2, 
   AlertTriangle,
   History,
-  Info
+  Info,
+  Download
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import { 
   Card,
   CardContent,
@@ -47,6 +49,8 @@ export default function AdminLogs() {
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null);
 
   useEffect(() => {
@@ -68,11 +72,52 @@ export default function AdminLogs() {
     return () => unsubscribe();
   }, []);
 
-  const filteredLogs = logs.filter(log => 
-    log.message.toLowerCase().includes(search.toLowerCase()) ||
-    log.type.toLowerCase().includes(search.toLowerCase()) ||
-    log.userEmail?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = !search ? true : (
+      log.message.toLowerCase().includes(search.toLowerCase()) ||
+      log.type.toLowerCase().includes(search.toLowerCase()) ||
+      log.userEmail?.toLowerCase().includes(search.toLowerCase())
+    );
+
+    if (!matchesSearch) return false;
+
+    if (log.timestamp) {
+      const logDate = log.timestamp.toDate();
+      if (fromDate) {
+        const fromDateStart = new Date(fromDate + "T00:00:00");
+        if (logDate < fromDateStart) return false;
+      }
+      if (toDate) {
+        const toDateEnd = new Date(toDate + "T23:59:59");
+        if (logDate > toDateEnd) return false;
+      }
+    }
+
+    return true;
+  });
+
+  const exportToCSV = () => {
+    const headers = ["Time", "Date", "Type", "Event", "User"];
+    const rows = filteredLogs.map(log => [
+      log.timestamp ? format(log.timestamp.toDate(), 'hh:mm:ss a') : '',
+      log.timestamp ? format(log.timestamp.toDate(), 'yyyy-MM-dd') : '',
+      log.type,
+      log.message.replace(/,/g, ';'),
+      log.userEmail || 'System'
+    ]);
+    
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `vertex_system_logs_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Logs exported to CSV");
+  };
 
   const getLogIcon = (type: string) => {
     switch (type) {
@@ -112,20 +157,49 @@ export default function AdminLogs() {
             Audit trail for administrative actions, security events, and simulated system notifications.
           </p>
         </div>
+        <Button 
+          variant="outline" 
+          onClick={exportToCSV}
+          className="flex items-center gap-2 font-bold uppercase tracking-widest text-xs border-2 hover:bg-slate-50"
+        >
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-        <Input 
-          placeholder="Filter logs by message, type, or user..." 
-          className="pl-12 h-14 bg-white border-slate-200 rounded-2xl shadow-sm"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
+        <div className="md:col-span-2 relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+          <Input 
+            placeholder="Filter logs by message, type, or user..." 
+            className="pl-12 h-12 bg-slate-50/50 border-slate-200 rounded-2xl"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">From</span>
+          <Input 
+            type="date"
+            className="h-12 bg-slate-50/50 border-slate-250 rounded-2xl text-xs font-bold w-full"
+            value={fromDate}
+            onChange={e => setFromDate(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">To</span>
+          <Input 
+            type="date"
+            className="h-12 bg-slate-50/50 border-slate-250 rounded-2xl text-xs font-bold w-full"
+            value={toDate}
+            onChange={e => setToDate(e.target.value)}
+          />
+        </div>
       </div>
 
       <Card className="border-slate-200 shadow-sm rounded-3xl overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
@@ -140,8 +214,8 @@ export default function AdminLogs() {
               {filteredLogs.map((log) => (
                 <tr key={log.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-xs font-bold text-slate-500">
-                      {log.timestamp ? format(log.timestamp.toDate(), 'HH:mm:ss') : '--:--:--'}
+                    <div className="text-xs font-bold text-slate-500 uppercase">
+                      {log.timestamp ? format(log.timestamp.toDate(), 'hh:mm:ss a') : '--:--:--'}
                     </div>
                     <div className="text-[10px] text-slate-400">
                       {log.timestamp ? format(log.timestamp.toDate(), 'MM/dd/yy') : '--/--/--'}
@@ -191,16 +265,75 @@ export default function AdminLogs() {
               ))}
             </tbody>
           </table>
-          
-          {filteredLogs.length === 0 && (
-            <div className="p-12 text-center space-y-3">
-              <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto">
-                <Search className="h-6 w-6 text-slate-200" />
-              </div>
-              <p className="text-sm text-slate-500 font-medium">No logs matched your current search filters.</p>
-            </div>
-          )}
         </div>
+
+        {/* Mobile Card List View */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredLogs.map((log) => (
+            <div key={log.id} className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {getLogIcon(log.type)}
+                  {getLogBadge(log.type)}
+                </div>
+                <div className="text-right font-medium">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight block">
+                    {log.timestamp ? format(log.timestamp.toDate(), 'hh:mm:ss a') : '--:--:--'}
+                  </span>
+                  <span className="text-[9px] text-slate-400 uppercase tracking-widest block">
+                    {log.timestamp ? format(log.timestamp.toDate(), 'MM/dd/yy') : '--/--/--'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-900 leading-normal mb-1">
+                  {log.message}
+                </p>
+                {log.details && log.type === 'EMAIL_SIM' && (
+                  <div className="text-[10px] text-slate-400 font-semibold bg-slate-50 rounded p-1.5 border border-slate-100 mt-1 truncate">
+                    To: {log.details.recipient}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  {log.userEmail ? (
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 bg-slate-100 rounded-full flex items-center justify-center text-[9px] font-black text-slate-400">
+                        {log.userEmail.charAt(0)}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 truncate max-w-[150px]">{log.userEmail}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400 italic">System Agent</span>
+                  )}
+                </div>
+
+                {log.details && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 hover:bg-blue-50 py-0"
+                    onClick={() => setSelectedLog(log)}
+                  >
+                    Details
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredLogs.length === 0 && (
+          <div className="p-12 text-center space-y-3">
+            <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto">
+              <Search className="h-6 w-6 text-slate-200" />
+            </div>
+            <p className="text-sm text-slate-500 font-medium">No logs matched your current search filters.</p>
+          </div>
+        )}
       </Card>
 
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
@@ -211,7 +344,7 @@ export default function AdminLogs() {
               {selectedLog?.type === 'EMAIL_SIM' ? 'EMAIL TRANSMISSION LOG' : 'SYSTEM EVENT DETAILS'}
             </DialogTitle>
             <DialogDescription className="font-bold text-slate-400 uppercase tracking-widest text-xs">
-              Audit ID: {selectedLog?.id} • {selectedLog?.timestamp && format(selectedLog.timestamp.toDate(), 'MMM d, yyyy HH:mm:ss')}
+              Audit ID: {selectedLog?.id} • {selectedLog?.timestamp && format(selectedLog.timestamp.toDate(), 'MMM d, yyyy hh:mm:ss a')}
             </DialogDescription>
           </DialogHeader>
 

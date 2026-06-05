@@ -30,8 +30,8 @@ export default function Automations() {
   const [integrations, setIntegrations] = useState<any>({});
   const [automations, setAutomations] = useState([
     { id: 1, name: "Send Lead to HubSpot", trigger: "On Lead Captured", action: "Create Contact in CRM", active: true, type: "crm" },
-    { id: 2, name: "Text Listing Agent", trigger: "On Hot Lead (Urgent)", action: "Send SMS via Twilio", active: true, type: "sms" },
-    { id: 3, name: "Email PDF Brochure", trigger: "On Email Provided", action: "Send SendGrid Template", active: false, type: "email" },
+    { id: 2, name: "Text Listing Agent", trigger: "On Hot Lead (Urgent)", action: "Send SMS Notification", active: true, type: "sms" },
+    { id: 3, name: "Email PDF Brochure", trigger: "On Email Provided", action: "Send Email Template", active: false, type: "email" },
     { id: 4, name: "Zapier generic ping", trigger: "On Any Interaction End", action: "Webhook POST", active: true, type: "webhook" },
   ]);
 

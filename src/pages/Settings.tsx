@@ -4,7 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { getAgent, updateUser } from "@/lib/api";
 import { toast } from "sonner";
 import { doc, getDoc, setDoc, collection, query, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { db, handleFirestoreError, OperationType, storage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   DropdownMenu,
@@ -87,6 +88,9 @@ export default function Settings() {
   // Branding State
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoStoragePath, setLogoStoragePath] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [accentColor, setAccentColor] = useState("#f8fafc");
 
   // Compliance State
@@ -120,21 +124,36 @@ export default function Settings() {
 
   async function loadProfile() {
     try {
-      // Load logs if admin
+      // Try to load admin settings if admin
       if (user?.role === 'ADMIN') {
-        const logsRef = collection(db, "logs");
-        const logsSnap = await getDocs(query(logsRef));
-        const logsData = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a: any, b: any) => b.timestamp - a.timestamp);
-        if (logsData.length === 0) {
-          // Mock some logs if none exist
-          setLogs([
-            { id: '1', action: 'ADMIN_LOGIN', user: user.email, timestamp: Date.now() - 3600000, message: 'Admin logged in from new IP' },
-            { id: '2', action: 'SETTINGS_UPDATE', user: 'system', timestamp: Date.now() - 7200000, message: 'Maintenance mode toggled OFF' },
-            { id: '3', action: 'USER_REGISTER', user: 'new_agent@example.com', timestamp: Date.now() - 86400000, message: 'New agent registered via landing page' }
-          ]);
-        } else {
-          setLogs(logsData);
+        const adminSettings: any = await getDoc(doc(db, "settings", "global"))
+          .then(d => d.exists() ? d.data() : {})
+          .catch(err => {
+             console.error("Admin Settings Load Error:", err);
+             return {};
+          });
+        
+        setMaintenanceMode(adminSettings.maintenanceMode ?? false);
+        setAllowRegistrations(adminSettings.allowRegistrations ?? true);
+        if (adminSettings.plans) {
+          setPlans(adminSettings.plans);
         }
+        setBrokerageName(adminSettings.brokerageName || "");
+        setBrokerageAddress(adminSettings.brokerageAddress || "");
+        setBrokerageCity(adminSettings.brokerageCity || "");
+        setBrokerageProvince(adminSettings.brokerageProvince || "");
+        setBrokerageCountry(adminSettings.brokerageCountry || "");
+        setBrokeragePostalCode(adminSettings.brokeragePostalCode || "");
+        setBrokeragePhone(adminSettings.brokeragePhone || "");
+        setBrokerageEmail(adminSettings.brokerageEmail || "");
+        setAdminEmail(adminSettings.adminEmail || "");
+        if (adminSettings.socials) {
+          setSocials({ ...socials, ...adminSettings.socials });
+        }
+        setPricingTitle(adminSettings.pricingTitle || "Simple, flexible pricing");
+        setPricingDescription(adminSettings.pricingDescription || "Pricing models designed to maximize your revenue while minimizing friction, matching the seasonal nature of real estate.");
+        setStripeConnected(adminSettings.stripeConnected ?? true);
+        setWebhookSecret(adminSettings.webhookSecret || "whsec_...");
       }
 
       const data: any = await getAgent(user!.id);
@@ -143,20 +162,21 @@ export default function Settings() {
         setLegalName(bp.legalName || "VertexAgent HQ");
         setRecoId(bp.recoId || "B-481923");
         setBrokerOfRecord(bp.brokerOfRecord || "Luc Valade");
-        setOfficePhone(bp.officePhone || "(905) 555-0192");
+        setOfficePhone(bp.officePhone || "(289) 659-5170");
         setOfficeEmail(bp.officeEmail || "ops@vertexagent.ca");
       } else {
         // Defaults if none exist
         setLegalName("VertexAgent HQ");
         setRecoId("B-481923");
         setBrokerOfRecord("Luc Valade");
-        setOfficePhone("(905) 555-0192");
+        setOfficePhone("(289) 659-5170");
         setOfficeEmail("ops@vertexagent.ca");
       }
 
       if (data?.branding) {
         setPrimaryColor(data.branding.primaryColor || "#2563eb");
-        setLogoUrl(data.branding.logoUrl || "");
+        setLogoUrl(data.branding.imageUrl || data.branding.logoUrl || "");
+        setLogoStoragePath(data.branding.storagePath || data.branding.logoStoragePath || "");
         setAccentColor(data.branding.accentColor || "#f8fafc");
       }
 
@@ -246,7 +266,17 @@ export default function Settings() {
     if (el) el.click();
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
   const validateUrl = (url: string) => {
+    if (url.startsWith('blob:') || url.startsWith('data:')) return true;
     try {
       new URL(url);
       return url.startsWith("http");
@@ -256,7 +286,10 @@ export default function Settings() {
   };
 
   const validateImageUrl = (url: string) => {
+    if (url.startsWith('blob:') || url.startsWith('data:')) return true;
     if (!validateUrl(url)) return false;
+    // Allow Firebase Storage URLs
+    if (url.includes('firebasestorage.googleapis.com')) return true;
     return /\.(jpg|jpeg|png|gif|webp|svg)($|\?|#)/i.test(url);
   };
 
@@ -331,7 +364,42 @@ export default function Settings() {
     }
 
     setSaving(true);
+    let finalLogoUrl = logoUrl;
+    let finalStoragePath = logoStoragePath;
+
     try {
+      if (selectedFile && user) {
+        try {
+          const uploadPromise = (async () => {
+            const storageRef = ref(storage, `logos/${user.id}/logo-${Date.now()}`);
+            const snap = await uploadBytes(storageRef, selectedFile);
+            const downloadUrl = await getDownloadURL(snap.ref);
+            return { imageUrl: downloadUrl, storagePath: snap.ref.fullPath };
+          })();
+
+          const timeoutPromise = new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error("Firebase Storage upload timed out")), 6000)
+          );
+
+          const result = await Promise.race([uploadPromise, timeoutPromise]);
+          if (result) {
+            finalLogoUrl = result.imageUrl;
+            finalStoragePath = result.storagePath;
+          }
+        } catch (uploadErr) {
+          console.warn("Storage upload failed, falling back to data URL conversion:", uploadErr);
+          const base64Data = await fileToBase64(selectedFile);
+          finalLogoUrl = base64Data;
+          finalStoragePath = `base64/${selectedFile.name}`;
+          toast.info("Logo stored locally in Firestore (Storage skipped or timed out).");
+        }
+        
+        // Update states to reflect successful upload
+        setLogoUrl(finalLogoUrl);
+        setLogoStoragePath(finalStoragePath);
+        setSelectedFile(null);
+      }
+
       await updateUser(user!.id, {
         brokerageProfile: {
           legalName,
@@ -343,7 +411,8 @@ export default function Settings() {
         },
         branding: {
           primaryColor,
-          logoUrl,
+          imageUrl: finalLogoUrl,
+          storagePath: finalStoragePath,
           accentColor
         },
         compliance: {
@@ -427,7 +496,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className={`space-y-6 mx-auto ${viewMode === 'ADMIN' ? 'max-w-[879px]' : 'max-w-4xl'}`}>
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -480,13 +549,116 @@ export default function Settings() {
         <div className="md:col-span-3 space-y-6">
           {activeTab === "profile" && (
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
-              <h2 className="text-lg font-bold mb-4">{viewMode === 'ADMIN' ? 'Admin Access' : 'Account Profile'}</h2>
-              
-              {viewMode !== 'ADMIN' && (
-                <div className="py-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-lg">
-                  <p className="text-sm text-slate-500">Account profiles are managed at the company level. Contact your administrator for changes.</p>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-lg font-bold">{viewMode === 'ADMIN' ? 'Admin Access' : 'Account Profile'}</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Manage your legal representative and office contact details.</p>
                 </div>
-              )}
+                {viewMode !== 'ADMIN' && (
+                  <span className="text-[10px] uppercase font-bold tracking-wider bg-blue-50 text-blue-700 px-2 py-1 rounded">
+                    Agent Settings
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                      <span>Legal Representative / Corporate Name</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Title Case</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.legalName ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                      value={legalName}
+                      onChange={(e) => setLegalName(e.target.value)}
+                      onBlur={(e) => handleBlur("legalName", e.target.value)}
+                      placeholder="e.g., VertexAgent HQ"
+                    />
+                    {errors.legalName && <p className="text-xs text-red-500 font-medium">{errors.legalName}</p>}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                      <span>License ID / RECO</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Alphanumeric</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.recoId ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                      value={recoId}
+                      onChange={(e) => setRecoId(e.target.value)}
+                      onBlur={(e) => handleBlur("recoId", e.target.value)}
+                      placeholder="e.g., B-481923"
+                    />
+                    {errors.recoId && <p className="text-xs text-red-500 font-medium">{errors.recoId}</p>}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-1 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                      <span>Broker of Record</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Title Case</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.brokerOfRecord ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                      value={brokerOfRecord}
+                      onChange={(e) => setBrokerOfRecord(e.target.value)}
+                      onBlur={(e) => handleBlur("brokerOfRecord", e.target.value)}
+                      placeholder="e.g., Luc Valade"
+                    />
+                    {errors.brokerOfRecord && <p className="text-xs text-red-500 font-medium">{errors.brokerOfRecord}</p>}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                      <span>Office Phone</span>
+                      <span className="text-[10px] text-slate-400 font-mono">(555) 555-5555</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.officePhone ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                      value={officePhone}
+                      onChange={(e) => setOfficePhone(formatPhone(e.target.value))}
+                      onBlur={(e) => handleBlur("officePhone", e.target.value)}
+                      placeholder="(289) 659-5170"
+                    />
+                    {errors.officePhone && <p className="text-xs text-red-500 font-medium">{errors.officePhone}</p>}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                      <span>Office Email</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Format matching</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.officeEmail ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                      value={officeEmail}
+                      onChange={(e) => setOfficeEmail(e.target.value)}
+                      onBlur={(e) => handleBlur("officeEmail", e.target.value)}
+                      placeholder="ops@vertexagent.ca"
+                    />
+                    {errors.officeEmail && <p className="text-xs text-red-500 font-medium">{errors.officeEmail}</p>}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t flex justify-end">
+                  <button 
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Save Profile
+                  </button>
+                </div>
+              </div>
 
               {user?.email === "luc.valade@gmail.com" && (
                 <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-lg">
@@ -584,9 +756,53 @@ export default function Settings() {
                       onBlur={(e) => handleBlur("logoUrl", e.target.value)}
                       placeholder="https://example.com/logo.png"
                     />
-                    <p className="text-[10px] text-slate-500 italic mt-1 leading-tight">
-                      * Logos appear on listing landing pages and PDF reports (recommended: transparent PNG, max 400px width).
-                    </p>
+                    {logoUrl && (
+                      <div className="mt-3 p-2 border border-slate-200 rounded-lg inline-block">
+                        <img src={logoUrl} alt="Logo preview" className="h-16 w-auto rounded-md" />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input 
+                        id="logoInput" 
+                        type="file" 
+                        accept=".png,.jpg,.jpeg" 
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                             if (file.size > 2 * 1024 * 1024) {
+                               toast.error("File size must be less than 2MB");
+                               return;
+                             }
+                             setSelectedFile(file);
+                             setLogoUrl(URL.createObjectURL(file));
+                             toast.success(`Logo ${file.name} selected. Click "Save Changes" to finalize.`);
+                          }
+                        }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => document.getElementById('logoInput')?.click()}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-md transition-colors"
+                      >
+                        Select File
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFile(null);
+                          setLogoUrl("");
+                          setLogoStoragePath("");
+                          const input = document.getElementById('logoInput') as HTMLInputElement;
+                          if (input) input.value = '';
+                          toast.info("Upload cancelled.");
+                        }}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-md transition-colors"
+                      >
+                        Clear Logo
+                      </button>
+                      <span className="text-[10px] text-slate-400">.png or .jpg, max 2MB</span>
+                    </div>
                     {errors.logoUrl && <p className="text-xs text-red-500 font-medium">{errors.logoUrl}</p>}
                   </div>
                 </div>
@@ -886,7 +1102,7 @@ export default function Settings() {
                             placeholder="123 King St W"
                           />
                         </div>
-                        <div className="grid md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 col-span-2">
                           <div className="space-y-1.5">
                             <label className="text-xs font-bold text-slate-600 uppercase tracking-tight">City</label>
                             <input 
@@ -928,7 +1144,7 @@ export default function Settings() {
                             </div>
                           </div>
                         </div>
-                        <div className="grid md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 col-span-2">
                           <div className="space-y-1.5">
                             <label className="text-xs font-bold text-slate-600 uppercase tracking-tight">Country</label>
                             <select 
@@ -951,11 +1167,11 @@ export default function Settings() {
                               value={brokeragePhone}
                               maxLength={20}
                               onChange={(e) => setBrokeragePhone(formatPhone(e.target.value))}
-                              placeholder="(905) 555-0192"
+                              placeholder="(289) 659-5170"
                             />
                           </div>
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 col-span-2">
                           <label className="text-xs font-bold text-slate-600 uppercase tracking-tight">Office Email</label>
                           <input 
                             className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:ring-2 focus:ring-red-500 focus:outline-none"
@@ -1032,7 +1248,7 @@ export default function Settings() {
                         </div>
                       </div>
 
-                      <div className="space-y-6">
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                         {plans.map((plan, idx) => (
                           <div key={plan.id} className="p-4 bg-white border border-slate-200 rounded-xl space-y-3">
                             <div className="grid grid-cols-2 gap-4">
@@ -1158,7 +1374,20 @@ export default function Settings() {
                   </div>
                 )}
 
-                <div className="pt-4 border-t flex justify-end">
+                <div className="pt-4 border-t flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (viewMode === 'ADMIN') {
+                        navigate('/app/admin');
+                      } else {
+                        navigate('/app');
+                      }
+                    }}
+                    className="px-4 py-2 border border-slate-200 rounded-md font-medium text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
                   <button 
                     onClick={handleSave}
                     disabled={saving}

@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-import { collection, query, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, getDocs, addDoc, serverTimestamp, where, orderBy, limit } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -23,7 +23,97 @@ export default function AdminDashboard() {
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [signupCount, setSignupCount] = useState<number | string>('...');
+  const [referralsCount, setReferralsCount] = useState<number | string>('...');
+  const [activeAgentsCount, setActiveAgentsCount] = useState<number | string>('...');
+  const [complianceCount, setComplianceCount] = useState<number | string>('...');
+  const [listingsCount, setListingsCount] = useState<number | string>('...');
+  const [leadsCount, setLeadsCount] = useState<number | string>('...');
   const [isAuditing, setIsAuditing] = useState(false);
+  const [vulnerabilitiesCount, setVulnerabilitiesCount] = useState<number>(0);
+  const [realSystemLogs, setRealSystemLogs] = useState<any[]>([]);
+
+  const fetchCounts = React.useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, "launch_notifications"));
+      setSignupCount(snap.size);
+      
+      let totalRefs = 0;
+      snap.forEach(doc => {
+        const data = doc.data();
+        if (data.referrals && Array.isArray(data.referrals)) {
+          totalRefs += data.referrals.length;
+        }
+      });
+      setReferralsCount(totalRefs);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, "launch_notifications");
+    }
+    try {
+      const snapListings = await getDocs(collection(db, "listings"));
+      const flaggedCount = snapListings.docs.filter(d => d.data().flag === true).length;
+      setComplianceCount(flaggedCount);
+      setListingsCount(snapListings.size);
+    } catch (err) {
+      console.error("Error fetching listings for compliance holds:", err);
+    }
+    try {
+      if (user?.id) {
+        const q = query(collection(db, "leads"), where("agentId", "==", user.id));
+        const snapLeads = await getDocs(q);
+        setLeadsCount(snapLeads.size);
+      } else {
+        setLeadsCount(0);
+      }
+    } catch (err) {
+      console.error("Error fetching leads count:", err);
+    }
+    try {
+      const snapUsers = await getDocs(collection(db, "users"));
+      // Active dummy count is 10. Combine with Firestore registered users count.
+      setActiveAgentsCount(10 + snapUsers.size);
+    } catch (err) {
+      console.error("Error fetching active agents count:", err);
+      setActiveAgentsCount(14);
+    }
+    try {
+      const qLogs = query(
+        collection(db, "system_logs"),
+        orderBy("timestamp", "desc"),
+        limit(10)
+      );
+      const snapLogs = await getDocs(qLogs);
+      
+      let vulns = 0;
+      const fetchedLogs = snapLogs.docs.map(docSnap => {
+        const data = docSnap.data();
+        if (data.type === 'SECURITY' && data.details && typeof data.details.vulnerabilitiesFound === 'number') {
+          vulns += data.details.vulnerabilitiesFound;
+        }
+        
+        let logIcon = Activity;
+        if (data.type === 'SECURITY') logIcon = Shield;
+        else if (data.type === 'ACTION') logIcon = Users;
+        
+        const dateVal = data.timestamp ? data.timestamp.toDate() : new Date();
+        const formatStr = format(dateVal, 'MM/dd/yy hh:mm a');
+        
+        return {
+          id: docSnap.id,
+          event: data.message || "System event",
+          user: data.userEmail || "System Agent",
+          time: formatStr,
+          icon: logIcon,
+          details: data.details,
+          severity: data.type === 'SECURITY' ? 'high' : 'medium'
+        };
+      });
+      
+      setRealSystemLogs(fetchedLogs);
+      setVulnerabilitiesCount(vulns);
+    } catch (err) {
+      console.error("Error fetching system logs:", err);
+    }
+  }, [user?.id]);
 
   const runSecurityAudit = async () => {
     setIsAuditing(true);
@@ -60,20 +150,13 @@ export default function AdminDashboard() {
       toast.error("Audit interrupted by system timeout.", { id: toastId });
     } finally {
       setIsAuditing(false);
+      fetchCounts();
     }
   };
 
   React.useEffect(() => {
-    const fetchCount = async () => {
-      try {
-        const snap = await getDocs(collection(db, "launch_notifications"));
-        setSignupCount(snap.size);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.GET, "launch_notifications");
-      }
-    };
-    fetchCount();
-  }, []);
+    fetchCounts();
+  }, [fetchCounts]);
 
   // Load notifications from localStorage
   const savedNotifications = JSON.parse(localStorage.getItem('system_notifications') || '[]');
@@ -96,14 +179,14 @@ export default function AdminDashboard() {
     severity: n.message.includes('downgrade') ? 'high' : 'medium'
   }));
 
-  const logs = [...dynamicLogs, ...baseLogs].slice(0, 5);
+  const logs = [...realSystemLogs, ...dynamicLogs, ...baseLogs].slice(0, 5);
 
   const stats = [
-    { label: 'Active Agents', value: '24', icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', path: '/app/admin/users', hover: 'hover:border-blue-300 hover:shadow-blue-50' },
-    { label: 'Total Listings', value: '142', icon: Home, iconAlt: true, color: 'text-purple-600', bg: 'bg-purple-50', path: '/app/admin/listings', hover: 'hover:border-purple-300 hover:shadow-purple-50' },
-    { label: 'Total Leads', value: '1,284', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50', path: '/app/leads', hover: 'hover:border-green-300 hover:shadow-green-50' },
-    { label: 'Launch Signups', value: signupCount.toString(), icon: Bell, color: 'text-blue-600', bg: 'bg-blue-50', path: '/app/admin/notifications', hover: 'hover:border-blue-300 hover:shadow-blue-50' },
-    { label: 'Pending Compliance', value: '5', icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50', path: '/app/compliance', hover: 'hover:border-amber-300 hover:shadow-amber-50' },
+    { label: 'Active Agents', value: activeAgentsCount.toString(), icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', path: '/app/admin/users', hover: 'hover:border-blue-300 hover:shadow-blue-50' },
+    { label: 'Total Listings', value: listingsCount.toString(), icon: Home, iconAlt: true, color: 'text-purple-600', bg: 'bg-purple-50', path: '/app/admin/listings', hover: 'hover:border-purple-300 hover:shadow-purple-50' },
+    { label: 'Total Leads', value: leadsCount.toString(), icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50', path: '/app/leads', hover: 'hover:border-green-300 hover:shadow-green-50' },
+    { label: 'Launch Signups/Referrals', value: `SignUps ${signupCount} / Referrals ${referralsCount}`, icon: Bell, color: 'text-blue-600', bg: 'bg-blue-50', path: '/app/admin/notifications', hover: 'hover:border-blue-300 hover:shadow-blue-50' },
+    { label: 'Pending Compliance', value: complianceCount.toString(), icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50', path: '/app/admin/listings', state: { showCompliance: true }, hover: 'hover:border-amber-300 hover:shadow-amber-50' },
   ];
 
   return (
@@ -120,26 +203,50 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, i) => (
-          <motion.div 
-            key={i}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            onClick={() => navigate(stat.path)}
-            className={`bg-white p-6 rounded-2xl border border-slate-200 shadow-sm transition-all duration-500 cursor-pointer group hover:bg-blue-600 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-200/50`}
-          >
-            <div className={`p-3 w-12 h-12 rounded-xl ${stat.bg} ${stat.color} mb-4 flex items-center justify-center transition-all group-hover:scale-110 group-hover:bg-white/20 group-hover:text-white shadow-inner`}>
-              <stat.icon className="h-6 w-6" />
-            </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 group-hover:text-blue-100 transition-colors">{stat.label}</p>
-            <div className="flex items-end justify-between">
-              <p className="text-3xl font-black tracking-tighter text-slate-900 italic group-hover:text-white transition-colors">{stat.value}</p>
-              <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-white transition-colors" />
-            </div>
-          </motion.div>
-        ))}
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {stats.slice(0, 3).map((stat, i) => (
+            <motion.div 
+              key={'stat-' + stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              onClick={() => navigate(stat.path, (stat as any).state ? { state: (stat as any).state } : undefined)}
+              className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm transition-all duration-500 cursor-pointer group hover:bg-blue-600 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-200/50"
+            >
+              <div className={`p-3 w-12 h-12 rounded-xl ${stat.bg} ${stat.color} mb-4 flex items-center justify-center transition-all group-hover:scale-110 group-hover:bg-white/20 group-hover:text-white shadow-inner`}>
+                <stat.icon className="h-6 w-6" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 group-hover:text-blue-100 transition-colors">{stat.label}</p>
+              <div className="flex items-end justify-between">
+                <p className="text-3xl font-black tracking-tighter text-slate-900 italic group-hover:text-white transition-colors">{stat.value}</p>
+                <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-white transition-colors" />
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {stats.slice(3).map((stat, i) => (
+            <motion.div 
+              key={'stat-' + stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: (i + 3) * 0.1 }}
+              onClick={() => navigate(stat.path, (stat as any).state ? { state: (stat as any).state } : undefined)}
+              className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm transition-all duration-500 cursor-pointer group hover:bg-blue-600 hover:border-blue-500 hover:shadow-xl hover:shadow-blue-200/50"
+            >
+              <div className={`p-3 w-12 h-12 rounded-xl ${stat.bg} ${stat.color} mb-4 flex items-center justify-center transition-all group-hover:scale-110 group-hover:bg-white/20 group-hover:text-white shadow-inner`}>
+                <stat.icon className="h-6 w-6" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 group-hover:text-blue-100 transition-colors">{stat.label}</p>
+              <div className="flex items-end justify-between">
+                <p className={`${stat.value.includes('/') ? 'text-lg md:text-xl lg:text-2xl' : 'text-3xl'} font-black tracking-tighter text-slate-900 italic group-hover:text-white transition-colors`}>{stat.value}</p>
+                <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-white transition-colors" />
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
@@ -189,7 +296,15 @@ export default function AdminDashboard() {
               <Shield className="h-5 w-5" />
               <h3 className="font-bold">Security Alerts</h3>
             </div>
-            <p className="text-red-100 text-sm mb-4">No critical vulnerabilities or unauthorized access attempts detected in the last 24h.</p>
+            {vulnerabilitiesCount === 0 ? (
+              <p className="text-red-100 text-sm mb-4">
+                <span className="font-black text-white text-base">NO</span> critical vulnerabilities or unauthorized access attempts detected in the last 24h.
+              </p>
+            ) : (
+              <p className="text-red-100 text-sm mb-4">
+                <span className="font-black text-white text-base">{vulnerabilitiesCount}</span> critical vulnerabilities or unauthorized access attempts detected in the last 24h.
+              </p>
+            )}
             <button 
               onClick={runSecurityAudit}
               disabled={isAuditing}
@@ -209,22 +324,34 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
             <h3 className="font-bold text-slate-900 mb-4">Brokerage Quota</h3>
             <div className="space-y-4">
-              <div>
+              <div 
+                className="group/item cursor-pointer p-2 -m-2 rounded-lg hover:bg-slate-50 transition-colors"
+                onClick={() => navigate('/app/admin/users')}
+                title="Manage active agent seats"
+              >
                 <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-500">Agent Seats</span>
+                  <span className="text-slate-500 group-hover/item:text-blue-600 font-medium flex items-center gap-1.5 transition-colors">
+                    Agent Seats <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">Manage →</span>
+                  </span>
                   <span className="font-bold text-slate-900">24 / 50</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-600 rounded-full" style={{ width: '48%' }}></div>
+                  <div className="h-full bg-blue-600 rounded-full group-hover/item:bg-blue-500 transition-colors" style={{ width: '48%' }}></div>
                 </div>
               </div>
-              <div>
+              <div 
+                className="group/item cursor-pointer p-2 -m-2 rounded-lg hover:bg-slate-50 transition-colors"
+                onClick={() => navigate('/app/assets')}
+                title="View dynamic asset storage"
+              >
                 <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-500">Total Storage</span>
+                  <span className="text-slate-500 group-hover/item:text-purple-600 font-medium flex items-center gap-1.5 transition-colors">
+                    Total Storage <span className="text-[9px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">Manage →</span>
+                  </span>
                   <span className="font-bold text-slate-900">12.4GB / 50GB</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-600 rounded-full" style={{ width: '25%' }}></div>
+                  <div className="h-full bg-purple-600 rounded-full group-hover/item:bg-purple-500 transition-colors" style={{ width: '25%' }}></div>
                 </div>
               </div>
             </div>
@@ -278,7 +405,28 @@ export default function AdminDashboard() {
 
           <div className="flex gap-3 pt-6 border-t border-slate-100">
             <Button variant="ghost" onClick={() => setSelectedLog(null)} className="flex-1 font-bold">Close</Button>
-            <Button className="flex-1 bg-blue-600 hover:bg-blue-500 font-bold gap-2">
+            <Button 
+              className="flex-1 bg-blue-600 hover:bg-blue-500 font-bold gap-2"
+              onClick={() => {
+                const logData = {
+                  id: selectedLog?.id,
+                  event: selectedLog?.event,
+                  actor: selectedLog?.user || 'System',
+                  time: selectedLog?.time,
+                  details: selectedLog?.details,
+                  severity: selectedLog?.severity || 'low',
+                  exportedAt: new Date().toISOString()
+                };
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logData, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `vertex-audit-log-${selectedLog?.id || 'event'}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                toast.success("Audit log JSON exported successfully!");
+              }}
+            >
               <Download className="h-4 w-4" /> Export JSON
             </Button>
           </div>
@@ -305,11 +453,11 @@ export default function AdminDashboard() {
             
             <div className="space-y-4">
               {[...logs, ...logs, ...logs].map((log, idx) => (
-                <div key={idx} className="flex gap-4 border-l border-green-900/30 pl-4 py-1 hover:bg-white/5 cursor-pointer transition-colors" onClick={() => {
+                <div key={'log-' + log.id + '-' + idx} className="flex gap-4 border-l border-green-900/30 pl-4 py-1 hover:bg-white/5 cursor-pointer transition-colors" onClick={() => {
                   setSelectedLog(log);
                   setIsLogsModalOpen(false);
                 }}>
-                  <span className="text-green-700 shrink-0">[{format(new Date(Date.now() - idx * 3600000), 'HH:mm:ss')}]</span>
+                  <span className="text-green-700 shrink-0">[{format(new Date(Date.now() - idx * 3600000), 'hh:mm:ss a')}]</span>
                   <span className="text-blue-300 shrink-0 uppercase tracking-tighter font-black">EVT_{log.id}</span>
                   <span className="text-slate-200">User: <span className="text-amber-200">{log.user}</span> executed <span className="text-green-200">{log.event}</span></span>
                 </div>

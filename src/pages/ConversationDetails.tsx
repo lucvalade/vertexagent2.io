@@ -4,14 +4,21 @@ import { format } from "date-fns";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { GoogleGenAI, Modality } from "@google/genai";
 
 import { auth, db, storage } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const DUMMY_CONVOS: Record<string, any> = {
-  "1": { id: "1", property: "888 Bel Air Rd, Los Angeles", lang: "English", duration: "4m 12s", qs: 8, date: 1746906300000, // May 10, 2026, 7:45 PM
+  "1": { 
+    id: "1", 
+    property: "888 Bel Air Rd, Los Angeles", 
+    lang: "English", 
+    duration: "4m 12s", 
+    qs: 8, 
+    date: 1746906300000, // May 10, 2026, 7:45 PM
+    agentName: "Sarah",
+    clientName: "Mark",
     transcript: [
       { speaker: "AI", text: "Hi there! Welcome to 888 Bel Air Rd. I'm Sarah, the AI agent for this property. Before we dive into the details, in case we get disconnected, who am I speaking with and what's the best number to reach you back on?" },
       { speaker: "Client", text: "Hi, this is Mark. My number is 555-0123. I'm interested in the swimming pool." },
@@ -22,12 +29,126 @@ const DUMMY_CONVOS: Record<string, any> = {
       { speaker: "AI", text: "Yes, a separate 2,000 sq ft guest wing with its own private entrance and kitchenette. Perfect for long-term visitors or live-in staff." }
     ]
   },
-  "2": { id: "2", property: "15 Central Park West, NY", lang: "Spanish", duration: "1m 45s", qs: 2, date: Date.now() - 1000 * 60 * 60 * 2,
+  "2": { 
+    id: "2", 
+    property: "15 Central Park West, NY", 
+    lang: "Spanish", 
+    duration: "1m 45s", 
+    qs: 2, 
+    date: Date.now() - 1000 * 60 * 60 * 2,
+    agentName: "Elena",
+    clientName: "Sofia",
     transcript: [
-       { speaker: "AI", text: "¡Hola! Bienvenido a 15 Central Park West. Soy el agente de inteligencia artificial de esta propiedad. ¿En qué puedo ayudarle hoy?" },
-       { speaker: "Client", text: "¿Hay estacionamiento?" },
-       { speaker: "AI", text: "Sí, el edificio ofrece servicio de aparcacoches (valet parking) y estacionamiento subterráneo privado para los residentes." }
+      { speaker: "AI", text: "¡Hola! Bienvenido a 15 Central Park West. Soy Elena, la agente de inteligencia artificial de esta propiedad. ¿Con quién tengo el gusto de hablar y cuál es su número de contacto en caso de que nos desconectemos?" },
+      { speaker: "Client", text: "Hola, me llamo Sofía. Mi número es 555-9876. ¿Tienen servicio de seguridad las 24 horas?" },
+      { speaker: "AI", text: "Encantada de saludarte, Sofía. Sí, el edificio cuenta con seguridad las 24 horas del día, servicio de conserjería completo y control de acceso sumamente estricto para garantizar la máxima privacidad de los residentes." },
+      { speaker: "Client", text: "Excelente. ¿Y el edificio cuenta con piscina?" },
+      { speaker: "AI", text: "Así es. Dispone de una piscina cubierta climatizada de 75 pies, ideal para nadar en cualquier época del año, además de un gimnasio privado de última generación." }
     ]
+  },
+  "3": { 
+    id: "3", 
+    property: "123 VertexAgent Lane", 
+    lang: "French", 
+    duration: "6m 30s", 
+    qs: 15, 
+    date: Date.now() - 1000 * 60 * 60 * 5,
+    agentName: "Chantal",
+    clientName: "Pierre",
+    transcript: [
+      { speaker: "AI", text: "Bonjour Pierre! Bienvenue au 123 VertexAgent Lane. Je suis Chantal, votre assistante IA pour cette magnifique propriété. Pour commencer, confirmez-moi votre numéro de téléphone afin que je puisse vous envoyer tous les plans ?" },
+      { speaker: "Client", text: "Bonjour Chantal. Oui, c'est le 555-4321. Quel est le classement de performance énergétique (DPE) ?" },
+      { speaker: "AI", text: "C'est noté, Pierre. Cette maison bénéficie d'une excellente performance énergétique de classe A, grâce à ses panneaux solaires intégrés et son isolation thermique de pointe. Souhaitez-vous en savoir plus sur les coûts annuels ?" },
+      { speaker: "Client", text: "Oui, et parlez-moi aussi du jardin." },
+      { speaker: "AI", text: "Bien sûr! Les coûts énergétiques annuels sont estimés à seulement 1400 euros. Quant au jardin, il s'étend sur 500 mètres carrés avec terrasse en bois de cèdre et système d'arrosage automatique intelligent." }
+    ]
+  },
+  "4": { 
+    id: "4", 
+    property: "888 Bel Air Rd, Los Angeles", 
+    lang: "English", 
+    duration: "2m 10s", 
+    qs: 4, 
+    date: Date.now() - 1000 * 60 * 60 * 24,
+    agentName: "Claire",
+    clientName: "David",
+    transcript: [
+      { speaker: "AI", text: "Hello! Welcome to 888 Bel Air Rd. I'm Claire, your dedicated virtual touring agent. Can I grab your name and number to send you the priority walkthrough link?" },
+      { speaker: "Client", text: "Hey! This is David. My number is 555-5678. Does the house have smart automation?" },
+      { speaker: "AI", text: "Wonderful to meet you, David, and yes! The property features a fully integrated smart-home control system covering multi-zone climate, smart window tints, security gates, and spatial sound." },
+      { speaker: "Client", text: "Great. Can you tell me about the parking situation?" },
+      { speaker: "AI", text: "The estate features an underground modern auto-gallery garage that comfortable accommodates 12 vehicles, as well as a generous motor court out front." }
+    ]
+  },
+  "5": { 
+    id: "5", 
+    property: "15 Central Park West, NY", 
+    lang: "German", 
+    duration: "8m 55s", 
+    qs: 22, 
+    date: Date.now() - 1000 * 60 * 60 * 48,
+    agentName: "Clara",
+    clientName: "Lukas",
+    transcript: [
+      { speaker: "AI", text: "Guten Tag! Willkommen bei 15 Central Park West. Ich bin Clara, Ihre KI-Spezialistin für diese Liegenschaft. Darf ich Ihren Namen und Ihre Telefonnummer notieren, falls wir unterbrochen werden?" },
+      { speaker: "Client", text: "Hallo Clara, ich bin Lukas. Meine Nummer ist 555-8765. Wie groß ist die Wohnfläche dieses Apartments?" },
+      { speaker: "AI", text: "Hallo Lukas! Dieses exklusive Apartment bietet eine luxuriöse Wohnfläche von 450 Quadratmetern mit atemberaubendem, unverstelltem Blick direkt auf den Central Park." },
+      { speaker: "Client", text: "Das klingt fantastisch. Gibt es einen privaten Aufzug?" },
+      { speaker: "AI", text: "Ja, absolut. Ein codierter Hochgeschwindigkeitsaufzug führt Sie direkt in Ihr privates Foyer für maximale Diskretion und Komfort." }
+    ]
+  }
+};
+
+const getWebSpeechVoice = (speaker: string, lang: string, clientName?: string) => {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const lowerLang = (lang || "English").toLowerCase();
+  
+  // Decide target language code prefix
+  let langCode = "en";
+  if (lowerLang.includes("span") || lowerLang === "es") langCode = "es";
+  else if (lowerLang.includes("fren") || lowerLang === "fr") langCode = "fr";
+  else if (lowerLang.includes("germ") || lowerLang === "de") langCode = "de";
+
+  // Filter voices by language match
+  const langVoices = voices.filter(v => v.lang.toLowerCase().startsWith(langCode));
+  const pool = langVoices.length > 0 ? langVoices : voices;
+
+  const nameLower = (clientName || "Mark").toLowerCase();
+  const isClientFemale = ["sofia", "lucy", "sofía", "eleanor", "sara", "emma", "lucy diamond", "eleanor rigby"].includes(nameLower);
+
+  if (speaker === "AI") {
+    // Sarah/Claire/Elena matches: try to find a female sounding voice
+    const female = pool.find(v => v.name.toLowerCase().includes("aria") && v.name.toLowerCase().includes("natural")) ||
+                   pool.find(v => v.name.toLowerCase().includes("samantha")) ||
+                   pool.find(v => v.name.toLowerCase().includes("google") && v.name.toLowerCase().includes("us english") && !v.name.toLowerCase().includes("male")) ||
+                   pool.find(v => v.name.toLowerCase().includes("zira")) ||
+                   pool.find(v => v.name.toLowerCase().includes("female")) ||
+                   pool.find(v => v.name.toLowerCase().includes("hazel") || v.name.toLowerCase().includes("amelie") || v.name.toLowerCase().includes("monica"));
+    return female || pool[0];
+  } else {
+    if (isClientFemale) {
+      // Sofia/Lucy: try female sounding voice
+      const female = pool.find(v => v.name.toLowerCase().includes("aria") && v.name.toLowerCase().includes("natural")) ||
+                     pool.find(v => v.name.toLowerCase().includes("samantha")) ||
+                     pool.find(v => v.name.toLowerCase().includes("google") && v.name.toLowerCase().includes("us english") && !v.name.toLowerCase().includes("male")) ||
+                     pool.find(v => v.name.toLowerCase().includes("zira")) ||
+                     pool.find(v => v.name.toLowerCase().includes("female")) ||
+                     pool.find(v => v.name.toLowerCase().includes("hazel") || v.name.toLowerCase().includes("amelie") || v.name.toLowerCase().includes("monica"));
+      return female || pool[0];
+    } else {
+      // Mark/Pierre/David matches: try to find a male sounding voice
+      const male = pool.find(v => 
+        v.name.toLowerCase().includes("male") || 
+        v.name.toLowerCase().includes("daniel") || 
+        v.name.toLowerCase().includes("david") || 
+        v.name.toLowerCase().includes("google uk english male") ||
+        v.name.toLowerCase().includes("ravi") ||
+        v.name.toLowerCase().includes("thomas") ||
+        v.name.toLowerCase().includes("paul")
+      );
+      return male || pool[1] || pool[0];
+    }
   }
 };
 
@@ -43,6 +164,9 @@ export default function ConversationDetails() {
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
   const [playProgress, setPlayProgress] = useState(0);
   const [visibleMessages, setVisibleMessages] = useState<number>(1);
+  const [isUsingWebSpeech, setIsUsingWebSpeech] = useState(false);
+  const [customActiveIndex, setCustomActiveIndex] = useState<number>(-1);
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Sync with Firestore
   useEffect(() => {
@@ -102,14 +226,30 @@ export default function ConversationDetails() {
     }
   }, [isPlaying]);
 
+  // Prime local voices
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+    }
+  }, []);
+
+  // Web Speech scroll behavior
+  useEffect(() => {
+    if (isUsingWebSpeech && customActiveIndex >= 0) {
+      const bubbleId = `bubble-${customActiveIndex}`;
+      const element = document.getElementById(bubbleId);
+      if (element && scrollAreaRef.current) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [isUsingWebSpeech, customActiveIndex]);
+
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const fullAudioBufferRef = useRef<AudioBuffer | null>(null);
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
-
-  // Initialize Gemini
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   const synthesizeConversation = async () => {
     if (fullAudioBufferRef.current) return fullAudioBufferRef.current;
@@ -149,45 +289,35 @@ export default function ConversationDetails() {
         description: "Synthesizing high-definition audio components."
       });
 
-      // 2. SYNTHESIZE
+      // 2. SYNTHESIZE VIA SECURE BACKEND API
       if (!convo.transcript || convo.transcript.length === 0) {
         throw new Error("No transcript data available for synthesis");
       }
       
-      const promptText = `TTS the following conversation between Sarah (AI Agent) and Mark (Client):
-      ${convo.transcript.map((m: any) => `${m.speaker}: ${m.text}`).join('\n')}`;
-
-      const synthesisPromise = ai.models.generateContent({
-        model: "gemini-3.1-flash-tts-preview",
-        contents: [{ parts: [{ text: promptText }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            multiSpeakerVoiceConfig: {
-              speakerVoiceConfigs: [
-                {
-                  speaker: 'AI',
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
-                },
-                {
-                  speaker: 'Client',
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
-                }
-              ]
-            }
-          }
+      const synthesisPromise = fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          transcript: convo.transcript,
+          agentName: convo.agentName,
+          clientName: convo.clientName
+        })
+      }).then(async r => {
+        if (!r.ok) {
+          const errRes = await r.json().catch(() => ({}));
+          throw new Error(errRes.error || `Server returned status ${r.status}`);
         }
+        return r.json();
       });
 
       const synthesisTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Gemini synthesis timed out (30s)")), 30000)
+        setTimeout(() => reject(new Error("Gemini synthesis connection timed out (150s)")), 150000)
       );
 
       const response = await Promise.race([synthesisPromise, synthesisTimeout]) as any;
 
-      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-      const base64Audio = audioPart?.inlineData?.data;
-      if (!base64Audio) throw new Error("No audio data returned from Gemini");
+      const base64Audio = response?.base64Audio;
+      if (!base64Audio) throw new Error("No audio data returned from Gemini TTS proxy");
 
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -240,9 +370,74 @@ export default function ConversationDetails() {
     }
   };
 
+  const speakTurn = (index: number) => {
+    if (!convo || !convo.transcript || index >= convo.transcript.length) {
+      setIsPlaying(false);
+      setIsUsingWebSpeech(false);
+      setCustomActiveIndex(-1);
+      setCurrentSpeaker(null);
+      setPlayProgress(100);
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+
+      const turn = convo.transcript[index];
+      const text = turn.text;
+      const utterance = new SpeechSynthesisUtterance(text);
+      // Professionally tuned tempo and conversational depth
+      utterance.rate = 0.92; 
+      utterance.pitch = 0.99; 
+
+      const voice = getWebSpeechVoice(turn.speaker, convo.lang, convo.clientName);
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      utterance.onend = () => {
+        setTimeout(() => {
+          speakTurn(index + 1);
+        }, 600);
+      };
+
+      utterance.onerror = (e) => {
+        console.warn("Speech Synthesis error:", e);
+        speakTurn(index + 1);
+      };
+
+      currentUtteranceRef.current = utterance;
+      setIsUsingWebSpeech(true);
+      setCustomActiveIndex(index);
+      setCurrentSpeaker(turn.speaker);
+      
+      const totalTurns = convo.transcript.length;
+      const currentProgress = (index / totalTurns) * 100;
+      setPlayProgress(currentProgress);
+
+      window.speechSynthesis.speak(utterance);
+      setIsPlaying(true);
+      setIsShowingPlayer(true);
+    }
+  };
+
   const startPlayback = async (offset = 0) => {
+    setIsShowingPlayer(true);
+
+    if (isUsingWebSpeech) {
+      speakTurn(customActiveIndex >= 0 ? customActiveIndex : 0);
+      return;
+    }
+
     const buffer = await synthesizeConversation();
-    if (!buffer || !audioContextRef.current) return;
+    if (!buffer || !audioContextRef.current) {
+      toast.info("Triggering offline-ready backup voice synthesis...", {
+        description: "Bypassing cloud audio delay for zero-latency direct speaking."
+      });
+      setIsUsingWebSpeech(true);
+      speakTurn(customActiveIndex >= 0 ? customActiveIndex : 0);
+      return;
+    }
 
     if (audioSourceRef.current) {
       audioSourceRef.current.stop();
@@ -267,6 +462,14 @@ export default function ConversationDetails() {
   };
 
   const pausePlayback = () => {
+    if (isUsingWebSpeech) {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setIsPlaying(false);
+      return;
+    }
+
     if (audioSourceRef.current && audioContextRef.current) {
       audioSourceRef.current.stop();
       pausedTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
@@ -281,8 +484,6 @@ export default function ConversationDetails() {
       pausePlayback();
     }
   };
-
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Sync progress and speakers
   useEffect(() => {
@@ -306,7 +507,8 @@ export default function ConversationDetails() {
         setPlayProgress(progress);
         
         // Match progress to transcript more accurately
-        const transcript = convo.transcript;
+        const transcript = convo?.transcript;
+        if (!transcript) return;
         const totalChars = transcript.reduce((acc: number, m: any) => acc + m.text.length, 0);
         
         // Refined temporal alignment with strict turn completion and 0.5s buffers
@@ -335,7 +537,9 @@ export default function ConversationDetails() {
           activeIndex = i;
         }
         
-        setCurrentSpeaker(transcript[activeIndex].speaker);
+        if (transcript[activeIndex]) {
+          setCurrentSpeaker(transcript[activeIndex].speaker);
+        }
         
         // Auto-scroll to active bubble
         const bubbleId = `bubble-${activeIndex}`;
@@ -352,10 +556,11 @@ export default function ConversationDetails() {
       }, 100);
     }
     return () => clearInterval(interval);
-  }, [isPlaying, convo.transcript]);
+  }, [isPlaying, convo?.transcript]);
 
   const activeIndex = useMemo(() => {
-    if (!isPlaying) return -1;
+    if (isUsingWebSpeech) return customActiveIndex;
+    if (!isPlaying || !convo?.transcript) return -1;
     const transcript = convo.transcript;
     const charsPerSec = 15;
     const PAUSE_DURATION = 0.5;
@@ -374,12 +579,15 @@ export default function ConversationDetails() {
       cumulativeTime += duration + PAUSE_DURATION;
     }
     return transcript.length - 1;
-  }, [isPlaying, playProgress, convo.transcript]);
+  }, [isPlaying, playProgress, convo?.transcript, isUsingWebSpeech, customActiveIndex]);
 
   useEffect(() => {
     return () => {
       if (audioSourceRef.current) audioSourceRef.current.stop();
       if (audioContextRef.current) audioContextRef.current.close();
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -466,10 +674,20 @@ export default function ConversationDetails() {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const x = e.clientX - rect.left;
                   const clickedProgress = x / rect.width;
-                  if (fullAudioBufferRef.current) {
+                  if (isUsingWebSpeech && convo?.transcript) {
+                    const totalTurns = convo.transcript.length;
+                    const clickedIndex = Math.floor(clickedProgress * totalTurns);
+                    const safeIndex = Math.min(Math.max(clickedIndex, 0), totalTurns - 1);
+                    setCustomActiveIndex(safeIndex);
+                    setPlayProgress(clickedProgress * 100);
+                    speakTurn(safeIndex);
+                  } else if (fullAudioBufferRef.current) {
                     const seekTime = clickedProgress * fullAudioBufferRef.current.duration;
                     setPlayProgress(clickedProgress * 100);
                     startPlayback(seekTime);
+                  } else {
+                    setPlayProgress(clickedProgress * 100);
+                    startPlayback();
                   }
                 }}
               >
@@ -552,7 +770,7 @@ export default function ConversationDetails() {
                 <div className="flex-1 space-y-1">
                   <div className="flex justify-between items-end mb-1">
                     <span className="text-[10px] font-bold text-[#FF6B35] uppercase tracking-widest">
-                      {isSynthesizing ? "Restoring Neural Audio..." : isPlaying ? "Reproducing call..." : fullAudioBufferRef.current ? "HD Recording Ready" : "HD Restoration Required"}
+                      {isUsingWebSpeech ? "Direct Speech Output Active" : isSynthesizing ? "Restoring Neural Audio..." : isPlaying ? "Reproducing call..." : fullAudioBufferRef.current ? "HD Recording Ready" : "HD Restoration Required"}
                     </span>
                     <span className="text-[10px] font-mono text-slate-400">
                       {formatTime(audioContextRef.current ? audioContextRef.current.currentTime - startTimeRef.current : 0)} / {convo.duration}
@@ -566,10 +784,20 @@ export default function ConversationDetails() {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const x = e.clientX - rect.left;
                       const clickedProgress = x / rect.width;
-                      if (fullAudioBufferRef.current) {
+                      if (isUsingWebSpeech && convo?.transcript) {
+                        const totalTurns = convo.transcript.length;
+                        const clickedIndex = Math.floor(clickedProgress * totalTurns);
+                        const safeIndex = Math.min(Math.max(clickedIndex, 0), totalTurns - 1);
+                        setCustomActiveIndex(safeIndex);
+                        setPlayProgress(clickedProgress * 100);
+                        speakTurn(safeIndex);
+                      } else if (fullAudioBufferRef.current) {
                         const seekTime = clickedProgress * fullAudioBufferRef.current.duration;
                         setPlayProgress(clickedProgress * 100);
                         startPlayback(seekTime);
+                      } else {
+                        setPlayProgress(clickedProgress * 100);
+                        startPlayback();
                       }
                     }}
                   >
@@ -607,15 +835,19 @@ export default function ConversationDetails() {
                       <div className="flex items-center gap-2 mb-1.5 px-1 text-left w-full">
                         <div className={`${msg.speaker === 'AI' ? 'bg-[#FF6B35]' : 'bg-blue-600'} w-1.5 h-4 rounded-full mr-1.5 ${isActive ? 'animate-pulse' : ''}`} />
                         <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${msg.speaker === 'AI' ? 'text-[#FF6B35]' : 'text-blue-600'}`}>
-                          {msg.speaker === 'AI' ? ' Sarah (AI Agent)' : 'Mark (Verified Client)'}
+                          {msg.speaker === 'AI' ? ` ${convo.agentName || 'Sarah'} (AI Agent)` : ` ${convo.clientName || 'Mark'} (Verified Client)`}
                           {msg.speaker === 'AI' && <Sparkles className="h-3 w-3" />}
                         </span>
                       </div>
-                      <div className={`p-4 rounded-2xl relative shadow-sm border text-left ${
+                      <div className={`p-4 rounded-2xl relative shadow-sm border text-left transition-all duration-300 ${
                         msg.speaker === 'Client' 
-                          ? 'bg-blue-600 text-white rounded-tr-sm border-blue-700' 
-                          : 'bg-[#FFF8F4] text-slate-800 rounded-tl-sm border-orange-100 shadow-[0_0_15px_rgba(255,107,53,0.05)]'
-                      } ${isActive ? 'ring-4 ring-[#FF6B35] ring-offset-2 scale-[1.02] shadow-xl z-20 !bg-orange-100 !border-orange-300' : ''} ${msg.speaker === 'AI' && !isActive ? 'border-orange-200/50' : ''} transition-all duration-300`}>
+                          ? (isActive 
+                              ? 'bg-blue-600 text-orange-300 border-blue-600 ring-4 ring-[#FF6B35] ring-offset-2 scale-[1.02] shadow-xl z-20 font-bold' 
+                              : 'bg-blue-600 text-white rounded-tr-sm border-blue-700')
+                          : (isActive 
+                              ? 'bg-orange-100 text-slate-900 border-orange-300 rounded-tl-sm ring-4 ring-[#FF6B35] ring-offset-2 scale-[1.02] shadow-xl z-20 font-semibold' 
+                              : 'bg-[#FFF8F4] text-slate-800 rounded-tl-sm border-orange-100 shadow-[0_0_15px_rgba(255,107,53,0.05)]')
+                      } ${msg.speaker === 'AI' && !isActive ? 'border-orange-200/50' : ''}`}>
                         <p className="text-sm leading-relaxed font-medium">{msg.text}</p>
                         
                         {isActive && (

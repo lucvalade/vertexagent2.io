@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 export default function App() {
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="w-full min-h-screen bg-slate-50 text-slate-900 font-sans overflow-x-hidden">
       <Outlet />
       <Toaster />
     </div>

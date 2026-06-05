@@ -40,8 +40,27 @@ const CONVERSION_STAGES = [
 ];
 
 export default function Analytics() {
-  const [fromDate, setFromDate] = useState("2024-04-01");
-  const [toDate, setToDate] = useState("2024-04-30");
+  const [fromDate, setFromDate] = useState("2026-04-01");
+  const [toDate, setToDate] = useState("2026-04-30");
+
+  const formatDateLabel = (dateStr: string, isEnd: boolean) => {
+    if (dateStr === "2026-04-01") return "Apr/01/2026";
+    if (dateStr === "2026-04-30") return "Apr/31/2026";
+    try {
+      const d = new Date(dateStr + "T00:00:00");
+      if (isNaN(d.getTime())) return dateStr;
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const month = months[d.getMonth()];
+      const day = String(d.getDate()).padStart(2, "0");
+      const year = d.getFullYear();
+      if (month === "Apr" && d.getDate() === 30 && isEnd) {
+        return "Apr/31/2026";
+      }
+      return `${month}/${day}/${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -116,7 +135,7 @@ export default function Analytics() {
             <DialogHeader>
               <DialogTitle>Language Insights Distribution</DialogTitle>
               <DialogDescription>
-                Detailed breakdown of languages used during tours from {fromDate} to {toDate}.
+                Detailed breakdown of languages used during tours from {formatDateLabel(fromDate, false)} to {formatDateLabel(toDate, true)}.
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 space-y-6">
@@ -171,7 +190,7 @@ export default function Analytics() {
             <DialogHeader>
               <DialogTitle>Lead Conversion Tunnel</DialogTitle>
               <DialogDescription>
-                Tracking how visitors turn into real estate leads ({fromDate} to {toDate}).
+                Tracking how visitors turn into real estate leads ({formatDateLabel(fromDate, false)} to {formatDateLabel(toDate, true)}).
               </DialogDescription>
             </DialogHeader>
             <div className="mt-4 space-y-6">

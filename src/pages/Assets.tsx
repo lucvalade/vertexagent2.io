@@ -192,6 +192,32 @@ export default function Assets() {
     }
   };
 
+  const handleDownloadAsset = (asset: Asset, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (!asset || !asset.url) {
+      toast.error("No asset URL found");
+      return;
+    }
+    
+    try {
+      const link = document.createElement("a");
+      link.href = asset.url;
+      link.download = asset.name || "download";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Download started for ${asset.name}`);
+    } catch (err) {
+      console.error("Download failed", err);
+      toast.error("Failed to trigger download");
+    }
+  };
+
   const handleRenameAsset = async () => {
     if (!selectedListing || !activeAsset) return;
     
@@ -274,6 +300,11 @@ export default function Assets() {
             alt={asset.name} 
             className="w-full h-full object-cover rounded-lg"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              const seed = asset.name ? asset.name.replace(/\s+/g, '_') : 'realestate';
+              target.src = `https://picsum.photos/seed/${seed}/400/300`;
+            }}
           />
         );
       case 'floorplan':
@@ -406,6 +437,10 @@ export default function Assets() {
                       alt="" 
                       className="w-full h-full object-cover opacity-10 group-hover:opacity-20 transition-opacity"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = `https://picsum.photos/seed/${listing.id}/400/300`;
+                      }}
                     />
                   </div>
                 ) : null}
@@ -450,10 +485,10 @@ export default function Assets() {
               <div className="aspect-square bg-slate-50 flex items-center justify-center p-0 overflow-hidden relative">
                 {renderAssetThumbnail(asset, selectedListing)}
                 
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                <div className="absolute top-2 right-2 z-20">
                   <DropdownMenu>
                     <DropdownMenuTrigger onClick={(e) => e.stopPropagation()} render={
-                      <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm border border-slate-200">
+                      <Button variant="secondary" size="icon" className="h-8 w-8 shadow-sm border-2 border-slate-950 bg-white hover:bg-slate-100 text-slate-950 rounded-full">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     } />
@@ -465,7 +500,7 @@ export default function Assets() {
                       }}>
                         <Pencil className="h-4 w-4 mr-2" /> Rename
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => handleDownloadAsset(asset, e)}>
                         <Download className="h-4 w-4 mr-2" /> Download
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -608,7 +643,7 @@ export default function Assets() {
                       }}>
                         <Pencil className="h-4 w-4 mr-2" /> Rename
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toast.success("Download started")}>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); if (previewAsset) handleDownloadAsset(previewAsset, e); }}>
                         <Download className="h-4 w-4 mr-2" /> Download
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -640,6 +675,11 @@ export default function Assets() {
                 alt={previewAsset.name}
                 className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  const seed = previewAsset.name ? previewAsset.name.replace(/\s+/g, '_') : 'realestate';
+                  target.src = `https://picsum.photos/seed/${seed}/1200/800`;
+                }}
               />
             )}
             {(previewAsset?.type === 'floorplan' || previewAsset?.type === 'document') && (
@@ -657,7 +697,7 @@ export default function Assets() {
                     Please download the file to view the content.
                   </p>
                 </div>
-                <Button className="bg-slate-900 hover:bg-slate-800 gap-2 px-10 h-12 text-sm font-bold shadow-lg">
+                <Button onClick={() => previewAsset && handleDownloadAsset(previewAsset)} className="bg-slate-900 hover:bg-slate-800 gap-2 px-10 h-12 text-sm font-bold shadow-lg">
                   <Download className="h-4 w-4" /> Download Original PDF
                 </Button>
               </div>

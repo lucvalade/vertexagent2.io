@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { useAuth, loginWithGoogle, loginWithEmail } from "@/hooks/useAuth";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
@@ -50,10 +51,11 @@ export default function Login() {
   // Redirect if user is already authenticated
   useEffect(() => {
     if (user && !authLoading) {
-      console.log("User detected in Login page, redirecting to /app/overview...");
-      navigate("/app/overview", { replace: true });
+      console.log("User detected in Login page, redirecting...");
+      const from = (location.state as any)?.from?.pathname || "/app/overview";
+      navigate(from, { replace: true });
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, navigate, location]);
 
   if (authLoading) {
     return (

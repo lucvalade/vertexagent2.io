@@ -100,6 +100,11 @@ service cloud.firestore {
       allow write: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
     }
 
+    match /settings/global_prompt {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
     match /launch_notifications/{notificationId} {
       allow create: if true;
       allow read, delete: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");

@@ -112,22 +112,18 @@ export default function ProtectedLayout() {
   }
 
   if (!user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   const navLinks = [
     { label: "Dashboard", icon: LayoutDashboard, path: "/app/overview" },
     { label: "Listings", icon: List, path: "/app/listings" },
+    { label: "AI Tour", icon: Mic2, path: "/app/aitours" },
+    { label: "Open Houses", icon: Home, path: "/app/openhouses" },
+    { label: "Flyers", icon: LayoutTemplate, path: "/app/flyers" },
     { label: "Leads", icon: Users, path: "/app/leads" },
-    { label: "Conversations", icon: MessageSquare, path: "/app/conversations" },
-    { label: "Assets", icon: Image, path: "/app/assets" },
-    { label: "Voice Lab", icon: Mic2, path: "/app/voicelab" },
-    { label: "Automations", icon: Zap, path: "/app/automations" },
-    { label: "CRM Integrations", icon: Link2, path: "/app/crm" },
-    { label: "Analytics", icon: BarChart2, path: "/app/analytics" },
-    { label: "Templates", icon: LayoutTemplate, path: "/app/templates" },
-    { label: "Team", icon: Building2, path: "/app/team" },
-    { label: "Billing", icon: CreditCard, path: "/app/billing" },
+    { label: "Lenders", icon: CreditCard, path: "/app/lenders" },
+    { label: "Teams", icon: Building2, path: "/app/team" },
     { label: "Settings", icon: Settings, path: "/app/settings" },
   ];
 
@@ -137,7 +133,7 @@ export default function ProtectedLayout() {
     { label: "Dashboard", icon: Shield, path: "/app/admin" },
     { label: "Manage Agents", icon: Users, path: "/app/admin/users" },
     { label: "All Listings", icon: List, path: "/app/admin/listings" },
-    { label: "Launch Notifications", icon: Bell, path: "/app/admin/notifications" },
+    { label: "Launch Notifications FREE Plan", icon: Bell, path: "/app/admin/notifications" },
     { label: "System Logs", icon: FileBox, path: "/app/admin/logs" },
     { label: "Settings", icon: Settings, path: "/app/admin/settings" },
   ];
@@ -179,20 +175,20 @@ export default function ProtectedLayout() {
   const activeColor = viewMode === 'ADMIN' ? 'red' : 'blue';
 
   const SidebarContent = () => (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-col h-20 items-center justify-center border-b px-6 relative">
-        <Link to="/" className="flex items-center gap-2 font-semibold">
-          <div className={`h-8 w-8 bg-${activeColor}-600 outline-1 outline-${activeColor}-600 rounded-md flex items-center justify-center text-white font-bold`}>
-            V
+    <div className="flex h-full flex-col bg-blue-950 text-white">
+      <div className="flex flex-col h-20 items-center justify-center border-b border-blue-900 px-6 relative">
+        <Link to="/" className="flex items-center gap-2 font-bold text-white">
+          <div className="h-8 w-8 bg-white rounded-full flex items-center justify-center text-[#0224bb] font-bold border border-white animate-multicolor-pulse">
+            A
           </div>
-          <span className="text-lg tracking-tight">VertexAgent.io</span>
+          <span className="text-lg tracking-tight">AI Open House Connect</span>
         </Link>
         <div className="absolute bottom-1 left-6">
           <DropdownMenu>
             <DropdownMenuTrigger className={`text-[9px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded border inline-flex items-center gap-1 cursor-pointer transition-colors outline-none ${
                 viewMode === 'ADMIN' 
-                  ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' 
-                  : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100'
+                  ? 'bg-red-900/50 text-red-100 border-red-800' 
+                  : 'bg-blue-900/50 text-blue-100 border-blue-800'
               }`}>
                 <Shield className="h-2 w-2" />
                 {viewMode === 'ADMIN' ? 'Admin Mode' : 'Client Mode'}
@@ -222,11 +218,14 @@ export default function ProtectedLayout() {
             if (isExternal) {
               return (
                 <a
-                  key={link.path}
+                  key={link.label}
                   href={link.path}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-${activeColor}-600 text-slate-600 hover:bg-slate-50`}
+                  className={viewMode === 'CLIENT' 
+                    ? "flex items-center gap-3 rounded-lg px-3 py-2 transition-all text-white/90 hover:text-white hover:bg-white/10 font-bold"
+                    : `flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-${activeColor}-600 text-slate-600 hover:bg-slate-50`
+                  }
                 >
                   <link.icon className="h-4 w-4" />
                   {link.label}
@@ -236,12 +235,17 @@ export default function ProtectedLayout() {
 
             return (
               <Link
-                key={link.path}
+                key={link.label}
                 to={link.path}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-${activeColor}-600 ${
-                  active ? `bg-${activeColor}-50 text-${activeColor}-600 font-medium` : "text-slate-600 hover:bg-slate-50"
-                }`}
+                className={viewMode === 'CLIENT'
+                  ? `flex items-center gap-3 rounded-lg px-3 py-2 transition-all font-bold ${
+                      active ? "bg-white/15 text-white font-extrabold shadow-sm border border-white/10" : "text-white/80 hover:bg-white/10 hover:text-white"
+                    }`
+                  : `flex items-center gap-3 rounded-lg px-3 py-2 transition-all hover:text-${activeColor}-600 ${
+                      active ? `bg-${activeColor}-50 text-${activeColor}-600 font-medium` : "text-slate-600 hover:bg-slate-50"
+                    }`
+                }
               >
                 <link.icon className="h-4 w-4" />
                 {link.label}
@@ -250,13 +254,13 @@ export default function ProtectedLayout() {
           })}
         </nav>
       </div>
-      <div className="border-t p-4">
+      <div className={`border-t p-4 ${viewMode === 'CLIENT' ? 'border-blue-900' : 'border-slate-200'}`}>
         <div className="flex items-center justify-between">
            <div className="text-sm truncate pr-2">
-             <div className="font-medium text-slate-900 truncate">{user.name}</div>
-             <div className="text-slate-500 truncate text-xs">{user.email}</div>
+             <div className={`font-bold truncate ${viewMode === 'CLIENT' ? 'text-white' : 'text-slate-900'}`}>{user.name}</div>
+             <div className={`truncate text-xs ${viewMode === 'CLIENT' ? 'text-blue-200' : 'text-slate-400'}`}>{user.email}</div>
            </div>
-           <Button variant="ghost" onClick={() => logout()} title="Logout" className="flex items-center gap-2 text-slate-500 hover:text-slate-900">
+           <Button variant="ghost" onClick={() => logout()} title="Logout" className={`flex items-center gap-2 font-bold cursor-pointer transition-colors ${viewMode === 'CLIENT' ? 'text-white/80 hover:text-white hover:bg-white/10' : 'text-slate-500 hover:text-slate-900'}`}>
               <span>Logout</span>
               <LogOut className="h-4 w-4" />
            </Button>
@@ -266,34 +270,34 @@ export default function ProtectedLayout() {
   );
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-50 text-slate-900">
+    <div className="flex min-h-screen w-full bg-slate-50 text-slate-900 overflow-x-hidden">
       {/* Desktop Sidebar */}
       <div className="hidden border-r bg-white md:block md:w-64 lg:w-72 shrink-0 h-screen sticky top-0">
         <SidebarContent />
       </div>
       
       {/* Mobile Topbar & Content */}
-      <div className="flex flex-col flex-1 min-w-0">
-        <header className="flex h-16 items-center gap-4 border-b bg-white px-4 md:hidden sticky top-0 z-30">
+      <div className="flex flex-col flex-1 min-w-0 max-w-full overflow-x-hidden">
+        <header className="flex h-16 items-center gap-4 border-b border-blue-900 bg-blue-950 px-4 md:hidden sticky top-0 z-30">
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger>
-              <div className="flex h-10 w-10 items-center justify-center rounded-md border text-sm shrink-0 md:hidden hover:bg-slate-100 transition-colors">
-                <Menu className="h-5 w-5" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-md border text-sm shrink-0 md:hidden hover:bg-blue-900 transition-colors">
+                <Menu className="h-5 w-5 text-white" />
                 <span className="sr-only">Toggle navigation menu</span>
               </div>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[280px] p-0 border-r">
+            <SheetContent side="left" className="w-[280px] p-0 border-r bg-blue-950">
                <SidebarContent />
             </SheetContent>
           </Sheet>
-          <div className="flex items-center gap-2 font-semibold">
-            <div className="h-6 w-6 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">V</div>
-            <span>VertexAgent.io</span>
+          <div className="flex items-center gap-2 font-bold text-white">
+            <div className="h-6 w-6 bg-white rounded-full flex items-center justify-center text-[#0224bb] font-bold border border-white text-xs text-center animate-multicolor-pulse">A</div>
+            <span>AI Open House Connect</span>
           </div>
         </header>
 
         <main className="flex-1 p-4 md:p-8">
-          <div className="mx-auto max-w-5xl">
+          <div className={`mx-auto ${location.pathname.includes('/flyers') ? 'max-w-7xl lg:max-w-[1380px] w-full' : 'max-w-5xl'}`}>
             {(user?.role === 'ADMIN' || user?.email === 'luc.valade@gmail.com') && maintenanceMode && (
               <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-2">
                 <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center shrink-0">

@@ -21,11 +21,11 @@ export default function EditMember() {
   const navigate = useNavigate();
 
   const DUMMY_AGENTS = [
-    { id: '1', name: 'Luc Valade', email: 'luc@vertexrealty.ca', role: 'ADMIN', status: 'Active', listings: 12 },
-    { id: '2', name: 'Sarah Jenkins', email: 'sarah@vertexrealty.ca', role: 'AGENT', status: 'Active', listings: 8 },
-    { id: '3', name: 'Michael Chen', email: 'mchen@vertexrealty.ca', role: 'AGENT', status: 'Pending', listings: 0 },
-    { id: '4', name: 'Emma Watson', email: 'emma@vertexrealty.ca', role: 'AGENT', status: 'Inactive', listings: 5 },
-    { id: '5', name: 'David Miller', email: 'dmiller@vertexrealty.ca', role: 'AGENT', status: 'Active', listings: 15 },
+    { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", listings: 4, office: "Vertex Agent Group" },
+    { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", listings: 12, office: "Vertex Agent Group" },
+    { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", listings: 8, office: "Vertex Agent Group" },
+    { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", listings: 0, office: "Vertex Agent Group" },
+    { id: "inv_luc", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", listings: 0, office: "Vertex Agent Group" }
   ];
 
   const [formData, setFormData] = useState({
@@ -40,8 +40,46 @@ export default function EditMember() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    // Load persisted data if it exists for this member
-    if (memberId) {
+    async function loadMemberDetail() {
+      if (!memberId) return;
+
+      // 1. Try checking the "users" collection in case it is a real Firestore user
+      try {
+        const userRef = doc(db, "users", memberId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const uData = userSnap.data();
+          setFormData({
+            name: uData.name || "",
+            email: uData.email || "",
+            office: uData.brokerage || "Main Office",
+            role: uData.role || "Agent"
+          });
+          return;
+        }
+      } catch (err) {
+        console.error("Error fetching Firestore user details:", err);
+      }
+
+      // 2. Try checking the "invitations" collection in case it is a pending invite in Firestore
+      try {
+        const inviteRef = doc(db, "invitations", memberId);
+        const inviteSnap = await getDoc(inviteRef);
+        if (inviteSnap.exists()) {
+          const iData = inviteSnap.data();
+          setFormData({
+            name: iData.name || "",
+            email: iData.email || "",
+            office: iData.brokerage || "Main Office",
+            role: iData.role || "Agent"
+          });
+          return;
+        }
+      } catch (err) {
+        console.error("Error fetching Firestore invite details:", err);
+      }
+
+      // 3. Check localStorage vertex_team_data
       const savedMembers = localStorage.getItem('vertex_team_data');
       let foundMember = null;
       
@@ -50,7 +88,7 @@ export default function EditMember() {
         foundMember = team.find((m: any) => m.id === memberId || m.name.toLowerCase().replace(' ', '-') === memberId);
       }
       
-      // Fallback to dummy data
+      // 4. Fallback to synced dummy data
       if (!foundMember) {
         foundMember = DUMMY_AGENTS.find(m => m.id === memberId || m.name.toLowerCase().replace(' ', '-') === memberId);
       }
@@ -59,11 +97,13 @@ export default function EditMember() {
         setFormData({
           name: foundMember.name,
           email: foundMember.email,
-          office: (foundMember as any).office || "Main Office",
-          role: (foundMember as any).role || "Agent (Standard)"
+          office: (foundMember as any).office || (foundMember as any).brokerage || "Main Office",
+          role: (foundMember as any).role || "Agent"
         });
       }
     }
+
+    loadMemberDetail();
   }, [memberId]);
 
   const validateField = (field: string, value: string) => {
@@ -127,30 +167,42 @@ export default function EditMember() {
           role: formData.role
         });
       } else {
-        // Persist to localStorage to simulate a database update for dummy/offline members
-        const savedMembers = localStorage.getItem('vertex_team_data');
-        let team = savedMembers ? JSON.parse(savedMembers) : [
-          { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", active: true, listings: 4 },
-          { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", active: true, listings: 12 },
-          { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", active: true, listings: 8 },
-          { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", active: true, listings: 0 },
-        ];
-
-        const memberIdx = team.findIndex((m: any) => m.id === memberId);
-        const updatedMember = {
-          id: memberId,
-          ...formData,
-          active: true,
-          listings: memberIdx >= 0 ? team[memberIdx].listings : 0
-        };
-
-        if (memberIdx >= 0) {
-          team[memberIdx] = updatedMember;
+        // Check if it's an invitation we are updating in Firestore
+        const inviteRef = doc(db, "invitations", memberId!);
+        const inviteSnap = await getDoc(inviteRef);
+        if (inviteSnap.exists()) {
+          await updateDoc(inviteRef, {
+            name: formData.name,
+            email: formData.email,
+            brokerage: formData.office,
+            role: formData.role
+          });
         } else {
-          team.push(updatedMember);
-        }
+          // Persist to localStorage to simulate a database update for dummy/offline members
+          const savedMembers = localStorage.getItem('vertex_team_data');
+          let team = savedMembers ? JSON.parse(savedMembers) : [
+            { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", active: true, listings: 4 },
+            { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", active: true, listings: 12 },
+            { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", active: true, listings: 8 },
+            { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", active: true, listings: 0 },
+          ];
 
-        localStorage.setItem('vertex_team_data', JSON.stringify(team));
+          const memberIdx = team.findIndex((m: any) => m.id === memberId);
+          const updatedMember = {
+            id: memberId,
+            ...formData,
+            active: true,
+            listings: memberIdx >= 0 ? team[memberIdx].listings : 0
+          };
+
+          if (memberIdx >= 0) {
+            team[memberIdx] = updatedMember;
+          } else {
+            team.push(updatedMember);
+          }
+
+          localStorage.setItem('vertex_team_data', JSON.stringify(team));
+        }
       }
       
       setTimeout(() => {

@@ -104,6 +104,11 @@ export default function ListingDetails() {
                   src={typeof listing.images[0] === 'string' ? listing.images[0] : listing.images[0].url} 
                   alt={listing.address} 
                   className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = "https://placehold.co/1200x800?text=Listing+Image+Not+Found";
+                  }}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full text-slate-400">No Image Available</div>

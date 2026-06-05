@@ -33,9 +33,13 @@ export interface Listing {
   originatingSystemName?: string;
   country?: string;
   brokerageName?: string;
+  brokerageLogo?: string;
+  brandingTemplate?: "luxury" | "tech" | "standard";
+  qrDestination?: "sign-in" | "microsite" | "tour";
   agentName?: string;
   agentPhone?: string;
   description?: string;
+  documents?: { name: string; url: string }[];
   images?: (string | ListingImage)[];
   talkingPoints?: string[];
   webhookUrl?: string;
@@ -44,6 +48,17 @@ export interface Listing {
   tourDescriptors?: string[];
   openHouseDate?: string;
   openHouseTime?: string;
+  welcome_en?: string;
+  welcome_fr?: string;
+  welcome_en_script?: string;
+  welcome_fr_script?: string;
+  welcome_other_lang?: string;
+  welcome_other_script?: string;
+  voiceEnabled?: boolean;
+  multilingualEnabled?: boolean;
+  lenderHandoff?: boolean;
+  selectedLenderName?: string;
+  ctas?: { label: string; action: string }[];
   createdAt: number;
   updatedAt: number;
 }
@@ -60,6 +75,17 @@ export interface Lead {
   status?: "New" | "Hot" | "Warm" | "Cold";
   createdAt: number;
   isLaunchSignup?: boolean;
+  notes?: string;
+  verified?: boolean;
+}
+
+export async function updateLead(leadId: string, updates: Partial<Lead>) {
+  const path = `leads/${leadId}`;
+  try {
+    await updateDoc(doc(db, "leads", leadId), updates);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
 }
 
 export async function createListing(listing: Listing) {
@@ -146,18 +172,40 @@ export async function getAllListings(): Promise<Listing[]> {
   }
 }
 
+export async function routeLeadToCRM(listing: Listing, lead: Lead) {
+  if (!listing.webhookUrl) return;
+  try {
+    const response = await fetch(listing.webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "new_lead",
+        lead,
+        listing: { address: listing.address, id: listing.id }
+      })
+    });
+    console.log(`[CRM Routing] Webhook sent to ${listing.webhookUrl}:`, response.status);
+  } catch (err) {
+    console.error("[CRM Routing] Failed to send webhook:", err);
+  }
+}
+
 export async function createLead(listingId: string, lead: Lead) {
   try {
+    let listingData: Listing | null = null;
     if (listingId !== "DEMO_SIGNUP") {
       // Ensure we have listing details
       const listingDoc = await getDoc(doc(db, "listings", listingId));
       if (listingDoc.exists()) {
-        const listingData = listingDoc.data() as Listing;
+        listingData = listingDoc.data() as Listing;
         lead.agentId = listingData.ownerId;
         lead.listingAddress = listingData.address;
         
         // Save to listing subcollection
         await setDoc(doc(db, "listings", listingId, "leads", lead.id), lead);
+
+        // CRM Routing
+        routeLeadToCRM(listingData, lead);
       }
     } else {
       lead.isLaunchSignup = true;
@@ -242,3 +290,24 @@ export async function sendEmail(payload: EmailPayload) {
     throw err;
   }
 }
+
+export async function getGlobalPromptSettings() {
+  try {
+    const d = await getDoc(doc(db, "settings", "global_prompt"));
+    if (d.exists()) {
+      return d.data();
+    }
+  } catch (err) {
+    console.error("Error fetching global prompt settings:", err);
+  }
+  return null;
+}
+
+export async function saveGlobalPromptSettings(settings: { prompt?: string; password?: string }) {
+  try {
+    await setDoc(doc(db, "settings", "global_prompt"), settings, { merge: true });
+  } catch (err) {
+    console.error("Error saving global prompt settings:", err);
+  }
+}
+

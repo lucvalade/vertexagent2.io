@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import { getUserListings, getAllListings, deleteListingOp, Listing, createListing } from "@/lib/api";
+import { getUserListings, getAllListings, deleteListingOp, Listing, createListing, updateListing } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ import {
   Layout
 } from "lucide-react";
 import { toast } from "sonner";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 import { QRCodeSVG } from 'qrcode.react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,6 +50,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [qrListing, setQrListing] = useState<Listing | null>(null);
+  const [qrForeground, setQrForeground] = useState("#2563eb");
+  const [qrBgColor, setQrBgColor] = useState("#ffffff");
+  const [includeCenterLogo, setIncludeCenterLogo] = useState(false);
+  const [shareListing, setShareListing] = useState<Listing | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteAddress, setDeleteAddress] = useState<string>("");
   const [visibleCount, setVisibleCount] = useState(3);
@@ -99,9 +105,9 @@ export default function Dashboard() {
         baths: 11,
         description: "An architectural masterpiece in Bel Air. This extraordinary estate offers unparalleled ocean and city views. Features include a zero-edge infinity pool, a 20-seat home theater, a wine cellar holding 2,000 bottles, and a state-of-the-art wellness spa with a sauna and massage room. The modern minimalist design blends seamlessly with luxurious finishes throughout.",
         images: [
-          "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=1200",
-          "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&q=80&w=1200",
-          "https://images.unsplash.com/photo-1600607687931-cebf14cd0bb6?auto=format&fit=crop&q=80&w=1200"
+          "https://picsum.photos/seed/belairestate/1200/800",
+          "https://picsum.photos/seed/belairliving/1200/800",
+          "https://picsum.photos/seed/belairbed/1200/800"
         ],
         talkingPoints: ["Infinity pool with LA city views", "20-seat home theater", "Wellness spa and sauna", "2000-bottle wine cellar"],
         createdAt: Date.now(),
@@ -122,9 +128,9 @@ export default function Dashboard() {
         baths: 6,
         description: "A sky-high sanctuary overlooking Central Park. This full-floor penthouse features 14-foot ceilings, floor-to-ceiling windows, and a private wraparound terrace. The chef's kitchen features imported Italian marble and top-of-the-line Gaggenau appliances. Smart-home integration throughout allows seamless control of lighting, climate, and security. The building offers white-glove service including a private dining room, health club, and 75-foot pool.",
         images: [
-          "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=1200",
-          "https://images.unsplash.com/photo-1502672260266-1c1cdeaa9cb9?auto=format&fit=crop&q=80&w=1200",
-          "https://images.unsplash.com/photo-1600566753086-00f18efc2297?auto=format&fit=crop&q=80&w=1200"
+          "https://picsum.photos/seed/nycpenthouse/1200/800",
+          "https://picsum.photos/seed/nycliving/1200/800",
+          "https://picsum.photos/seed/nycbed/1200/800"
         ],
         talkingPoints: ["Unobstructed Central Park views", "Private wraparound terrace", "Floor-to-ceiling windows", "Imported Italian marble kitchen"],
         createdAt: Date.now(),
@@ -140,6 +146,31 @@ export default function Dashboard() {
       console.error(err);
     } finally {
       setSeeding(false);
+    }
+  }
+
+  async function trackShareActivity(listingId: string, type: 'QR' | 'SOCIAL') {
+    if (!user) return;
+    try {
+      const logData = {
+        type: "SHARE_ACTIVITY",
+        listingId,
+        shareType: type,
+        agentId: user.id,
+        agentEmail: user.email,
+        timestamp: Date.now(),
+        clientTime: new Date().toISOString()
+      };
+      // Log to system_logs
+      await addDoc(collection(db, "system_logs"), {
+        type: "SHARE_CLICK",
+        message: `${type} Link Generated for Listing ${listingId} by ${user.email}`,
+        timestamp: serverTimestamp(),
+        details: logData
+      });
+      console.log(`Tracked ${type} share for ${listingId}`);
+    } catch (err) {
+      console.error("Failed to track share activity:", err);
     }
   }
 
@@ -163,7 +194,7 @@ export default function Dashboard() {
           <Skeleton className="h-10 w-32" />
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {[1,2,3].map(i => <Skeleton key={i} className="h-64 w-full rounded-xl" />)}
+          {[1,2,3].map(i => <Skeleton key={'skeleton-' + i} className="h-64 w-full rounded-xl" />)}
         </div>
       </div>
     );
@@ -225,8 +256,8 @@ export default function Dashboard() {
       ) : (
         <div className="space-y-8">
           <div className={`grid gap-6 sm:grid-cols-2 ${layoutCols === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2 max-w-5xl'}`}>
-            {listings.slice(0, visibleCount).map(listing => (
-              <Card key={listing.id} className="overflow-hidden flex flex-col group hover:shadow-lg transition-all duration-300 border-slate-200">
+            {Array.from(new Map(listings.map(l => [l.id, l])).values()).slice(0, visibleCount).map(listing => (
+              <Card key={'listing-' + listing.id} className="overflow-hidden flex flex-col group hover:shadow-lg transition-all duration-300 border-slate-200">
                 <div 
                   className="h-48 bg-slate-100 relative cursor-pointer overflow-hidden"
                   onClick={() => navigate(`/app/listings/${listing.id}`)}
@@ -236,6 +267,11 @@ export default function Dashboard() {
                       src={typeof listing.images[0] === 'string' ? listing.images[0] : listing.images[0].url} 
                       alt={listing.address} 
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = `https://picsum.photos/seed/${listing.id}/600/400`;
+                      }}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full text-slate-400">No Image</div>
@@ -246,27 +282,45 @@ export default function Dashboard() {
                     <CardTitle className="text-lg line-clamp-1 group-hover:text-blue-600 transition-colors flex-1">
                       {listing.address}{listing.city ? `, ${listing.city}` : ''}{listing.province ? `, ${listing.province}` : ''}
                     </CardTitle>
-                    <div onClick={(e) => e.stopPropagation()}>
+                     <div onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
                       <DropdownMenu>
                         <DropdownMenuTrigger render={
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-slate-900 transition-colors -mt-1 -mr-1">
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-slate-900 transition-colors -mt-1 -mr-1" type="button" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         } />
-                        <DropdownMenuContent align="end" className="w-44 p-2 rounded-xl shadow-xl border-slate-200">
-                          <DropdownMenuItem onClick={() => navigate(`/app/listings/${listing.id}`)} className="rounded-lg font-bold gap-2">
+                        <DropdownMenuContent align="end" className="w-44 p-2 rounded-xl shadow-xl border-slate-200" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/${listing.id}`); }} className="rounded-lg font-bold gap-2">
                             <Eye className="h-4 w-4 text-blue-600" /> View Tour
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/app/listings/edit/${listing.id}`)} className="rounded-lg font-bold gap-2">
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/edit/${listing.id}`); }} className="rounded-lg font-bold gap-2">
                             <Edit className="h-4 w-4 text-blue-600" /> Edit Listing
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setQrListing(listing)} className="rounded-lg font-bold gap-2">
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            setQrListing(listing);
+                            trackShareActivity(listing.id, 'QR');
+                          }} className="rounded-lg font-bold gap-2">
                             <QrCode className="h-4 w-4 text-blue-600" /> Get QR Code
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            setShareListing(listing);
+                            trackShareActivity(listing.id, 'SOCIAL');
+                          }} className="rounded-lg font-bold gap-2">
+                            <ExternalLink className="h-4 w-4 text-blue-600" /> Get Tour URL
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/app/flyers');
+                          }} className="rounded-lg font-bold gap-2">
+                            <Layout className="h-4 w-4 text-blue-600" /> Print Flyer
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="my-1" />
                           <DropdownMenuItem 
                             className="rounded-lg font-bold gap-2 text-red-600 focus:text-red-700 focus:bg-red-50"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setDeleteId(listing.id);
                               setDeleteAddress(listing.address);
                             }}
@@ -347,33 +401,221 @@ export default function Dashboard() {
       )}
 
       <Dialog open={!!qrListing} onOpenChange={(open) => !open && setQrListing(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Share Property Tour</DialogTitle>
+            <DialogTitle>Dynamic QR Code Settings</DialogTitle>
             <DialogDescription>
-              Scan this QR code or share the link to allow buyers to take the AI-powered tour.
+              Configure routing destination, choose custom styling options, or export high-resolution code for listing materials.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col items-center justify-center p-6 space-y-4">
-            <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-100">
-               {qrListing && (
-                 <QRCodeSVG 
-                   value={`${window.location.origin}/tour/${qrListing.id}`} 
-                   size={200}
-                   level="H"
-                   includeMargin
-                 />
-               )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
+            {/* Visual Preview column */}
+            <div className="flex flex-col items-center justify-center bg-slate-50 border rounded-2xl p-4 space-y-4">
+              <div className="p-4 bg-white rounded-2xl shadow-md border border-slate-100">
+                {qrListing && (
+                  <QRCodeSVG 
+                    id="qr-code-svg"
+                    value={`${window.location.origin}${qrListing.qrDestination === 'sign-in' ? `/open-houses/${qrListing.id}` : qrListing.qrDestination === 'microsite' ? `/microsite/${qrListing.id}` : `/tour/${qrListing.id}`}`} 
+                    size={180}
+                    level="H"
+                    includeMargin
+                    fgColor={qrForeground}
+                    bgColor={qrBgColor}
+                    {...(includeCenterLogo ? {
+                      imageSettings: {
+                        src: "https://vertexagent.io/favicon.ico",
+                        x: undefined,
+                        y: undefined,
+                        height: 24,
+                        width: 24,
+                        excavate: true,
+                      }
+                    } : {})}
+                  />
+                )}
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-bold text-slate-800 line-clamp-1">
+                  {qrListing?.address}
+                </p>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {qrListing?.city}, {qrListing?.province}
+                </span>
+              </div>
             </div>
-            <p className="text-sm font-medium text-slate-800 text-center">
-              {qrListing?.address}{qrListing?.city ? `, ${qrListing.city}` : ''}
-            </p>
-            <div className="flex gap-2 w-full mt-4">
-               <Button className="flex-1" variant="outline" onClick={() => {
-                 navigator.clipboard.writeText(`${window.location.origin}/tour/${qrListing?.id}`);
-                 toast.success("Link copied to clipboard!");
-               }}>Copy Link</Button>
-               <Button className="flex-1" onClick={() => window.open(`/tour/${qrListing?.id}`, '_blank')}>Open Tour</Button>
+
+            {/* Controls parameters column */}
+            <div className="space-y-4 text-left">
+              <div>
+                <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 block mb-1.5">QR Destination Routing</label>
+                <select 
+                  className="w-full text-xs p-2 bg-white border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  value={qrListing?.qrDestination || "tour"}
+                  onChange={(e) => {
+                    const dest = e.target.value as "sign-in" | "microsite" | "tour";
+                    if (qrListing) {
+                      const updated = { ...qrListing, qrDestination: dest };
+                      setQrListing(updated);
+                      setListings(prev => prev.map(l => l.id === qrListing.id ? updated : l));
+                      updateListing(qrListing.id, { qrDestination: dest })
+                        .then(() => toast.success("Dynamic redirect updated instantly!"))
+                        .catch(() => toast.error("Could not sync destination."));
+                    }
+                  }}
+                >
+                  <option value="tour">AI Virtual Tour guide</option>
+                  <option value="sign-in">Digital Open House Sign-In Form</option>
+                  <option value="microsite">Branded Listing Microsite page</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 block mb-1.5 font-sans">Brand Styling Palette</label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="text-[10px] text-slate-600 block mb-0.5">Foreground</label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="color" 
+                        value={qrForeground} 
+                        onChange={(e) => setQrForeground(e.target.value)} 
+                        className="w-7 h-7 rounded border cursor-pointer p-0"
+                      />
+                      <span className="font-mono text-[10px] text-slate-500 tracking-wider uppercase">{qrForeground}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-600 block mb-0.5">Background</label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="color" 
+                        value={qrBgColor} 
+                        onChange={(e) => setQrBgColor(e.target.value)} 
+                        className="w-7 h-7 rounded border cursor-pointer p-0"
+                      />
+                      <span className="font-mono text-[10px] text-slate-500 tracking-wider uppercase">{qrBgColor}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <input 
+                  type="checkbox" 
+                  id="includeLogo" 
+                  checked={includeCenterLogo} 
+                  onChange={(e) => setIncludeCenterLogo(e.target.checked)} 
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <label htmlFor="includeLogo" className="text-xs font-semibold text-slate-700 cursor-pointer select-none">Embed Vertex Brand Badge</label>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 w-full p-4 border-t border-slate-100">
+            <Button 
+              className="flex-1 text-xs py-2 h-10 font-bold" 
+              variant="outline" 
+              onClick={() => {
+                if (!qrListing) return;
+                const destPath = qrListing.qrDestination === 'sign-in' ? `/open-houses/${qrListing.id}` : qrListing.qrDestination === 'microsite' ? `/microsite/${qrListing.id}` : `/tour/${qrListing.id}`;
+                navigator.clipboard.writeText(`${window.location.origin}${destPath}`);
+                toast.success("Destination link copied to clipboard!");
+              }}
+            >
+              Copy Link URL
+            </Button>
+            <Button 
+              className="flex-1 text-xs py-2 h-10 font-bold bg-blue-600 hover:bg-blue-700 text-white" 
+              onClick={() => {
+                const svg = document.getElementById("qr-code-svg");
+                if (!svg) return;
+                try {
+                  const svgData = new XMLSerializer().serializeToString(svg);
+                  const canvas = document.createElement("canvas");
+                  canvas.width = 1000;
+                  canvas.height = 1000;
+                  const ctx = canvas.getContext("2d");
+                  const img = new Image();
+                  img.onload = () => {
+                    if (ctx) {
+                      ctx.fillStyle = qrBgColor;
+                      ctx.fillRect(0, 0, 1000, 1000);
+                      ctx.drawImage(img, 100, 100, 800, 800);
+                      const url = canvas.toDataURL("image/png");
+                      const a = document.createElement("a");
+                      a.download = `QR-${qrListing?.mlsNumber || "listing"}.png`;
+                      a.href = url;
+                      a.click();
+                      toast.success("High-res printable PNG downloaded successfully!");
+                    }
+                  };
+                  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+                } catch (e) {
+                  toast.error("Download failed. Copy URL to generate externally.");
+                }
+              }}
+            >
+              Export Printable PNG
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!shareListing} onOpenChange={(open) => !open && setShareListing(null)}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl border-0 shadow-2xl">
+          <div className="bg-white p-8 space-y-6">
+            <div className="space-y-2 text-center">
+              <h2 className="text-2xl font-black tracking-tighter uppercase italic text-slate-900">Share Property Tour</h2>
+              <p className="text-sm text-slate-500 font-medium px-4">
+                Share the link on your Social Media platforms to allow buyers to take the AI-powered tour.
+              </p>
+            </div>
+
+            <div className="relative aspect-video rounded-2xl overflow-hidden shadow-inner border border-slate-100 bg-slate-50">
+              {shareListing?.images && shareListing.images.length > 0 ? (
+                <img 
+                  src={typeof shareListing.images[0] === 'string' ? shareListing.images[0] : shareListing.images[0].url} 
+                  alt={shareListing.address}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = `https://picsum.photos/seed/${shareListing.id}/600/400`;
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-300 italic">No Image Available</div>
+              )}
+            </div>
+
+            <div className="text-center">
+              <p className="text-lg font-black text-slate-900 tracking-tight">
+                {shareListing?.address}
+              </p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {shareListing?.city}{shareListing?.province ? `, ${shareListing.province}` : ''}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-2">
+              <Button 
+                className="h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest shadow-xl shadow-blue-200"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/tour/${shareListing?.id}`);
+                  toast.success("Social media link copied!");
+                }}
+              >
+                Copy Link
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="h-14 rounded-2xl font-bold text-slate-500 hover:text-slate-900"
+                onClick={() => setShareListing(null)}
+              >
+                Close
+              </Button>
             </div>
           </div>
         </DialogContent>

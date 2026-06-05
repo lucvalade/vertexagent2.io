@@ -82,7 +82,7 @@ export default function Register() {
           </div>
           <CardTitle className="text-2xl font-black tracking-tight text-slate-900 mb-2">Join VertexAgent</CardTitle>
           <CardDescription className="text-slate-500 font-medium leading-relaxed">
-            Create your account to start generating AI tours.
+            Try Free for 14 Days (No Credit Card Required). Create your account to start.
           </CardDescription>
         </CardHeader>
         <CardContent className="px-8 pb-8 flex flex-col gap-4">
@@ -196,7 +196,7 @@ export default function Register() {
         </CardContent>
         <CardFooter className="bg-slate-50 border-t border-slate-100 p-6 px-8 flex justify-between items-center text-xs">
           <p className="text-slate-500 font-medium">Already have an account?</p>
-          <Link to="/" className="text-blue-600 font-bold hover:underline flex items-center gap-1">
+          <Link to="/login" className="text-blue-600 font-bold hover:underline flex items-center gap-1">
             Sign In <ArrowRight className="h-3 w-3" />
           </Link>
         </CardFooter>

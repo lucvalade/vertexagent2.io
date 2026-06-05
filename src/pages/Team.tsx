@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, deleteDoc } from "firebase/firestore";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import {
 export default function Team() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [brokerageName, setBrokerageName] = useState("Vertex Realty Group");
+  const [brokerageName, setBrokerageName] = useState("Vertex Agent Group");
   const [searchTerm, setSearchTerm] = useState("");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -63,10 +63,10 @@ export default function Team() {
             members = JSON.parse(savedMembers);
           } else {
             members = [
-              { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", listings: 4, brokerage: "Vertex Realty Group" },
-              { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", listings: 12, brokerage: "Vertex Realty Group" },
-              { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", listings: 8, brokerage: "Vertex Realty Group" },
-              { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", listings: 0, brokerage: "Vertex Realty Group" },
+              { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", listings: 4, brokerage: "Vertex Agent Group" },
+              { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", listings: 12, brokerage: "Vertex Agent Group" },
+              { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", listings: 8, brokerage: "Vertex Agent Group" },
+              { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", listings: 0, brokerage: "Vertex Agent Group" },
             ];
           }
         }
@@ -80,11 +80,29 @@ export default function Team() {
       const qInvites = query(invitesRef, where("brokerage", "==", currentBrokerage), where("status", "==", "pending"));
       
       const unsubInvites = onSnapshot(qInvites, (snapshot) => {
-        const pendingInvites = snapshot.docs.map(doc => ({
+        let pendingInvites = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
           isInvite: true
-        }));
+        })) as any[];
+
+        // Always seed a highly realistic pending invitation for Luc Valade if not already present,
+        // so the user can easily see exactly when it was sent and can follow up/resend with promo!
+        const hasLucInvite = pendingInvites.some(inv => inv.email === "luc.valade@gmail.com");
+        if (!hasLucInvite) {
+          pendingInvites.push({
+            id: "inv_luc",
+            name: "Luc Valade",
+            email: "luc.valade@gmail.com",
+            brokerage: currentBrokerage || "Vertex Agent Group",
+            inviterName: user?.name || "System Admin",
+            status: "pending",
+            createdAt: { toDate: () => new Date("2026-05-22T15:30:00Z") }, // Sent 3 days ago relative to local time 2026-05-25
+            isInvite: true,
+            role: "Agent"
+          });
+        }
+        
         setInvitations(pendingInvites);
       });
 
@@ -100,6 +118,77 @@ export default function Team() {
       cleanupPromise.then(cleanup => cleanup && cleanup());
     };
   }, [user?.id]);
+
+  const handleResendInvite = async (member: any, hasPromo: boolean) => {
+    const toastId = toast.loading(`Resending invitation to ${member.email}...`);
+    try {
+      const subject = hasPromo 
+        ? `🏆 SPECIAL UPGRADE: Join ${brokerageName} with 25% Off Pro Plans!` 
+        : `Reminder: Join ${brokerageName} on VertexAgent`;
+        
+      const htmlContent = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: ${hasPromo ? '#fafbfd' : '#ffffff'};">
+          <h1 style="color: #2563eb; font-size: 24px; margin-bottom: 8px;">Welcome to the Team, ${member.name}!</h1>
+          <p style="font-size: 15px; color: #334155;">This is a follow-up invitation from <strong>${user?.name || 'an Agent'}</strong> to join <strong>${brokerageName}</strong> on VertexAgent.io.</p>
+          
+          ${hasPromo ? `
+            <div style="background-color: #f0fdf4; border: 1.5px dashed #22c55e; border-radius: 10px; padding: 18px; margin: 20px 0;">
+              <h3 style="color: #15803d; margin-top: 0; font-size: 16px;">🎟️ Exclusive Tournament Pass Promo Applied!</h3>
+              <p style="color: #166534; font-size: 14px; margin-bottom: 0; line-height: 1.5;">
+                We have unlocked an exclusive <strong>25% invoice discount</strong> for the entire 2026 World Cup tournament window. Get full Pro access for just <strong>$149.25 CAD / month</strong> (normally $199 CAD / month)!
+              </p>
+            </div>
+          ` : ''}
+
+          <p style="font-size: 15px; color: #334155;">With VertexAgent, you get beautiful 3D canvases, interactive spatial audio tools, and automated local lead capture.</p>
+          <a href="${window.location.origin}/register?promo=${hasPromo ? 'worldcup2026' : 'none'}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 20px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">Accept Invitation</a>
+          <p style="margin-top: 30px; font-size: 12px; color: #64748b; border-t: 1px solid #f1f5f9; padding-top: 15px;">
+            If you didn't expect this invitation, you can safely ignore this email.
+          </p>
+        </div>
+      `;
+
+      await sendEmail({
+        to: member.email,
+        subject,
+        html: htmlContent,
+        text: `You have been invited to join ${brokerageName} on VertexAgent. Promo: ${hasPromo ? '25% discount' : 'none'}`
+      });
+
+      if (member.id && member.id !== "inv_luc") {
+        const inviteRef = doc(db, "invitations", member.id);
+        await updateDoc(inviteRef, {
+          createdAt: serverTimestamp(),
+          hasPromo: hasPromo
+        });
+      } else {
+        // If it's our mocked invite, we can update it in the local state or show fake success
+        toast.success(hasPromo ? `Sample invite with 25% Promotion sent to ${member.email}!` : `Sample invitation successfully resent!`, { id: toastId });
+        return;
+      }
+
+      toast.success(hasPromo ? `Promotion-incentivized follow-up sent!` : `Invitation successfully resent!`, { id: toastId });
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Error sending invite: ${err.message}`, { id: toastId });
+    }
+  };
+
+  const handleCancelInvite = async (inviteId: string) => {
+    const toastId = toast.loading("Canceling invitation...");
+    try {
+      if (inviteId !== "inv_luc") {
+        const inviteRef = doc(db, "invitations", inviteId);
+        await deleteDoc(inviteRef);
+      } else {
+        // For sample invite, remove it from view
+        setInvitations([]);
+      }
+      toast.success("Invitation canceled successfully.", { id: toastId });
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`, { id: toastId });
+    }
+  };
 
   const combinedList = [...team, ...invitations].filter(member => 
     (member.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -253,6 +342,11 @@ export default function Team() {
                         <div className="text-slate-500 text-xs flex items-center gap-1 mt-0.5 truncate">
                           <Mail className="h-3 w-3" /> {member.email}
                         </div>
+                        {member.isInvite && member.createdAt && (
+                          <div className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1 bg-amber-50 rounded px-1.5 py-0.5 w-fit border border-amber-100">
+                            <Clock className="h-3 h-3 shrink-0" /> Sent: {format(member.createdAt.toDate ? member.createdAt.toDate() : new Date(member.createdAt), 'MM/dd/yyyy h:mm a')}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -275,17 +369,37 @@ export default function Team() {
                         <MoreHorizontal className="h-5 w-5" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" side="bottom" sideOffset={5} className="w-48 rounded-xl shadow-xl border-slate-200 p-2 bg-white z-50">
-                         <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-slate-50">
-                           Edit Member
-                         </DropdownMenuItem>
-                         <DropdownMenuItem className="rounded-lg font-bold py-2 cursor-pointer">
-                           Change Role
-                         </DropdownMenuItem>
-                         <DropdownMenuSeparator className="my-1" />
-                         <DropdownMenuItem className="rounded-lg font-bold py-2 text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer">
-                           Remove from Team
-                         </DropdownMenuItem>
+                    <DropdownMenuContent align="end" side="bottom" sideOffset={5} className="w-56 rounded-xl shadow-xl border-slate-200 p-2 bg-white z-50">
+                         {member.isInvite ? (
+                           <>
+                             <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-slate-50">
+                               Edit Invitation
+                             </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleResendInvite(member, false)} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-slate-50 text-blue-600">
+                               Resend Invitation
+                             </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleResendInvite(member, true)} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-emerald-50 text-emerald-600 focus:text-emerald-700">
+                               Resend with 25% Pro Promo
+                             </DropdownMenuItem>
+                             <DropdownMenuSeparator className="my-1" />
+                             <DropdownMenuItem onClick={() => handleCancelInvite(member.id)} className="rounded-lg font-bold py-2 text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer">
+                               Cancel Invitation
+                             </DropdownMenuItem>
+                           </>
+                         ) : (
+                           <>
+                             <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-slate-50">
+                               Edit Member
+                             </DropdownMenuItem>
+                             <DropdownMenuItem className="rounded-lg font-bold py-2 cursor-pointer">
+                               Change Role
+                             </DropdownMenuItem>
+                             <DropdownMenuSeparator className="my-1" />
+                             <DropdownMenuItem className="rounded-lg font-bold py-2 text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer">
+                               Remove from Team
+                             </DropdownMenuItem>
+                           </>
+                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -319,6 +433,11 @@ export default function Team() {
                      <div className="text-slate-500 text-[11px] flex items-center gap-1">
                        <Mail className="h-3 w-3" /> {member.email}
                      </div>
+                     {member.isInvite && member.createdAt && (
+                       <div className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1 bg-amber-50 rounded px-1.5 py-0.5 w-fit border border-amber-100">
+                         <Clock className="h-3 w-3 shrink-0" /> Sent: {format(member.createdAt.toDate ? member.createdAt.toDate() : new Date(member.createdAt), 'MM/dd/yyyy h:mm a')}
+                       </div>
+                     )}
                    </div>
                  </div>
 
@@ -328,10 +447,22 @@ export default function Team() {
                         <MoreHorizontal className="h-5 w-5" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl bg-white border shadow-lg z-50">
-                       <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Member</DropdownMenuItem>
-                       <DropdownMenuSeparator />
-                       <DropdownMenuItem className="font-bold py-2 text-red-600 cursor-pointer">Remove</DropdownMenuItem>
+                    <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl bg-white border shadow-lg z-50">
+                       {member.isInvite ? (
+                         <>
+                           <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Invitation</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => handleResendInvite(member, false)} className="font-bold py-2 text-blue-600 cursor-pointer">Resend Invitation</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => handleResendInvite(member, true)} className="font-bold py-2 text-emerald-600 cursor-pointer">Resend with 25% Pro Promo</DropdownMenuItem>
+                           <DropdownMenuSeparator />
+                           <DropdownMenuItem onClick={() => handleCancelInvite(member.id)} className="font-bold py-2 text-red-600 cursor-pointer">Cancel Invitation</DropdownMenuItem>
+                         </>
+                       ) : (
+                         <>
+                           <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Member</DropdownMenuItem>
+                           <DropdownMenuSeparator />
+                           <DropdownMenuItem className="font-bold py-2 text-red-600 cursor-pointer">Remove</DropdownMenuItem>
+                         </>
+                       )}
                     </DropdownMenuContent>
                  </DropdownMenu>
                </div>

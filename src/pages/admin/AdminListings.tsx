@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
-import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, MoreVertical, Eye, Trash2, Edit, X, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, MoreVertical, Eye, Trash2, Edit, X, Calendar, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,15 +25,63 @@ import { toast } from "sonner";
 
 export default function AdminListings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
-  
-  const [allListings, setAllListings] = useState([
-    { id: '1', address: '123 Maple St', city: 'Toronto', agent: 'Luc Valade', status: 'Active', price: '$1,249,000', leads: 42, flag: false, date: '2024-05-01' },
-    { id: '2', address: '456 Oak Ave', city: 'Oakville', agent: 'Sarah Jenkins', status: 'Draft', price: '$899,000', leads: 0, flag: true, date: '2024-05-05' },
-    { id: '3', address: '789 Pine Rd', city: 'Mississauga', agent: 'David Miller', status: 'Active', price: '$2,100,000', leads: 15, flag: false, date: '2024-04-20' },
-    { id: '4', address: '321 Birch Ln', city: 'Burlington', agent: 'Luc Valade', status: 'Sold', price: '$549,000', leads: 128, flag: false, date: '2024-05-08' },
-    { id: '5', address: '555 Cedar Ct', city: 'Toronto', agent: 'Emma Watson', status: 'Active', price: '$1,150,000', leads: 8, flag: true, date: '2024-05-10' },
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [allListings, setAllListings] = useState<any[]>([]);
+  const [isQuickEditOpen, setIsQuickEditOpen] = useState(false);
+  const [shareListing, setShareListing] = useState<any>(null);
+  const [selectedListing, setSelectedListing] = useState<any>(null);
+  const [editPrice, setEditPrice] = useState("");
+  const [editStatus, setEditStatus] = useState("Active");
+  const [showComplianceOnly, setShowComplianceOnly] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.showCompliance) {
+      setShowComplianceOnly(true);
+      setIsComplianceInfoOpen(true);
+    }
+  }, [location.state]);
+
+  useEffect(() => {
+    const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAllListings(data);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, "listings");
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    // Automated Fix: Ensure all listings have a voice assigned (Calm Narrator as default)
+    const fixVoices = async () => {
+      const untracked = allListings.filter(l => !l.voiceId || l.voiceId === "none");
+      if (untracked.length > 0) {
+        console.log(`Fixing voices for ${untracked.length} listings...`);
+        for (const l of untracked) {
+          try {
+            await updateDoc(doc(db, "listings", l.id), {
+              voiceId: "2",
+              voiceName: "Professional Female",
+              updatedAt: Date.now()
+            });
+          } catch (err) {
+            console.error(`Failed to fix voice for ${l.id}`, err);
+          }
+        }
+      }
+    };
+    if (allListings.length > 0) {
+      fixVoices();
+    }
+  }, [allListings.length]);
 
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [startDate, setStartDate] = useState("");
@@ -47,9 +99,10 @@ export default function AdminListings() {
   const filteredAndSortedListings = allListings
     .filter(l => 
       (l.address.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       l.agent.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (!startDate || l.date >= startDate) &&
-      (!endDate || l.date <= endDate)
+       (l.agentName && l.agentName.toLowerCase().includes(searchTerm.toLowerCase()))) &&
+      (!startDate || (l.createdAt && new Date(l.createdAt).toISOString() >= startDate)) &&
+      (!endDate || (l.createdAt && new Date(l.createdAt).toISOString() <= endDate)) &&
+      (!showComplianceOnly || l.flag === true)
     )
     .sort((a, b) => {
       if (!sortConfig) return 0;
@@ -61,12 +114,85 @@ export default function AdminListings() {
       return 0;
     });
 
-  const handleFlagStatus = (id: string, currentlyFlagged: boolean) => {
-    setAllListings(prev => prev.map(l => l.id === id ? { ...l, flag: !currentlyFlagged } : l));
-    toast.success(currentlyFlagged ? "Flag removed from listing" : "Listing flagged for review", {
-      description: currentlyFlagged ? "Compliance hold has been lifted." : "Brokerage compliance review is required."
-    });
+  const handleFlagStatus = async (id: string, currentlyFlagged: boolean) => {
+    try {
+      await updateDoc(doc(db, "listings", id), { flag: !currentlyFlagged });
+      toast.success(currentlyFlagged ? "Flag removed from listing" : "Listing flagged for review");
+    } catch (err) {
+      toast.error("Failed to update status");
+    }
   };
+
+  const toggleListingStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'Active' ? 'Draft' : 'Active';
+    try {
+      await updateDoc(doc(db, "listings", id), {
+        status: newStatus,
+        updatedAt: Date.now()
+      });
+      toast.success(`Listing status set to ${newStatus}`);
+    } catch (err) {
+      toast.error("Failed to toggle listing status");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to permanently delete this listing?")) return;
+    try {
+      await deleteDoc(doc(db, "listings", id));
+      toast.success("Listing deleted successfully");
+    } catch (err) {
+      toast.error("Failed to delete listing");
+    }
+  };
+
+  const handleQuickEdit = (listing: any) => {
+    setSelectedListing(listing);
+    setEditPrice(listing.price?.toString() || "");
+    setEditStatus(listing.status || "Active");
+    setIsQuickEditOpen(true);
+  };
+
+  const trackShareActivity = async (listingId: string, type: 'QR' | 'SOCIAL') => {
+    try {
+      await addDoc(collection(db, "system_logs"), {
+        type: "SHARE_CLICK",
+        message: `${type} Link Generated for Listing ${listingId} by Admin`,
+        timestamp: serverTimestamp(),
+        details: {
+          listingId,
+          shareType: type,
+          agentId: "ADMIN",
+          timestamp: Date.now()
+        }
+      });
+    } catch (err) {
+      console.error("Failed to track share activity:", err);
+    }
+  };
+
+  const handleSaveQuickEdit = async () => {
+    if (!selectedListing) return;
+    try {
+      await updateDoc(doc(db, "listings", selectedListing.id), {
+        price: parseFloat(editPrice) || editPrice,
+        status: editStatus,
+        updatedAt: Date.now()
+      });
+      toast.success("Listing updated successfully");
+      setIsQuickEditOpen(false);
+    } catch (err) {
+      toast.error("Update failed");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -132,13 +258,38 @@ export default function AdminListings() {
               </div>
             </div>
             <button 
-              onClick={() => setIsComplianceInfoOpen(true)}
+              onClick={() => {
+                setShowComplianceOnly(true);
+                setIsComplianceInfoOpen(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-100 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-colors h-[34px]"
             >
-              <AlertTriangle className="h-3.5 w-3.5 animate-pulse" /> Compliance Holds (2)
+              <AlertTriangle className="h-3.5 w-3.5 animate-pulse" /> Compliance Holds ({allListings.filter(l => l.flag).length})
             </button>
           </div>
         </div>
+
+        {showComplianceOnly && (
+          <div className="mx-6 my-4 p-3.5 bg-red-50 border border-red-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-red-900 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-red-100 rounded-lg text-red-600">
+                <AlertTriangle className="h-4 w-4 animate-pulse" />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider">Compliance Mode Active</p>
+                <p className="text-[11px] text-red-700 font-medium">Showing only the {filteredAndSortedListings.length} listing(s) currently flagged for review.</p>
+              </div>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowComplianceOnly(false)}
+              className="h-8 text-[10px] uppercase tracking-widest border-red-300 bg-white text-red-700 hover:bg-red-100 font-extrabold shadow-sm shrink-0"
+            >
+              View All Listings
+            </Button>
+          </div>
+        )}
 
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -187,30 +338,43 @@ export default function AdminListings() {
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-5">
+                   <td className="px-6 py-5">
                     <div className="flex items-center gap-2.5">
                        <div className="h-7 w-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center italic text-[10px] font-black text-slate-500">
-                        {listing.agent.split(' ').map(n => n[0]).join('')}
+                        {(listing.agentName || "U A").split(' ').map((n: string) => n[0]).join('')}
                        </div>
-                       <span className="text-xs font-bold text-slate-700">{listing.agent}</span>
+                       <span className="text-xs font-bold text-slate-700">{listing.agentName || "Unknown Agent"}</span>
                     </div>
                   </td>
                   <td className="px-6 py-5 text-sm font-black text-slate-900 italic">
-                    {listing.price}
+                    {typeof listing.price === 'number' ? `$${listing.price.toLocaleString()}` : (listing.price || "N/A")}
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex flex-col">
-                      <span className="text-xs font-black text-slate-900">{listing.leads}</span>
+                      <span className="text-xs font-black text-slate-900">{listing.leadsCount || 0}</span>
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Verified Leads</span>
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                     <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                      listing.status === 'Active' ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm' : 
-                      listing.status === 'Draft' ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-blue-100 text-blue-700 border border-blue-200 shadow-sm'
-                    }`}>
-                      {listing.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => toggleListingStatus(listing.id, listing.status)}
+                        className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        style={{ backgroundColor: listing.status === 'Active' ? '#22c55e' : '#ef4444' }}
+                        title="Click to toggle listing status between Active (ON) and Draft (OFF)"
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            listing.status === 'Active' ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      <span className={`text-[10px] font-black uppercase tracking-wider ${
+                        listing.status === 'Active' ? 'text-green-600' : 'text-red-500'
+                      }`}>
+                        {listing.status === 'Active' ? 'ACTIVE' : `DRAFT`}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-1">
@@ -224,8 +388,14 @@ export default function AdminListings() {
                           <DropdownMenuItem onClick={() => navigate(`/app/listings/${listing.id}`)} className="rounded-lg font-bold gap-2">
                             <Eye className="h-4 w-4 text-blue-600" /> View Listing
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/app/listings/edit/${listing.id}`)} className="rounded-lg font-bold gap-2">
-                            <Edit className="h-4 w-4 text-blue-600" /> Edit Listing
+                          <DropdownMenuItem onClick={() => {
+                            setShareListing(listing);
+                            trackShareActivity(listing.id, 'SOCIAL');
+                          }} className="rounded-lg font-bold gap-2">
+                            <ExternalLink className="h-4 w-4 text-blue-600" /> Get Tour URL
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleQuickEdit(listing)} className="rounded-lg font-bold gap-2">
+                            <Edit className="h-4 w-4 text-blue-600" /> Edit & Save
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="my-1" />
                           <DropdownMenuItem onClick={() => handleFlagStatus(listing.id, listing.flag)} className="rounded-lg font-bold gap-2">
@@ -233,7 +403,7 @@ export default function AdminListings() {
                             {listing.flag ? 'Clear Flag' : 'Flag Listing'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="my-1" />
-                          <DropdownMenuItem onClick={() => toast.error("Asset teardown initiated", { description: listing.address })} className="rounded-lg font-bold text-red-600 focus:text-red-700 focus:bg-red-50 gap-2">
+                          <DropdownMenuItem onClick={() => handleDelete(listing.id)} className="rounded-lg font-bold text-red-600 focus:text-red-700 focus:bg-red-50 gap-2">
                             <Trash2 className="h-4 w-4" /> Force Takedown
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -276,21 +446,34 @@ export default function AdminListings() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="flex flex-wrap gap-2 items-center text-[10px]">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${
-                  listing.status === 'Active' ? 'bg-green-100 text-green-700 border border-green-200' : 
-                  listing.status === 'Draft' ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-blue-100 text-blue-700 border border-blue-200'
-                }`}>
-                  {listing.status}
-                </span>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-100 rounded text-slate-600 font-black uppercase tracking-tighter italic">
-                  {listing.price}
+              <div className="flex flex-wrap gap-3 items-center text-[10px] bg-slate-50 p-2.5 rounded-xl border border-slate-100 w-full justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleListingStatus(listing.id, listing.status)}
+                    className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                    style={{ backgroundColor: listing.status === 'Active' ? '#22c55e' : '#ef4444' }}
+                    title="Toggle Listing Status"
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        listing.status === 'Active' ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                  <span className={`text-[9px] font-black uppercase tracking-wider ${
+                    listing.status === 'Active' ? 'text-green-600' : 'text-red-500'
+                  }`}>
+                    {listing.status === 'Active' ? 'ACTIVE' : `DRAFT`}
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-100 rounded text-slate-600 font-black uppercase tracking-tighter">
-                  {listing.leads} Engagement
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-700 font-bold">
+                  {typeof listing.price === 'number' ? `$${listing.price.toLocaleString()}` : (listing.price || "N/A")}
                 </div>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-100 rounded text-slate-500 font-bold">
-                  By {listing.agent}
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-700 font-bold">
+                  {listing.leadsCount || 0} Leads
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-500 font-bold">
+                  By {listing.agentName || "Agent"}
                 </div>
               </div>
               {listing.flag && (
@@ -302,6 +485,98 @@ export default function AdminListings() {
           ))}
         </div>
       </div>
+      {/* Quick Edit Dialog */}
+      <Dialog open={isQuickEditOpen} onOpenChange={setIsQuickEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-black text-2xl italic tracking-tighter uppercase">Quick Edit Property</DialogTitle>
+            <DialogDescription className="font-bold text-slate-400">{selectedListing?.address}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Asking Price</Label>
+              <Input 
+                value={editPrice}
+                onChange={e => setEditPrice(e.target.value)}
+                placeholder="1249000"
+                className="font-bold"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Listing Status</Label>
+              <select 
+                value={editStatus}
+                onChange={e => setEditStatus(e.target.value)}
+                className="w-full h-10 border rounded-lg px-3 text-sm font-bold bg-white"
+              >
+                <option value="Active">Active</option>
+                <option value="Draft">Draft</option>
+                <option value="Sold">Sold</option>
+                <option value="Off-Market">Off-Market</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setIsQuickEditOpen(false)} className="font-bold">Cancel</Button>
+            <Button onClick={handleSaveQuickEdit} className="bg-blue-600 text-white font-bold px-8">Save Changes</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Dialog */}
+      <Dialog open={!!shareListing} onOpenChange={(open) => !open && setShareListing(null)}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-3xl border-0 shadow-2xl">
+          <div className="bg-white p-8 space-y-6">
+            <div className="space-y-2 text-center">
+              <h2 className="text-2xl font-black tracking-tighter uppercase italic text-slate-900">Share Property Tour</h2>
+              <p className="text-sm text-slate-500 font-medium px-4">
+                Share the link on your Social Media platforms to allow buyers to take the AI-powered tour.
+              </p>
+            </div>
+
+            <div className="relative aspect-video rounded-2xl overflow-hidden shadow-inner border border-slate-100 bg-slate-50">
+              {shareListing?.images && shareListing.images.length > 0 ? (
+                <img 
+                  src={typeof shareListing.images[0] === 'string' ? shareListing.images[0] : shareListing.images[0].url} 
+                  alt={shareListing.address}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-300 italic">No Image Available</div>
+              )}
+            </div>
+
+            <div className="text-center">
+              <p className="text-lg font-black text-slate-900 tracking-tight">
+                {shareListing?.address}
+              </p>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                {shareListing?.city}{shareListing?.province ? `, ${shareListing.province}` : ''}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-2">
+              <Button 
+                className="h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest shadow-xl shadow-blue-200"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.origin}/tour/${shareListing?.id}`);
+                  toast.success("Social media link copied!");
+                }}
+              >
+                Copy Link
+              </Button>
+              <Button 
+                variant="ghost" 
+                className="h-14 rounded-2xl font-bold text-slate-500 hover:text-slate-900"
+                onClick={() => setShareListing(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Compliance Info Dialog */}
       <Dialog open={isComplianceInfoOpen} onOpenChange={setIsComplianceInfoOpen}>
         <DialogContent className="sm:max-w-md">

@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type, Modality } from "@google/genai";
+import twilio from "twilio";
 import * as dotenv from "dotenv";
 import FirecrawlApp from "@mendable/firecrawl-js";
 import { WebSocketServer, WebSocket } from "ws";
@@ -66,6 +67,22 @@ const PLACEHOLDERS = ["MY_GEMINI_API_KEY", "YOUR_API_KEY", "INSERT_KEY_HERE"];
 
 let aiClient: GoogleGenAI | null = null;
 let firecrawlClient: FirecrawlApp | null = null;
+let twilioClient: twilio.Twilio | null = null;
+
+function getTwilio() {
+  if (!twilioClient) {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    
+    if (!accountSid || !authToken) {
+      console.warn("[Twilio] Missing SID or Token. Follow-up SMS disabled.");
+      return null;
+    }
+    
+    twilioClient = twilio(accountSid, authToken);
+  }
+  return twilioClient;
+}
 
 /**
  * Lazily initializes the Firecrawl client.
@@ -220,6 +237,104 @@ async function startServer() {
         code: err.code,
         command: err.command
       });
+    }
+  });
+
+  /**
+   * API Route for Sending Follow-up SMS via Twilio
+   */
+  app.post("/api/send-followup", async (req, res) => {
+    const { to, message } = req.body;
+
+    if (!to || !message) {
+      return res.status(400).json({ error: "Missing required fields (to, message)" });
+    }
+
+    try {
+      const client = getTwilio();
+      if (!client) {
+        return res.status(503).json({ error: "Twilio service is not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN." });
+      }
+
+      console.log(`[Twilio] Sending SMS to ${to}...`);
+      
+      const msg = await client.messages.create({
+        body: message,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: to
+      });
+
+      console.log(`[Twilio] SMS success! Message SID: ${msg.sid}`);
+      
+      res.json({ success: true, sid: msg.sid });
+    } catch (err: any) {
+      console.error("[Twilio] Error:", err.message);
+      res.status(500).json({ error: `Failed to send SMS: ${err.message}` });
+    }
+  });
+
+  /**
+   * API Route for Text-to-Speech (TTS) using Gemini securely
+   * Path: POST /api/tts
+   */
+  app.post("/api/tts", async (req, res) => {
+    const { transcript, agentName = "Sarah", clientName = "Mark" } = req.body;
+    if (!transcript || !Array.isArray(transcript)) {
+      return res.status(400).json({ error: "Transcript array is required" });
+    }
+
+    try {
+      console.log(`[TTS] Synthesizing conversation transcript securely on server for Agent: ${agentName}, Client: ${clientName}...`);
+      const ai = getAi();
+      
+      // Map names to specific genders / prebuilt voices
+      const isClientFemale = ["sofia", "lucy", "sofía", "eleanor", "sara", "emma", "lucy diamond", "eleanor rigby"].includes(clientName.toLowerCase());
+      const clientVoiceName = isClientFemale ? "Aoede" : "Puck";
+      const agentVoiceName = "Kore"; // AI (Sarah, Elena, Chantal, Claire, Clara) are always female
+
+      // Format clean transcript labeled by their exact human names
+      const promptText = `TTS the following conversation between ${agentName} (${agentVoiceName} voice) and ${clientName} (${clientVoiceName} voice):
+      ${transcript.map((m: any) => {
+        const nameLabel = m.speaker === "AI" ? agentName : clientName;
+        return `${nameLabel}: ${m.text}`;
+      }).join('\n')}`;
+
+      console.log("[TTS Generated Prompt]:\n", promptText);
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-tts-preview",
+        contents: [{ parts: [{ text: promptText }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            multiSpeakerVoiceConfig: {
+              speakerVoiceConfigs: [
+                {
+                  speaker: agentName,
+                  voiceConfig: { prebuiltVoiceConfig: { voiceName: agentVoiceName } }
+                },
+                {
+                  speaker: clientName,
+                  voiceConfig: { prebuiltVoiceConfig: { voiceName: clientVoiceName } }
+                }
+              ]
+            }
+          }
+        }
+      });
+
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      const base64Audio = audioPart?.inlineData?.data;
+
+      if (!base64Audio) {
+        throw new Error("No audio data returned from Gemini");
+      }
+
+      console.log("[TTS] Synthesis completed successfully.");
+      res.json({ base64Audio });
+    } catch (err: any) {
+      console.error("[TTS Endpoint Error]:", err);
+      res.status(500).json({ error: err.message || "Failed to synthesize audio" });
     }
   });
 
@@ -477,6 +592,146 @@ ${input ? input.substring(0, 15000) : "[MISSING CONTENT - USE SEARCH TOOL TO FIN
     });
   });
 
+  /**
+   * API Route for AI notes assist/rewrite
+   * Path: POST /api/assist-notes
+   */
+  app.post("/api/assist-notes", async (req, res) => {
+    const { notes } = req.body;
+    if (!notes) {
+      return res.status(400).json({ error: "Notes content is required" });
+    }
+
+    try {
+      console.log("[AI Assist Notes] Rewriting notes with Gemini...");
+      const ai = getAi();
+      const prompt = `You are an elite, highly professional real estate marketing assistant.
+Rewrite the following open house listing descriptive notes and preparation checklist for a client-facing open house event.
+Make it highly engaging, professionally styled, clear, and elegant.
+Do NOT invent false statistics or false features, but structure and format the notes gracefully, emphasizing features.
+
+RULES:
+1. Return ONLY the rewritten text.
+2. Under no circumstance should the output exceed 2000 characters.
+3. The first letter of the rewritten notes MUST be capitalized (uppercase).
+
+ORIGINAL NOTES:
+"${notes}"`;
+
+      const result = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      });
+
+      let text = result.text || "";
+      text = text.trim();
+      // Enforce capitalizing the first letter
+      if (text.length > 0) {
+        text = text.charAt(0).toUpperCase() + text.slice(1);
+      }
+      
+      // Ensure max 2000 characters
+      if (text.length > 2000) {
+        text = text.substring(0, 2000);
+      }
+
+      res.json({ success: true, rewrittenNotes: text });
+    } catch (err: any) {
+      console.error("[AI Assist Notes] Error generating content:", err);
+      res.status(500).json({ error: err.message || "Failed to generate optimized notes" });
+    }
+  });
+
+  /**
+   * API Route for script translation
+   * Path: POST /api/translate-script
+   */
+  app.post("/api/translate-script", async (req, res) => {
+    const { text, targetLanguage } = req.body;
+    if (!text || !targetLanguage) {
+      return res.status(400).json({ error: "Text and targetLanguage are required" });
+    }
+
+    try {
+      console.log(`[Translate Script] Translating text to ${targetLanguage}...`);
+      const ai = getAi();
+      const prompt = `You are an elite multilingual real estate copywriter.
+Translate the following real estate property welcome script into ${targetLanguage}.
+Make it sound beautiful, natural, premium, elegant, and highly professional when spoken by a state-of-the-art neural AI voice.
+Do NOT include any introduction, explanations, meta-comments or quotation marks. Only output the exact translated text.
+
+SCRIPT TO TRANSLATE (in English):
+"${text}"`;
+
+      const result = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      });
+
+      let translatedText = result.text || "";
+      translatedText = translatedText.trim();
+      
+      // Clean up markdown block encodings if models output them
+      if (translatedText.startsWith("```")) {
+        translatedText = translatedText.replace(/^```[a-zA-Z]*\n/, "").replace(/\n```$/, "");
+      }
+      translatedText = translatedText.trim();
+
+      res.json({ success: true, translatedText });
+    } catch (err: any) {
+      console.error("[Translate Script] Error generating translation:", err);
+      res.status(500).json({ error: err.message || "Failed to generate translation" });
+    }
+  });
+
+  /**
+   * API Route for Simple Text-To-Speech (TTS) using Gemini Voice securely
+   * Path: POST /api/tts-simple
+   */
+  app.post("/api/tts-simple", async (req, res) => {
+    const { text, lang = "English" } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: "Text is required" });
+    }
+
+    try {
+      console.log(`[TTS Simple] Synthesizing text with Gemini in ${lang}: "${text.substring(0, 40)}..."`);
+      const ai = getAi();
+      
+      // Determine voice to use. Puck can be male, Kore female. Let's use puck for dynamic or Kore as default
+      const voiceName = (lang === "French" || lang === "Spanish") ? "Aoede" : "Kore"; 
+
+      const systemInstruction = `Speak natural, beautiful, and fluidly in ${lang}. Maintain a friendly, supportive, and extremely professional real estate agent guide tone. Do not announce yourself with metadata, just read the script perfectly.`;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-tts-preview",
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: voiceName
+              }
+            }
+          }
+        }
+      });
+
+      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      const base64Audio = audioPart?.inlineData?.data;
+
+      if (!base64Audio) {
+        throw new Error("No audio payload returned from Gemini model.");
+      }
+
+      res.json({ success: true, base64Audio });
+    } catch (err: any) {
+      console.error("[TTS Simple Endpoint Error]:", err);
+      res.status(500).json({ error: err.message || "Failed to synthesize speech in backend" });
+    }
+  });
+
   server.on("upgrade", (request, socket, head) => {
     const { pathname } = new URL(request.url || "", `http://${request.headers.host}`);
     if (pathname === "/api/voice-proxy") {
@@ -488,6 +743,14 @@ ${input ? input.substring(0, 15000) : "[MISSING CONTENT - USE SEARCH TOOL TO FIN
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    // Prevent client-side/iframe caching of dev assets and vite dependencies
+    app.use((req, res, next) => {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      next();
+    });
+
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

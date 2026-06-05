@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { sendEmail, getUserLeads, createLead, Lead } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, deleteDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -42,19 +42,45 @@ export default function Leads() {
   const [visibleCount, setVisibleCount] = useState(10);
 
   useEffect(() => {
-    if (user?.id) {
-      loadLeads();
-    }
+    if (!user?.id) return;
+
+    const isAdmin = (user as any).role === 'ADMIN';
+    const leadsQuery = isAdmin
+      ? collection(db, "leads")
+      : query(collection(db, "leads"), where("agentId", "==", user.id));
+
+    const unsub = onSnapshot(leadsQuery, (snap) => {
+      const data = snap.docs.map(doc => {
+        const d = doc.data();
+        return {
+          ...d,
+          createdAt: d.createdAt || Date.now()
+        } as Lead;
+      });
+      // Sort in-place by date descending
+      setLeads(data.sort((a, b) => b.createdAt - a.createdAt));
+      setLoading(false);
+    }, (err) => {
+      console.error("Error dynamically syncing leads:", err);
+      toast.error("Failed to synchronize leads");
+      setLoading(false);
+    });
+
+    return () => unsub();
   }, [user?.id]);
 
   async function loadLeads() {
+    // Left as backwards-compatible helper if called directly
+    if (!user?.id) return;
     try {
-      const data = await getUserLeads(user!.id);
-      // Sort by date descending
-      setLeads(data.sort((a, b) => b.createdAt - a.createdAt));
+      const data = await getUserLeads(user.id);
+      const safeData = data.map(d => ({
+        ...d,
+        createdAt: d.createdAt || Date.now()
+      }));
+      setLeads(safeData.sort((a, b) => b.createdAt - a.createdAt));
     } catch (err) {
-      console.error("Error loading leads:", err);
-      toast.error("Failed to load leads");
+      console.error("Error manually reloading leads:", err);
     } finally {
       setLoading(false);
     }
@@ -198,6 +224,9 @@ export default function Leads() {
             <p style="margin: 10px 0;"><strong>Email:</strong> ${lead.email}</p>
             <p style="margin: 10px 0;"><strong>Phone:</strong> ${lead.phone}</p>
             <p style="margin: 10px 0 0 0;"><strong>Status:</strong> <span style="color: #ef4444; font-weight: bold;">${lead.status}</span></p>
+            <div style="margin-top: 10px;">
+              <a href="${window.location.origin}/app/leads/${lead.id}" style="color: #2563eb; text-decoration: underline; font-size: 12px; font-weight: bold;">View lead details</a>
+            </div>
           </div>
         `).join('');
 
@@ -213,11 +242,16 @@ export default function Leads() {
               <div style="padding: 20px;">
                 <p>Requested bulk export for <strong>${selectedData.length} leads</strong></p>
                 ${leadsHtml}
+                
+                <div style="margin-top: 24px; text-align: center; border-radius: 8px; margin-bottom: 20px;">
+                  <a href="${window.location.origin}/app/leads" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 8px; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">→ Open Leads in Agent Portal</a>
+                </div>
+
                 <p style="font-size: 12px; color: #64748b; font-style: italic;">Note: This is a consolidated AI-generated lead insight report.</p>
               </div>
             </div>
           `,
-          text: `Consolidated Prospect Report for ${selectedData.length} leads.`
+          text: `Consolidated Prospect Report for ${selectedData.length} leads. View online in Agent Portal: ${window.location.origin}/app/leads`
         });
         successCount = selectedData.length;
       } else {
@@ -241,11 +275,16 @@ export default function Leads() {
                     <p style="margin: 10px 0;"><strong>Phone:</strong> ${lead.phone}</p>
                     <p style="margin: 10px 0 0 0;"><strong>Status:</strong> <span style="color: #ef4444; font-weight: bold;">${lead.status}</span></p>
                   </div>
+
+                  <div style="margin-top: 24px; text-align: center; border-radius: 8px; margin-bottom: 20px;">
+                    <a href="${window.location.origin}/app/leads/${lead.id}" style="display: inline-block; padding: 11px 22px; background-color: #2563eb; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 8px; font-size: 13px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">→ View Lead in Agent Portal</a>
+                  </div>
+
                   <p style="font-size: 12px; color: #64748b; font-style: italic;">Note: This is an AI-generated lead insight report.</p>
                 </div>
               </div>
             `,
-            text: `Prospect Report for ${lead.name} - Property: ${lead.listingAddress}`
+            text: `Prospect Report for ${lead.name} - Property: ${lead.listingAddress}. View inside Agent Portal: ${window.location.origin}/app/leads/${lead.id}`
           });
           successCount++;
         }
