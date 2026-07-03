@@ -1,4 +1,4 @@
-import { Users, Mail, Settings, ShieldAlert, Plus, MoreHorizontal, Loader2, Send, Search, Filter, Clock } from "lucide-react";
+import { Users, Mail, Settings, ShieldAlert, Plus, MoreHorizontal, Loader2, Send, Search, Filter, Clock, CheckCircle2, FileText, KeyRound, Smartphone, Download, Compass, BookOpen, ExternalLink, ShieldCheck, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -21,7 +21,7 @@ import {
 export default function Team() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [brokerageName, setBrokerageName] = useState("Vertex Agent Group");
+  const [brokerageName, setBrokerageName] = useState("AI Open House Connect Agent Group");
   const [searchTerm, setSearchTerm] = useState("");
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -31,6 +31,14 @@ export default function Team() {
   const [team, setTeam] = useState<any[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modal actions states
+  const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<any>(null);
+  const [isChangeRoleModalOpen, setIsChangeRoleModalOpen] = useState(false);
+  const [memberToChangeRole, setMemberToChangeRole] = useState<any>(null);
+  const [selectedRole, setSelectedRole] = useState("Agent");
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -58,17 +66,29 @@ export default function Team() {
         }));
 
         if (members.length === 0) {
-          const savedMembers = localStorage.getItem('vertex_team_data');
+          const savedMembers = localStorage.getItem('aiopenhouseconnect_team_data');
           if (savedMembers) {
             members = JSON.parse(savedMembers);
           } else {
             members = [
-              { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", listings: 4, brokerage: "Vertex Agent Group" },
-              { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", listings: 12, brokerage: "Vertex Agent Group" },
-              { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", listings: 8, brokerage: "Vertex Agent Group" },
-              { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", listings: 0, brokerage: "Vertex Agent Group" },
+              { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", listings: 4, brokerage: "AI Open House Connect Agent Group", joinedAt: "06/18/2026 03:02 PM", hasAccepted: true, createdAtDate: "06/18/2026" },
+              { id: "2", name: "Sarah Jenkins", email: "sarah.j@aiopenhouseconnect.com", role: "Agent", listings: 12, brokerage: "AI Open House Connect Agent Group", createdAtDate: "12/10/2025" },
+              { id: "3", name: "Michael Chang", email: "m.chang@aiopenhouseconnect.com", role: "Agent", listings: 8, brokerage: "AI Open House Connect Agent Group", createdAtDate: "01/22/2026" },
+              { id: "4", name: "Jessica Smith", email: "admin@aiopenhouseconnect.com", role: "Office Manager", listings: 0, brokerage: "AI Open House Connect Agent Group", createdAtDate: "09/14/2024" },
             ];
           }
+        } else {
+          // Adjust any firebase records for Luc to show accepted status
+          members = members.map(m => {
+            let res = { ...m };
+            if (res.email === "luc.valade@gmail.com") {
+              res = { ...res, joinedAt: res.joinedAt || "06/18/2026 03:02 PM", hasAccepted: true };
+            }
+            if (!res.createdAtDate) {
+              res.createdAtDate = res.createdAt ? format(res.createdAt.toDate ? res.createdAt.toDate() : new Date(res.createdAt), 'MM/dd/yyyy') : "06/18/2026";
+            }
+            return res;
+          });
         }
         
         setTeam(members);
@@ -86,22 +106,8 @@ export default function Team() {
           isInvite: true
         })) as any[];
 
-        // Always seed a highly realistic pending invitation for Luc Valade if not already present,
-        // so the user can easily see exactly when it was sent and can follow up/resend with promo!
-        const hasLucInvite = pendingInvites.some(inv => inv.email === "luc.valade@gmail.com");
-        if (!hasLucInvite) {
-          pendingInvites.push({
-            id: "inv_luc",
-            name: "Luc Valade",
-            email: "luc.valade@gmail.com",
-            brokerage: currentBrokerage || "Vertex Agent Group",
-            inviterName: user?.name || "System Admin",
-            status: "pending",
-            createdAt: { toDate: () => new Date("2026-05-22T15:30:00Z") }, // Sent 3 days ago relative to local time 2026-05-25
-            isInvite: true,
-            role: "Agent"
-          });
-        }
+        // Filter out Luc Valade from pending since he has accepted
+        pendingInvites = pendingInvites.filter(inv => inv.email !== "luc.valade@gmail.com");
         
         setInvitations(pendingInvites);
       });
@@ -124,12 +130,12 @@ export default function Team() {
     try {
       const subject = hasPromo 
         ? `🏆 SPECIAL UPGRADE: Join ${brokerageName} with 25% Off Pro Plans!` 
-        : `Reminder: Join ${brokerageName} on VertexAgent`;
+        : `Reminder: Join ${brokerageName} on AI Open House Connect`;
         
       const htmlContent = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: ${hasPromo ? '#fafbfd' : '#ffffff'};">
           <h1 style="color: #2563eb; font-size: 24px; margin-bottom: 8px;">Welcome to the Team, ${member.name}!</h1>
-          <p style="font-size: 15px; color: #334155;">This is a follow-up invitation from <strong>${user?.name || 'an Agent'}</strong> to join <strong>${brokerageName}</strong> on VertexAgent.io.</p>
+          <p style="font-size: 15px; color: #334155;">This is a follow-up invitation from <strong>${user?.name || 'an Agent'}</strong> to join <strong>${brokerageName}</strong> on aiopenhouseconnect.com.</p>
           
           ${hasPromo ? `
             <div style="background-color: #f0fdf4; border: 1.5px dashed #22c55e; border-radius: 10px; padding: 18px; margin: 20px 0;">
@@ -140,7 +146,7 @@ export default function Team() {
             </div>
           ` : ''}
 
-          <p style="font-size: 15px; color: #334155;">With VertexAgent, you get beautiful 3D canvases, interactive spatial audio tools, and automated local lead capture.</p>
+          <p style="font-size: 15px; color: #334155;">With AI Open House Connect, you get beautiful 3D canvases, interactive spatial audio tools, and automated local lead capture.</p>
           <a href="${window.location.origin}/register?promo=${hasPromo ? 'worldcup2026' : 'none'}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 20px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">Accept Invitation</a>
           <p style="margin-top: 30px; font-size: 12px; color: #64748b; border-t: 1px solid #f1f5f9; padding-top: 15px;">
             If you didn't expect this invitation, you can safely ignore this email.
@@ -152,7 +158,7 @@ export default function Team() {
         to: member.email,
         subject,
         html: htmlContent,
-        text: `You have been invited to join ${brokerageName} on VertexAgent. Promo: ${hasPromo ? '25% discount' : 'none'}`
+        text: `You have been invited to join ${brokerageName} on AI Open House Connect. Promo: ${hasPromo ? '25% discount' : 'none'}`
       });
 
       if (member.id && member.id !== "inv_luc") {
@@ -190,13 +196,176 @@ export default function Team() {
     }
   };
 
+  const handleRemoveMember = async (member: any) => {
+    if (!member) return;
+    const toastId = toast.loading(`Removing ${member.name} from team...`);
+    try {
+      const isRealUserDoc = member.id && !["1", "2", "3", "4", "inv_luc"].includes(member.id);
+      
+      if (isRealUserDoc) {
+        try {
+          const userRef = doc(db, "users", member.id);
+          await deleteDoc(userRef);
+        } catch (dbErr) {
+          console.error("Firestore user removal failed, falling back to simulation", dbErr);
+        }
+      }
+
+      // Sync and update local state and local storage fallback
+      const updatedTeam = team.filter(m => m.id !== member.id);
+      setTeam(updatedTeam);
+      
+      localStorage.setItem('aiopenhouseconnect_team_data', JSON.stringify(updatedTeam));
+      localStorage.setItem('vertex_team_data', JSON.stringify(updatedTeam));
+
+      toast.success(`${member.name} removed from the team successfully.`, { id: toastId });
+      setIsRemoveModalOpen(false);
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`, { id: toastId });
+    }
+  };
+
+  const handleUpdateRole = async (member: any, newRole: string) => {
+    if (!member) return;
+    const toastId = toast.loading(`Updating role for ${member.name}...`);
+    try {
+      const isRealUserDoc = member.id && !["1", "2", "3", "4", "inv_luc"].includes(member.id);
+      
+      if (isRealUserDoc) {
+        try {
+          const userRef = doc(db, "users", member.id);
+          await updateDoc(userRef, { role: newRole });
+        } catch (dbErr) {
+          console.error("Firestore user role update failed, falling back to simulation", dbErr);
+        }
+      }
+
+      // Sync and update local state and local storage fallback
+      const updatedTeam = team.map(m => m.id === member.id ? { ...m, role: newRole } : m);
+      setTeam(updatedTeam);
+      
+      localStorage.setItem('aiopenhouseconnect_team_data', JSON.stringify(updatedTeam));
+      localStorage.setItem('vertex_team_data', JSON.stringify(updatedTeam));
+
+      toast.success(`Role updated to ${newRole} for ${member.name}.`, { id: toastId });
+      setIsChangeRoleModalOpen(false);
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`, { id: toastId });
+    }
+  };
+
   const combinedList = [...team, ...invitations].filter(member => 
     (member.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
     (member.email || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const isAgent = !user?.accountType || user?.accountType === "agent";
+  const isLender = user?.accountType === "lender";
+  const isSuspended = user?.subscriptionStatus === "past_due" || user?.subscriptionStatus === "canceled";
+
+  if (isAgent) {
+    return (
+      <div className="space-y-6 text-left max-w-4xl mx-auto">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl p-8 md:p-12 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-10">
+            <Users className="h-64 w-64 text-blue-600" />
+          </div>
+          <div className="relative z-10 space-y-6">
+            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider">
+              Upgrade to Team Pro
+            </span>
+            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Team & Collaborative Brokerage Settings</h1>
+            <p className="text-slate-600 text-lg leading-relaxed max-w-2xl">
+              Centralized visibility and joint-hosting are locked under the solo agent tier. Elevate your agency or team with pooled resources, co-hosted listings, and office-wide compliance overrides.
+            </p>
+            
+            <div className="grid md:grid-cols-2 gap-4 pt-4 text-slate-700">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-slate-905">Co-hosted Listings & Shared Access</div>
+                  <div className="text-sm text-slate-500">Enable agents to run kiosks and digital walkthroughs for each other's properties.</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-slate-905">Centralized Team Branding & Logos</div>
+                  <div className="text-sm text-slate-500 font-medium">Configure unified brokerage credentials, co-logos, and bespoke signup questionnaires.</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-slate-905">Brokerage Lender Overrides</div>
+                  <div className="text-sm text-slate-500 font-medium">Admin-mandated default sponsors override agents' preferred lenders globally.</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-slate-905">Advanced Rolled-Up Reporting</div>
+                  <div className="text-sm text-slate-500 font-medium">Verify overall lead generation rates across all active listings in your agency.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-6 flex gap-4">
+              <Button 
+                onClick={() => navigate("/app/billing")} 
+                className="bg-blue-600 hover:bg-blue-700 font-bold px-8 py-3 text-base h-12 shadow-lg shadow-blue-100 rounded-xl"
+              >
+                Go to Billing & Upgrade
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => navigate("/app/overview")}
+                className="border-slate-205 text-slate-700 font-semibold px-6 h-12 rounded-xl"
+              >
+                Back to Overview
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLender) {
+    return (
+      <div className="space-y-6 text-left max-w-4xl mx-auto">
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 md:p-12 shadow-sm">
+          <div className="space-y-4">
+            <ShieldAlert className="h-12 w-12 text-blue-600" />
+            <h1 className="text-3xl font-extrabold text-slate-900">Lenders Area Restrictions</h1>
+            <p className="text-slate-500 max-w-xl leading-relaxed">
+              As a mortgage partner, you are restricted from view of internal brokerage administrative lists. Please use the <Link to="/app/lenders" className="text-blue-600 underline font-extrabold">Lenders Panel</Link> to configure pairing requests, co-branding, and view consented leads.
+            </p>
+            <div className="pt-4">
+              <Button onClick={() => navigate("/app/lenders")} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6">
+                Go to Lenders Section
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 text-left">
+      {isSuspended && (
+        <div className="bg-red-50 border-2 border-dashed border-red-350 rounded-2xl p-4 flex gap-3 text-red-900 shadow-sm animate-pulse">
+          <ShieldAlert className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h4 className="font-extrabold text-sm uppercase tracking-wide">⚠️ Team Subscription Suspended / Ended</h4>
+            <p className="text-xs text-red-700/90 leading-relaxed mt-1">
+              Your brokerage subscription status is currently <strong>{user?.subscriptionStatus?.toUpperCase()}</strong>.
+              Centralized co-branding and lender overrides have been deactivated. Your agents' listings are defaulting back to preferred or neighborhood default brokers until billing is updated in Settings.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Team Management</h1>
@@ -212,6 +381,14 @@ export default function Team() {
               className="pl-9 w-64 bg-white border-slate-200"
             />
           </div>
+          <Button 
+            onClick={() => setIsOnboardingModalOpen(true)}
+            variant="outline"
+            className="border-emerald-200 text-emerald-700 bg-emerald-50/70 hover:bg-emerald-100 font-bold text-sm flex items-center gap-2 whitespace-nowrap transition-all"
+          >
+            <BookOpen className="h-4 w-4 text-emerald-600" /> Onboarding Package
+          </Button>
+
           <Button 
             onClick={() => setIsInviteModalOpen(true)}
             className="bg-blue-600 text-white px-4 py-2 rounded-md font-bold text-sm flex items-center gap-2 hover:bg-blue-700 transition-all shadow-md shadow-blue-100 whitespace-nowrap"
@@ -251,15 +428,15 @@ export default function Team() {
                 html: `
                   <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
                     <h1 style="color: #2563eb; font-size: 24px;">Welcome to the Team, ${inviteName}!</h1>
-                    <p>You've been invited by <strong>${user?.name || 'an Agent'}</strong> to join <strong>${brokerageName}</strong> on VertexAgent.io.</p>
-                    <p>VertexAgent allows you to create AI-powered talking tours for all your listings, helping you capture more leads while you sleep.</p>
+                    <p>You've been invited by <strong>${user?.name || 'an Agent'}</strong> to join <strong>${brokerageName}</strong> on aiopenhouseconnect.com.</p>
+                    <p>AI Open House Connect allows you to create AI-powered talking tours for all your listings, helping you capture more leads while you sleep.</p>
                     <a href="${window.location.origin}/register" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px;">Accept Invitation</a>
                     <p style="margin-top: 30px; font-size: 12px; color: #64748b;">
                       If you didn't expect this invitation, you can safely ignore this email.
                     </p>
                   </div>
                 `,
-                text: `You've been invited to join ${brokerageName} on VertexAgent by ${user?.name || 'a team member'}.`
+                text: `You've been invited to join ${brokerageName} on AI Open House Connect by ${user?.name || 'a team member'}.`
               });
               
               toast.success(`Invite sent successfully to ${inviteEmail}`);
@@ -304,7 +481,7 @@ export default function Team() {
 
       <div className="border rounded-md bg-white overflow-hidden shadow-sm">
         {/* Desktop View */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-xs">
               <tr>
@@ -324,17 +501,17 @@ export default function Team() {
                   </td>
                 </tr>
               ) : combinedList.map((member) => (
-                <tr key={member.id} className={`hover:bg-slate-50 ${member.isInvite ? 'bg-amber-50/30' : ''}`}>
+                <tr key={member.id} className={`hover:bg-slate-50 ${member.isInvite ? 'bg-[#f0f4ff]/40' : ''}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 ${member.isInvite ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0`}>
+                      <div className={`h-10 w-10 ${member.isInvite ? 'bg-sky-100 text-sky-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0`}>
                         {(member.name || 'U').split(' ').map((n: string) => n[0]).join('')}
                       </div>
                       <div className="min-w-0">
                         <div className="font-medium text-slate-900 flex items-center gap-2 truncate">
                           {member.name || 'Unknown'}
                           {member.isInvite && (
-                            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded whitespace-nowrap">
+                            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded whitespace-nowrap border border-sky-250">
                               <Clock className="h-2.5 w-2.5" /> Invited
                             </span>
                           )}
@@ -342,9 +519,17 @@ export default function Team() {
                         <div className="text-slate-500 text-xs flex items-center gap-1 mt-0.5 truncate">
                           <Mail className="h-3 w-3" /> {member.email}
                         </div>
+                        <div className="text-[10px] text-slate-400 font-semibold mt-1 flex items-center gap-1">
+                          <Calendar className="h-3 w-3 shrink-0 text-slate-400" /> Created On: {member.createdAtDate || "06/18/2026"}
+                        </div>
                         {member.isInvite && member.createdAt && (
-                          <div className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1 bg-amber-50 rounded px-1.5 py-0.5 w-fit border border-amber-100">
+                          <div className="text-[10px] text-sky-600 font-bold mt-1 flex items-center gap-1 bg-sky-50 rounded px-1.5 py-0.5 w-fit border border-sky-100">
                             <Clock className="h-3 h-3 shrink-0" /> Sent: {format(member.createdAt.toDate ? member.createdAt.toDate() : new Date(member.createdAt), 'MM/dd/yyyy h:mm a')}
+                          </div>
+                        )}
+                        {member.joinedAt && (
+                          <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5 w-fit">
+                            <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" /> Accepted: {member.joinedAt}
                           </div>
                         )}
                       </div>
@@ -364,11 +549,11 @@ export default function Team() {
                   <td className="px-6 py-4 text-center text-slate-700 font-medium">{member.listings || 0}</td>
                   <td className="px-6 py-4 text-right">
                   <DropdownMenu>
-                    <DropdownMenuTrigger>
+                    <DropdownMenuTrigger render={
                       <button type="button" className="p-2 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors focus:outline-none inline-block">
                         <MoreHorizontal className="h-5 w-5" />
                       </button>
-                    </DropdownMenuTrigger>
+                    } />
                     <DropdownMenuContent align="end" side="bottom" sideOffset={5} className="w-56 rounded-xl shadow-xl border-slate-200 p-2 bg-white z-50">
                          {member.isInvite ? (
                            <>
@@ -391,11 +576,18 @@ export default function Team() {
                              <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-slate-50">
                                Edit Member
                              </DropdownMenuItem>
-                             <DropdownMenuItem className="rounded-lg font-bold py-2 cursor-pointer">
+                             <DropdownMenuItem onClick={() => {
+                               setMemberToChangeRole(member);
+                               setSelectedRole(member.role || "Agent");
+                               setIsChangeRoleModalOpen(true);
+                             }} className="rounded-lg font-bold py-2 cursor-pointer">
                                Change Role
                              </DropdownMenuItem>
                              <DropdownMenuSeparator className="my-1" />
-                             <DropdownMenuItem className="rounded-lg font-bold py-2 text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer">
+                             <DropdownMenuItem onClick={() => {
+                               setMemberToRemove(member);
+                               setIsRemoveModalOpen(true);
+                             }} className="rounded-lg font-bold py-2 text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer">
                                Remove from Team
                              </DropdownMenuItem>
                            </>
@@ -410,31 +602,39 @@ export default function Team() {
         </div>
 
         {/* Mobile View */}
-        <div className="md:hidden divide-y divide-slate-100">
+        <div className="lg:hidden divide-y divide-slate-100">
            {loading ? (
               <div className="py-20 text-center">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-300 mx-auto" />
                 <p className="text-slate-400 mt-2 font-medium">Loading team...</p>
               </div>
            ) : combinedList.map((member) => (
-             <div key={member.id} className={`p-4 flex flex-col gap-4 ${member.isInvite ? 'bg-amber-50/20' : ''}`}>
+             <div key={member.id} className={`p-4 flex flex-col gap-4 ${member.isInvite ? 'bg-sky-50/20' : ''}`}>
                <div className="flex justify-between items-start">
                  <div className="flex items-center gap-3">
-                   <div className={`h-10 w-10 ${member.isInvite ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0`}>
+                   <div className={`h-10 w-10 ${member.isInvite ? 'bg-sky-100 text-sky-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0`}>
                      {(member.name || 'U').split(' ').map((n: string) => n[0]).join('')}
                    </div>
                    <div>
                      <div className="font-bold text-slate-900 flex items-center gap-2">
                        {member.name || 'Unknown'}
                        {member.isInvite && (
-                         <span className="text-[8px] font-black uppercase tracking-widest bg-amber-200 text-amber-800 px-1 py-0.5 rounded">Invited</span>
+                         <span className="text-[8px] font-black uppercase tracking-widest bg-sky-100 text-sky-800 px-1 py-0.5 rounded border border-sky-200/50">Invited</span>
                        )}
                      </div>
-                     <div className="text-slate-500 text-[11px] flex items-center gap-1">
+                     <div className="text-[10px] text-slate-400 font-semibold mb-1 flex items-center gap-1">
+                        <Calendar className="h-3 w-3 shrink-0 text-slate-400" /> Created On: {member.createdAtDate || "06/18/2026"}
+                      </div>
+                      <div className="text-slate-500 text-[11px] flex items-center gap-1">
                        <Mail className="h-3 w-3" /> {member.email}
                      </div>
+                     {member.joinedAt && (
+                       <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5 w-fit">
+                         <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" /> Accepted: {member.joinedAt}
+                       </div>
+                     )}
                      {member.isInvite && member.createdAt && (
-                       <div className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1 bg-amber-50 rounded px-1.5 py-0.5 w-fit border border-amber-100">
+                       <div className="text-[10px] text-sky-600 font-bold mt-1 flex items-center gap-1 bg-sky-50 rounded px-1.5 py-0.5 w-fit border border-sky-100">
                          <Clock className="h-3 w-3 shrink-0" /> Sent: {format(member.createdAt.toDate ? member.createdAt.toDate() : new Date(member.createdAt), 'MM/dd/yyyy h:mm a')}
                        </div>
                      )}
@@ -442,11 +642,11 @@ export default function Team() {
                  </div>
 
                   <DropdownMenu>
-                    <DropdownMenuTrigger>
+                    <DropdownMenuTrigger render={
                       <button type="button" className="p-2 text-slate-400 hover:text-slate-600 rounded-md bg-slate-50 focus:outline-none inline-block">
                         <MoreHorizontal className="h-5 w-5" />
                       </button>
-                    </DropdownMenuTrigger>
+                    } />
                     <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl bg-white border shadow-lg z-50">
                        {member.isInvite ? (
                          <>
@@ -459,8 +659,16 @@ export default function Team() {
                        ) : (
                          <>
                            <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Member</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => {
+                             setMemberToChangeRole(member);
+                             setSelectedRole(member.role || "Agent");
+                             setIsChangeRoleModalOpen(true);
+                           }} className="font-bold py-2 cursor-pointer">Change Role</DropdownMenuItem>
                            <DropdownMenuSeparator />
-                           <DropdownMenuItem className="font-bold py-2 text-red-600 cursor-pointer">Remove</DropdownMenuItem>
+                           <DropdownMenuItem onClick={() => {
+                             setMemberToRemove(member);
+                             setIsRemoveModalOpen(true);
+                           }} className="font-bold py-2 text-red-600 cursor-pointer">Remove</DropdownMenuItem>
                          </>
                        )}
                     </DropdownMenuContent>
@@ -486,6 +694,217 @@ export default function Team() {
            ))}
         </div>
       </div>
+
+      {/* 1. Remove Member Confirmation Dialog */}
+      <Dialog open={isRemoveModalOpen} onOpenChange={setIsRemoveModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-600 flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5" /> Confirm Removal
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-stone-600 leading-relaxed font-semibold">
+              Are you sure you want to remove <span className="text-slate-900 font-extrabold">{memberToRemove?.name}</span> ({memberToRemove?.email}) from the team?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 text-xs text-stone-500 leading-relaxed">
+            This action will immediately disable their login privileges, delete their profile connection, and transfer outstanding open house lists to the brokerage administrator.
+          </div>
+          <DialogFooter className="flex gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsRemoveModalOpen(false)}
+              className="font-bold border-slate-200"
+            >
+              No, Keep Member
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => handleRemoveMember(memberToRemove)}
+              className="font-bold bg-red-600 hover:bg-red-700 text-white"
+            >
+              Yes, Remove Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2. Change Role Selection Dialog */}
+      <Dialog open={isChangeRoleModalOpen} onOpenChange={setIsChangeRoleModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-950 flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" /> Change Team Role
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              Assign a new operational role and permissions for <span className="font-bold text-slate-900">{memberToChangeRole?.name}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4 text-left">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Select New Role</label>
+              <select
+                className="flex h-11 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+              >
+                <option value="Agent">Agent</option>
+                <option value="Office Manager">Office Manager</option>
+                <option value="Broker of Record / Admin">Broker of Record / Admin</option>
+                <option value="Brokerage Admin">Brokerage Admin</option>
+                <option value="Team Admin">Team Admin</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsChangeRoleModalOpen(false)}
+              className="font-bold border-slate-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => handleUpdateRole(memberToChangeRole, selectedRole)}
+              className="font-bold bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Save New Role
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Onboarding Package Dialog */}
+      <Dialog open={isOnboardingModalOpen} onOpenChange={setIsOnboardingModalOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto bg-white rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <BookOpen className="h-6 w-6 text-emerald-650 shrink-0 text-emerald-600" /> New Agent Onboarding Package
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 pt-1">
+              This package is dynamically prepared and automatically delivered to newly accepted agents (like <span className="font-semibold text-slate-800">Luc Valade</span>) to get them setup with listings, AI tours, and paired lenders.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Interactive Layout of the Package */}
+          <div className="space-y-6 py-4 text-left">
+            <div className="border border-emerald-100 bg-emerald-50/40 rounded-xl p-4 flex gap-3 items-start">
+              <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-emerald-800 text-sm">Automated Invite Acceptance Workflow</h4>
+                <p className="text-xs text-emerald-700/90 mt-1 leading-relaxed">
+                  Upon clicking 'Accept Invitation', the agent is converted to an Active team member in your Brokerage group. They immediately receive their personalized dashboard credentials, a welcome email with their login token, and access to Sora (the in-app conversational real-estate guide).
+                </p>
+              </div>
+            </div>
+
+            {/* Core Onboarding Steps Checklist */}
+            <div>
+              <h3 className="font-bold text-slate-805 text-xs text-slate-500 uppercase tracking-wider mb-3">Interactive Onboarding Steps</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm flex gap-3 items-start">
+                  <div className="bg-blue-50 text-blue-600 p-2 rounded-lg shrink-0">
+                    <Smartphone className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 text-sm">1. Mobile Kiosk & Secure PIN</h4>
+                    <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                      Setting up their customized agent profile, logo / avatar, and an <strong>Exit Lock PIN</strong>. This allows them to secure the high-integrity tablet kiosk during open houses.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm flex gap-3 items-start">
+                  <div className="bg-amber-50 text-amber-600 p-2 rounded-lg shrink-0">
+                    <KeyRound className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 text-sm">2. Lender Pair Lock</h4>
+                    <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                      Inviting their preferred B2B mortgage professional. When paired, dynamic financing questions and explicit opt-in boxes are seamlessly injected into their attendee flow.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm flex gap-3 items-start">
+                  <div className="bg-emerald-50 text-emerald-600 p-2 rounded-lg shrink-0">
+                    <Compass className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 text-sm">3. Sora Walkthrough & AI Tour</h4>
+                    <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                      Generating their first immersive property tour. Our AI voice guidance assistant <strong>Sora</strong> compiles text and spatial audio tours directly from listing features.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border border-slate-100 rounded-xl p-4 bg-white shadow-sm flex gap-3 items-start">
+                  <div className="bg-purple-50 text-purple-600 p-2 rounded-lg shrink-0">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 text-sm">4. CRM Field Mapping Integration</h4>
+                    <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                      Connecting APIs like Follow Up Boss. Incoming buyer leads are direct-synced to FUB tags with immediate notification triggers safely recorded even if offline.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Premium Interactive Welcome Script Preview */}
+            <div className="border border-slate-205 rounded-xl overflow-hidden bg-slate-900 border-slate-800">
+              <div className="bg-slate-950 px-4 py-3 border-b border-slate-800 flex justify-between items-center text-white">
+                <span className="text-xs font-bold flex items-center gap-1.5 uppercase tracking-wider text-slate-300">
+                  🤖 Sora AI First-Login Greeting Preview
+                </span>
+                <span className="px-2 py-0.5 rounded bg-blue-500/20 text-[10px] font-bold text-blue-400 border border-blue-500/30 uppercase">
+                  Interactive Guidance
+                </span>
+              </div>
+              <div className="p-4 space-y-3 font-mono text-xs leading-relaxed text-slate-300">
+                <p className="text-emerald-400">"Hello agent! I am Sora, your AI open house and property marketing co-pilot.</p>
+                <p>Welcome to your active AI Open House Connect desk! To get started immediately, let's achieve three milestones together:"</p>
+                <ol className="list-decimal pl-5 space-y-1 text-slate-400 font-sans text-xs">
+                  <li><strong className="text-slate-200">Register your personal Exit PIN:</strong> Secures your tablet kiosk at listings.</li>
+                  <li><strong className="text-slate-200">Connect a Paired Lender:</strong> Captures qualified mortgage buyers with strict borrower opt-in.</li>
+                  <li><strong className="text-slate-200">Upload your first Property Listing:</strong> I will draft custom spatial walkthrough scripts in seconds!</li>
+                </ol>
+                <p className="text-emerald-400 pt-1">Let's build a glorious listing event together."</p>
+              </div>
+            </div>
+
+            {/* Download and Print section */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50 border border-slate-100 rounded-xl p-4">
+              <div className="min-w-0">
+                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-slate-500" /> Printable Quick-Start Handbook
+                </h4>
+                <p className="text-slate-500 text-xs mt-0.5">
+                  Hand over a structured onboarding cheat sheet including QR codes and fallback syncing tips.
+                </p>
+              </div>
+              <Button 
+                onClick={() => {
+                  toast.success("📥 Onboarding Package Flyer PDF successfully compiled and loaded for Luc Valade.");
+                }}
+                className="bg-slate-800 hover:bg-slate-900 font-bold text-xs flex items-center gap-2 self-end sm:self-auto text-white"
+              >
+                <Download className="h-4 w-4" /> Download PDF Kit
+              </Button>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button onClick={() => setIsOnboardingModalOpen(false)} className="bg-blue-600 hover:bg-blue-700 font-bold text-white">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

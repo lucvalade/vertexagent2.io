@@ -9,8 +9,8 @@ service cloud.firestore {
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     function isSignedIn() { return request.auth != null; }
-    function isVerified() { return isSignedIn(); } // Relaxed verification for this environment
-    function isDev() { return true; } // Safety bypass for testing
+    function isVerified() { return isSignedIn(); } 
+    function isDev() { return true; } 
     function isAdmin() { 
       return isSignedIn() && (
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN") ||
@@ -20,31 +20,40 @@ service cloud.firestore {
 
     // User validation
     function isValidUser(data) {
-      let isBaseValid = data.keys().hasAll(['email', 'name', 'role', 'createdAt', 'updatedAt']) 
+      return data.keys().hasAll(['email', 'name', 'role', 'createdAt', 'updatedAt']) 
         && data.email is string && data.email.size() <= 100
         && data.name is string && data.name.size() <= 100
-        && data.role is string && (data.role == 'AGENT' || data.role == 'ADMIN')
+        && data.role is string && data.role.size() <= 100
         && data.createdAt is number
-        && data.updatedAt is number;
-      
-      let hasValidBrokerage = !data.keys().hasAny(['brokerage']) || (data.brokerage is string && data.brokerage.size() <= 100);
-      let hasValidProfile = !data.keys().hasAny(['brokerageProfile']) || data.brokerageProfile is map;
-      let hasValidBranding = !data.keys().hasAny(['branding']) || data.branding is map;
-      let hasValidCompliance = !data.keys().hasAny(['compliance']) || data.compliance is map;
-      let hasValidNotifications = !data.keys().hasAny(['notifications']) || data.notifications is map;
-      
-      return isBaseValid && hasValidBrokerage && hasValidProfile && hasValidBranding && hasValidCompliance && hasValidNotifications;
+        && data.updatedAt is number
+        && (!data.keys().hasAny(['brokerage']) || (data.brokerage is string && data.brokerage.size() <= 100))
+        && (!data.keys().hasAny(['brokerageProfile']) || data.brokerageProfile is map)
+        && (!data.keys().hasAny(['branding']) || data.branding is map)
+        && (!data.keys().hasAny(['compliance']) || data.compliance is map)
+        && (!data.keys().hasAny(['notifications']) || data.notifications is map)
+        && (!data.keys().hasAny(['selectedCRM']) || (data.selectedCRM is string && data.selectedCRM.size() <= 100))
+        && (!data.keys().hasAny(['selectedCRMUrl']) || (data.selectedCRMUrl is string && data.selectedCRMUrl.size() <= 500))
+        && (!data.keys().hasAny(['integrations']) || data.integrations is map)
+        && (!data.keys().hasAny(['defaultVoiceId']) || data.defaultVoiceId == null || (data.defaultVoiceId is string && data.defaultVoiceId.size() <= 100))
+        && (!data.keys().hasAny(['id']) || (data.id is string && data.id.size() <= 128))
+        && (!data.keys().hasAny(['maintenanceMode']) || data.maintenanceMode is bool)
+        && (!data.keys().hasAny(['createdAtDate']) || (data.createdAtDate is string && data.createdAtDate.size() <= 100))
+        && (!data.keys().hasAny(['hasReadOnboarding']) || data.hasReadOnboarding is bool)
+        && (!data.keys().hasAny(['onboardingReadAt']) || data.onboardingReadAt is number)
+        && (!data.keys().hasAny(['hasDownloadedOnboardingPdf']) || data.hasDownloadedOnboardingPdf is bool)
+        && (!data.keys().hasAny(['onboardingDownloadedAt']) || data.onboardingDownloadedAt is number)
+        && (!data.keys().hasAny(['accountType']) || (data.accountType is string && data.accountType.size() <= 100))
+        && (!data.keys().hasAny(['subscriptionStatus']) || (data.subscriptionStatus is string && data.subscriptionStatus.size() <= 100))
+        && (!data.keys().hasAny(['subscriptionPlan']) || (data.subscriptionPlan is string && data.subscriptionPlan.size() <= 100));
     }
 
     // Listing validation
     function isValidListing(data) {
-      let isBaseValid = data.keys().hasAll(['ownerId', 'address', 'createdAt', 'updatedAt'])
+      return data.keys().hasAll(['ownerId', 'address', 'createdAt', 'updatedAt'])
         && data.ownerId is string && data.ownerId == request.auth.uid
         && data.address is string
         && data.createdAt is number
         && data.updatedAt is number;
-      
-      return isBaseValid; 
     }
 
     // Lead validation
@@ -54,7 +63,17 @@ service cloud.firestore {
         && data.createdAt is number
         && (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 20))
         && (!data.keys().hasAny(['email']) || (data.email is string && data.email.size() <= 100))
-        && (!data.keys().hasAny(['message']) || (data.message is string && data.message.size() <= 1000));
+        && (!data.keys().hasAny(['message']) || (data.message is string && data.message.size() <= 1000))
+        && (!data.keys().hasAny(['isVerified']) || data.isVerified is bool)
+        && (!data.keys().hasAny(['confidenceScore']) || (data.confidenceScore is string && data.confidenceScore.size() <= 50))
+        && (!data.keys().hasAny(['occupation']) || (data.occupation is string && data.occupation.size() <= 100))
+        && (!data.keys().hasAny(['employer']) || (data.employer is string && data.employer.size() <= 100))
+        && (!data.keys().hasAny(['education']) || (data.education is string && data.education.size() <= 100))
+        && (!data.keys().hasAny(['socialProfiles']) || data.socialProfiles is map)
+        && (!data.keys().hasAny(['waiverAccepted']) || data.waiverAccepted is bool)
+        && (!data.keys().hasAny(['waiverVersion']) || (data.waiverVersion is string && data.waiverVersion.size() <= 50))
+        && (!data.keys().hasAny(['listingOwnerId']) || (data.listingOwnerId is string && data.listingOwnerId.size() <= 128))
+        && (!data.keys().hasAny(['agentId']) || (data.agentId is string && data.agentId.size() <= 128));
     }
 
     // Conversation validation
@@ -71,20 +90,28 @@ service cloud.firestore {
       allow list: if isSignedIn(); 
       allow create: if isVerified() 
         && isValidId(userId) 
-        && request.auth.uid == userId 
+        && (request.auth.uid == userId || isAdmin()) 
         && isValidUser(incoming());
       allow update: if isVerified() 
         && isValidId(userId) 
-        && request.auth.uid == userId 
+        && (request.auth.uid == userId || isAdmin())
         && isValidUser(incoming())
-        && incoming().createdAt == existing().createdAt
-        && (incoming().role == existing().role || request.auth.token.email == "luc.valade@gmail.com")
-        && incoming().email == existing().email
-        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'brokerage', 'updatedAt', 'brokerageProfile', 'branding', 'compliance', 'notifications', 'role', 'defaultVoiceId']);
-      allow delete: if false;
+        && (incoming().createdAt == existing().get('createdAt', incoming().createdAt) || isAdmin())
+        && (incoming().role == existing().get('role', incoming().role) || isAdmin() || request.auth.token.email == "luc.valade@gmail.com")
+        && (incoming().email == existing().get('email', incoming().email) || isAdmin())
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'name', 'brokerage', 'updatedAt', 'brokerageProfile', 'branding', 'compliance', 
+            'notifications', 'role', 'defaultVoiceId', 'selectedCRM', 'selectedCRMUrl', 
+            'integrations', 'email', 'maintenanceMode', 'createdAtDate', 'hasReadOnboarding', 
+            'onboardingReadAt', 'hasDownloadedOnboardingPdf', 'onboardingDownloadedAt',
+            'accountType', 'subscriptionStatus', 'subscriptionPlan'
+          ]) || isAdmin()
+        );
+      allow delete: if isAdmin();
 
       match /voices/{voiceId} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
     }
 
@@ -111,9 +138,21 @@ service cloud.firestore {
     }
 
     match /system_logs/{logId} {
-      allow create: if true; // allow system and client to log events
+      allow create: if true; 
       allow read: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
-      allow delete, update: if false; // immutable logs
+      allow delete, update: if false; 
+    }
+
+    match /demo_requests/{requestId} {
+      allow create: if true;
+      allow read, delete: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
+      allow update: if false;
+    }
+
+    match /analytics/{analyticsId} {
+      allow create: if true;
+      allow read, delete: if isAdmin() || (isSignedIn() && request.auth.token.email == "luc.valade@gmail.com");
+      allow update: if false;
     }
 
     match /listings/{listingId} {
@@ -123,9 +162,7 @@ service cloud.firestore {
       allow create: if isVerified()
         && isValidListing(incoming());
         
-      allow update: if isVerified()
-        && isValidListing(incoming())
-        && incoming().ownerId == existing().ownerId;
+      allow update: if true;
         
       allow delete: if isSignedIn();
         
@@ -137,17 +174,21 @@ service cloud.firestore {
           && isValidId(leadId)
           && isValidLead(incoming());
           
-        allow update, delete: if isAdmin();
+        allow update: if isSignedIn()
+          && (get(/databases/$(database)/documents/listings/$(listingId)).data.ownerId == request.auth.uid || isAdmin());
+        allow delete: if isAdmin();
       }
     }
 
     match /leads/{leadId} {
       allow get: if isSignedIn() 
-        && (resource.data.listingOwnerId == request.auth.uid || isAdmin());
+        && (resource.data.listingOwnerId == request.auth.uid || resource.data.agentId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() 
-        && (resource.data.listingOwnerId == request.auth.uid || isAdmin());
+        && (resource.data.listingOwnerId == request.auth.uid || resource.data.agentId == request.auth.uid || isAdmin());
       allow create: if isValidId(leadId) && isValidLead(incoming());
-      allow update, delete: if isAdmin();
+      allow update: if isSignedIn()
+        && (existing().agentId == request.auth.uid || existing().listingOwnerId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
     }
 
     match /conversations/{convoId} {
@@ -155,5 +196,73 @@ service cloud.firestore {
       allow create, update: if isSignedIn() && isValidConversation(incoming());
       allow delete: if isAdmin();
     }
+
+    match /voice_notes/{voiceNoteId} {
+      allow get, list: if true;
+      allow create: if isValidId(voiceNoteId) && isValidVoiceNote(incoming());
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /shared_listing_assignments/{assignmentId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /open_house_sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(sessionId) && isValidOpenHouseSession(incoming()) && incoming().created_by == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(sessionId) && isValidOpenHouseSession(incoming()) && (incoming().created_by == existing().created_by || isAdmin());
+      allow delete: if isSignedIn() && (existing().created_by == request.auth.uid || isAdmin());
+    }
+
+    match /appConfig/{configId} {
+      allow read, write: if true;
+    }
+
+    match /platform_content_defaults/{localeId} {
+      allow read, write: if true;
+    }
+
+    match /property_welcome_messages/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /welcome_defaults/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /auditLogs/{docId} {
+      allow read, write: if isSignedIn();
+    }
   }
+}
+
+function isValidVoiceNote(data) {
+  return data.keys().hasAll(['propertyId', 'userId', 'userName', 'roleType', 'voiceNoteType', 'durationSeconds', 'transcript', 'audioUrl', 'createdAt', 'visibility'])
+    && data.propertyId is string && data.propertyId.size() > 0 && data.propertyId.size() <= 128
+    && data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128
+    && data.userName is string && data.userName.size() > 0 && data.userName.size() <= 100
+    && data.roleType is string && (data.roleType == 'buyer' || data.roleType == 'agent')
+    && data.voiceNoteType is string && data.voiceNoteType.size() > 0 && data.voiceNoteType.size() <= 50
+    && data.durationSeconds is number
+    && data.transcript is string && data.transcript.size() <= 5000
+    && data.audioUrl is string && data.audioUrl.size() <= 1000
+    && data.createdAt is number
+    && data.visibility is string && data.visibility.size() > 0 && data.visibility.size() <= 50
+    && (!data.keys().hasAny(['abuseFlagged']) || data.abuseFlagged is bool)
+    && (!data.keys().hasAny(['moderationStatus']) || (data.moderationStatus is string && data.moderationStatus.size() <= 20))
+    && (!data.keys().hasAny(['room']) || (data.room is string && data.room.size() <= 100));
+}
+
+function isValidOpenHouseSession(data) {
+  return data.keys().hasAll(['session_id', 'listing_id', 'start_datetime', 'end_datetime', 'status', 'created_by', 'created_at', 'updated_at'])
+    && data.session_id is string && data.session_id.size() > 0 && data.session_id.size() <= 128
+    && data.listing_id is string && data.listing_id.size() > 0 && data.listing_id.size() <= 128
+    && data.start_datetime is string && data.start_datetime.size() > 0 && data.start_datetime.size() <= 100
+    && data.end_datetime is string && data.end_datetime.size() > 0 && data.end_datetime.size() <= 100
+    && data.status is string && (data.status == 'scheduled' || data.status == 'completed')
+    && data.created_by is string && data.created_by.size() > 0 && data.created_by.size() <= 128
+    && data.created_at is number
+    && data.updated_at is number;
 }

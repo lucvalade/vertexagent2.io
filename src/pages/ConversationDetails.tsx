@@ -48,7 +48,7 @@ const DUMMY_CONVOS: Record<string, any> = {
   },
   "3": { 
     id: "3", 
-    property: "123 VertexAgent Lane", 
+    property: "123 Open House Lane", 
     lang: "French", 
     duration: "6m 30s", 
     qs: 15, 
@@ -56,7 +56,7 @@ const DUMMY_CONVOS: Record<string, any> = {
     agentName: "Chantal",
     clientName: "Pierre",
     transcript: [
-      { speaker: "AI", text: "Bonjour Pierre! Bienvenue au 123 VertexAgent Lane. Je suis Chantal, votre assistante IA pour cette magnifique propriété. Pour commencer, confirmez-moi votre numéro de téléphone afin que je puisse vous envoyer tous les plans ?" },
+      { speaker: "AI", text: "Bonjour Pierre! Bienvenue au 123 Open House Lane. Je suis Chantal, votre assistante IA pour cette magnifique propriété. Pour commencer, confirmez-moi votre numéro de téléphone afin que je puisse vous envoyer tous les plans ?" },
       { speaker: "Client", text: "Bonjour Chantal. Oui, c'est le 555-4321. Quel est le classement de performance énergétique (DPE) ?" },
       { speaker: "AI", text: "C'est noté, Pierre. Cette maison bénéficie d'une excellente performance énergétique de classe A, grâce à ses panneaux solaires intégrés et son isolation thermique de pointe. Souhaitez-vous en savoir plus sur les coûts annuels ?" },
       { speaker: "Client", text: "Oui, et parlez-moi aussi du jardin." },
@@ -745,9 +745,9 @@ export default function ConversationDetails() {
             {/* COMPACT WAVEFORM PLAYER (Inspired by User Image) */}
             <div className="border-b bg-white sticky top-0 z-10">
               <div className="bg-slate-50 border-b border-slate-100 py-1.5 px-4 flex items-center gap-2">
-                <Clock className="h-3.5 w-3.5 text-[#FF6B35]" />
+                <Clock className="h-3.5 w-3.5 text-blue-600" />
                 <p className="text-[10px] font-medium text-slate-500">
-                  <span className="font-bold text-[#FF6B35] mr-1">Note:</span> 
+                  <span className="font-bold text-blue-600 mr-1">Note:</span> 
                   Generating the high-definition neural recording may take up to 60 seconds.
                 </p>
               </div>
@@ -756,7 +756,7 @@ export default function ConversationDetails() {
                   onClick={togglePlayback}
                   disabled={isSynthesizing}
                   size="icon"
-                  className="h-12 w-12 rounded-full bg-[#FF6B35] hover:bg-[#E85D2C] shadow-lg shadow-orange-200 transition-all flex-shrink-0"
+                  className="h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all flex-shrink-0"
                 >
                   {isSynthesizing ? (
                     <Loader2 className="h-6 w-6 animate-spin text-white" />
@@ -769,7 +769,7 @@ export default function ConversationDetails() {
 
                 <div className="flex-1 space-y-1">
                   <div className="flex justify-between items-end mb-1">
-                    <span className="text-[10px] font-bold text-[#FF6B35] uppercase tracking-widest">
+                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
                       {isUsingWebSpeech ? "Direct Speech Output Active" : isSynthesizing ? "Restoring Neural Audio..." : isPlaying ? "Reproducing call..." : fullAudioBufferRef.current ? "HD Recording Ready" : "HD Restoration Required"}
                     </span>
                     <span className="text-[10px] font-mono text-slate-400">
@@ -808,7 +808,7 @@ export default function ConversationDetails() {
                           className={`w-1 rounded-full bg-slate-100 transition-all duration-200`}
                           style={{ 
                             height: `${20 + Math.sin(i * 0.5) * 40 + Math.random() * 20}%`,
-                            backgroundColor: (i / 40) * 100 <= playProgress ? '#FF6B35' : '#F1F5F9'
+                            backgroundColor: (i / 40) * 100 <= playProgress ? '#2563eb' : '#F1F5F9'
                           }}
                         />
                       ))}
@@ -833,8 +833,8 @@ export default function ConversationDetails() {
                       className={`flex flex-col ${msg.speaker === 'Client' ? 'items-end ml-auto' : 'items-start mr-auto'} transition-all duration-500 max-w-[85%] ${isPlaying && !isActive ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'} animate-in fade-in slide-in-from-bottom-2`}
                     >
                       <div className="flex items-center gap-2 mb-1.5 px-1 text-left w-full">
-                        <div className={`${msg.speaker === 'AI' ? 'bg-[#FF6B35]' : 'bg-blue-600'} w-1.5 h-4 rounded-full mr-1.5 ${isActive ? 'animate-pulse' : ''}`} />
-                        <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${msg.speaker === 'AI' ? 'text-[#FF6B35]' : 'text-blue-600'}`}>
+                        <div className={`${msg.speaker === 'AI' ? 'bg-blue-600' : 'bg-slate-700'} w-1.5 h-4 rounded-full mr-1.5 ${isActive ? 'animate-pulse' : ''}`} />
+                        <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${msg.speaker === 'AI' ? 'text-blue-600' : 'text-slate-700'}`}>
                           {msg.speaker === 'AI' ? ` ${convo.agentName || 'Sarah'} (AI Agent)` : ` ${convo.clientName || 'Mark'} (Verified Client)`}
                           {msg.speaker === 'AI' && <Sparkles className="h-3 w-3" />}
                         </span>
@@ -842,17 +842,17 @@ export default function ConversationDetails() {
                       <div className={`p-4 rounded-2xl relative shadow-sm border text-left transition-all duration-300 ${
                         msg.speaker === 'Client' 
                           ? (isActive 
-                              ? 'bg-blue-600 text-orange-300 border-blue-600 ring-4 ring-[#FF6B35] ring-offset-2 scale-[1.02] shadow-xl z-20 font-bold' 
-                              : 'bg-blue-600 text-white rounded-tr-sm border-blue-700')
+                              ? 'bg-slate-800 text-blue-200 border-slate-800 ring-4 ring-blue-600 ring-offset-2 scale-[1.02] shadow-xl z-20 font-bold' 
+                              : 'bg-slate-800 text-white rounded-tr-sm border-slate-900')
                           : (isActive 
-                              ? 'bg-orange-100 text-slate-900 border-orange-300 rounded-tl-sm ring-4 ring-[#FF6B35] ring-offset-2 scale-[1.02] shadow-xl z-20 font-semibold' 
-                              : 'bg-[#FFF8F4] text-slate-800 rounded-tl-sm border-orange-100 shadow-[0_0_15px_rgba(255,107,53,0.05)]')
-                      } ${msg.speaker === 'AI' && !isActive ? 'border-orange-200/50' : ''}`}>
+                              ? 'bg-blue-100 text-slate-900 border-blue-300 rounded-tl-sm ring-4 ring-blue-600 ring-offset-2 scale-[1.02] shadow-xl z-20 font-semibold' 
+                              : 'bg-blue-50/70 text-slate-800 rounded-tl-sm border-blue-100 shadow-[0_0_15px_rgba(37,99,235,0.05)]')
+                      } ${msg.speaker === 'AI' && !isActive ? 'border-blue-200/50' : ''}`}>
                         <p className="text-sm leading-relaxed font-medium">{msg.text}</p>
                         
                         {isActive && (
                           <div className="absolute -bottom-1 -right-1">
-                            <div className="h-4 w-4 bg-[#FF6B35] rounded-full flex items-center justify-center animate-bounce shadow-md">
+                            <div className="h-4 w-4 bg-blue-600 rounded-full flex items-center justify-center animate-bounce shadow-md">
                                 <Volume2 className="h-2 w-2 text-white" />
                             </div>
                           </div>

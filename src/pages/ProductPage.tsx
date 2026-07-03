@@ -32,17 +32,17 @@ export default function ProductPage() {
     foyer: {
       title: "Grande Entryway & Foyer",
       transcript: "Welcome to 888 Bel Air Road. As we step through the massive 12-foot custom hand-carved mahogany doors, observe the soaring double-height ceilings and the elegant, circular floating marble staircase...",
-      voiceStyle: "Sora (Pre-Approved Female Voice)"
+      voiceStyle: "Sora (Premium Female Voice)"
     },
     kitchen: {
       title: "Chef's Culinary Domain",
       transcript: "This is a full-stack professional culinary kitchen. Notice the dual solid calacatta gold marble waterfalls on the islands, custom gaggenau appliances, and the hidden butler pantry...",
-      voiceStyle: "Sora (Pre-Approved Female Voice)"
+      voiceStyle: "Sora (Premium Female Voice)"
     },
     suite: {
       title: "Master Penthouse Suite",
       transcript: "Step into the master wing. Here we find custom walnut paneled ceilings, automated pocket doors opening to a private heated plunge pool, and panoramic 270-degree views of the Los Angeles basin...",
-      voiceStyle: "Sora (Pre-Approved Female Voice)"
+      voiceStyle: "Sora (Premium Female Voice)"
     }
   };
 
@@ -58,19 +58,19 @@ export default function ProductPage() {
               id: "foyer",
               title: "Grande Entryway & Foyer",
               transcript: "Welcome to 888 Bel Air Road. As we step through the massive 12-foot custom hand-carved mahogany doors, observe the soaring double-height ceilings and the elegant, circular floating marble staircase...",
-              voiceStyle: "Sora (Pre-Approved Female Voice)"
+              voiceStyle: "Sora (Premium Female Voice)"
             },
             {
               id: "kitchen",
               title: "Chef's Culinary Domain",
               transcript: "This is a full-stack professional culinary kitchen. Notice the dual solid calacatta gold marble waterfalls on the islands, custom gaggenau appliances, and the hidden butler pantry...",
-              voiceStyle: "Sora (Pre-Approved Female Voice)"
+              voiceStyle: "Sora (Premium Female Voice)"
             },
             {
               id: "suite",
               title: "Master Penthouse Suite",
               transcript: "Step into the master wing. Here we find custom walnut paneled ceilings, automated pocket doors opening to a private heated plunge pool, and panoramic 270-degree views of the Los Angeles basin...",
-              voiceStyle: "Sora (Pre-Approved Female Voice)"
+              voiceStyle: "Sora (Premium Female Voice)"
             }
           ]
         });
@@ -142,7 +142,7 @@ export default function ProductPage() {
     try {
       await addDoc(collection(db, "system_logs"), {
         type: "voice_sample_played",
-        platform: "Cora Guide Voice Narrator",
+        platform: "Sora Voice Narrator",
         roomId: selectedRoom,
         title: roomNarrations[selectedRoom].title,
         transcript: roomNarrations[selectedRoom].transcript,
@@ -285,7 +285,7 @@ export default function ProductPage() {
               </h1>
               
               <p className="text-lg text-slate-600 leading-relaxed max-w-xl">
-                VertexAgent turns simple listings into immersive voice-narrated homes, giving prospective buyers hand-held conversational tour assistants as they look around.
+                AI Open House Connect turns simple listings into immersive voice-narrated homes, giving prospective buyers hand-held conversational tour assistants as they look around.
               </p>
 
               <div className="flex flex-wrap gap-4 pt-2">
@@ -306,7 +306,7 @@ export default function ProductPage() {
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400">VertexAgent.io Media Node</span>
+                <span className="text-[10px] font-mono text-slate-400">aiopenhouseconnect.com Media Node</span>
               </div>
 
               <div className="aspect-[4/3] bg-slate-950 rounded-2xl flex flex-col justify-between p-4 relative overflow-hidden" style={{ backgroundImage: "linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.85))" }}>
@@ -320,7 +320,7 @@ export default function ProductPage() {
 
                 <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl space-y-1">
                   <div className="flex justify-between items-center text-[10px]">
-                    <span className="text-blue-400 font-bold uppercase tracking-wide">Assistant Sora</span>
+                    <span className="text-blue-400 font-bold uppercase tracking-wide">Sora Voice</span>
                     <span className="text-slate-500 font-mono">Stream Active</span>
                   </div>
                   <p className="text-[10px] text-slate-300 leading-normal italic">
@@ -342,7 +342,7 @@ export default function ProductPage() {
                 Interactive Voice Room Narrator
               </h2>
               <p className="text-slate-500 text-sm">
-                Choose a room and activate the play state to preview how Sora narrate home details room-by-room as prospective buyers walk around.
+                Choose a room and activate the play state to preview how Sora Voice narrates home details room-by-room as prospective buyers walk around.
               </p>
             </div>
 
@@ -392,7 +392,7 @@ export default function ProductPage() {
                 
                 <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-xs font-mono">
                   <span>SPEECH PROCESSOR NODE</span>
-                  <span className="text-blue-500">VOICE ACTIVE (SORA)</span>
+                  <span className="text-blue-500">VOICE ACTIVE (KORE)</span>
                 </div>
 
                 <div className="space-y-4">
@@ -430,7 +430,7 @@ export default function ProductPage() {
                   <div className="flex justify-between items-center pt-2">
                     <Button onClick={toggleNarrator} className="bg-blue-600 hover:bg-blue-700 text-xs font-bold px-6 h-10 rounded-xl flex gap-1.5">
                       {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                      {isPlaying ? "Pause Narration" : "Listen to Cora Guide"}
+                      {isPlaying ? "Pause Narration" : "Listen to Sora Voice Guide"}
                     </Button>
                     <span className="text-[10px] font-mono text-slate-500">Synthetic Voice Audio Stream (Female)</span>
                   </div>
@@ -448,7 +448,7 @@ export default function ProductPage() {
             <span className="text-xs font-black text-blue-600 uppercase tracking-widest border-l-4 border-blue-600 pl-3">Automations & Analytics / Deep Feature Breakdown</span>
             <h2 className="text-3xl md:text-5xl font-extrabold text-slate-900 tracking-tight">Complete AI Real Estate Experience</h2>
             <p className="text-slate-600 leading-normal">
-              VertexAgent delivers a multi-channel framework covering every prospective client touchpoint.
+              AI Open House Connect delivers a multi-channel framework covering every prospective client touchpoint.
             </p>
           </div>
 

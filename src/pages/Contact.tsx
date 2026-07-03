@@ -213,8 +213,8 @@ export default function Contact() {
                 maxLength={200}
               />
               <div className="flex justify-end">
-                <span className={`text-[10px] font-bold ${formData.message.length < 20 ? 'text-amber-500' : 'text-slate-400'}`}>
-                  {formData.message.length}/200
+                <span className={`text-[10px] font-bold ${formData.message.length >= 150 ? 'text-amber-600 animate-pulse' : formData.message.length < 20 ? 'text-amber-500' : 'text-slate-400'}`}>
+                  {formData.message.length}/200 {formData.message.length >= 150 && " (75% Reached)"}
                 </span>
               </div>
             </div>

@@ -34,7 +34,7 @@ function base64ToFloat32(base64: string): Float32Array {
   return float32Array;
 }
 
-export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall: (name: string, args: any) => any, voice: string = "Puck") {
+export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall: (name: string, args: any) => any, voice: string = "Aoede") {
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { toast } from "sonner";
 import PublicLayout from "@/components/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,9 +41,169 @@ export default function DemoPage() {
   
   // Sign-In Form State
   const [guestName, setGuestName] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
-  const [emailValidationError, setEmailValidationError] = useState("");
   const [isRegistered, setIsRegistered] = useState(false);
+
+  // Pro Form Validation Fields & Error States
+  const [formFullName, setFormFullName] = useState("");
+  const [fullNameError, setFullNameError] = useState("");
+  const [fullNameTouched, setFullNameTouched] = useState(false);
+
+  const [formEmail, setFormEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailTouched, setEmailTouched] = useState(false);
+
+  const [formPhone, setFormPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [phoneTouched, setPhoneTouched] = useState(false);
+
+  const [formWebsite, setFormWebsite] = useState("");
+  const [websiteError, setWebsiteError] = useState("");
+  const [websiteTouched, setWebsiteTouched] = useState(false);
+
+  const [formDetails, setFormDetails] = useState("");
+  const [detailsError, setDetailsError] = useState("");
+  const [detailsTouched, setDetailsTouched] = useState(false);
+
+  // Helper to validate Full Name
+  const validateFullName = (val: string): boolean => {
+    const cleaned = val.trim().replace(/\s+/g, " ");
+    if (!cleaned) {
+      setFullNameError("Full Name is required.");
+      return false;
+    }
+    const parts = cleaned.split(" ");
+    if (parts.length < 2) {
+      setFullNameError("Please enter both first and last name.");
+      return false;
+    }
+    const firstWordValid = /^[A-Z]/.test(parts[0]);
+    const lastWordValid = /^[A-Z]/.test(parts[parts.length - 1]);
+    if (!firstWordValid || !lastWordValid) {
+      setFullNameError("Please enter a full name with the first letter of the first and last name capitalized.");
+      return false;
+    }
+    setFullNameError("");
+    return true;
+  };
+
+  const handleFullNameChange = (val: string) => {
+    const words = val.split(" ");
+    const capitalizedWords = words.map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : "");
+    const formatted = capitalizedWords.join(" ");
+    setFormFullName(formatted);
+    if (fullNameTouched) {
+      validateFullName(formatted);
+    }
+  };
+
+  // Helper to validate Email
+  const validateEmail = (val: string): boolean => {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setEmailError("Email Address is required.");
+      return false;
+    }
+    if (!trimmed.includes("@")) {
+      setEmailError("Please enter a valid email address that includes @.");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      setEmailError("Please enter a valid email address that includes @.");
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  // Helper to validate Phone
+  const validatePhone = (val: string): boolean => {
+    const phonePattern = /^\(\d{3}\) \d{3}-\d{4}$/;
+    if (!val) {
+      setPhoneError("Phone Number is required.");
+      return false;
+    }
+    if (!phonePattern.test(val)) {
+      setPhoneError("Please enter a valid phone number in this format: (289) 659-2541.");
+      return false;
+    }
+    setPhoneError("");
+    return true;
+  };
+
+  const handlePhoneChange = (val: string) => {
+    const digits = val.replace(/\D/g, "");
+    const truncated = digits.slice(0, 10);
+    let formatted = "";
+    if (truncated.length > 0) {
+      formatted += "(" + truncated.slice(0, 3);
+    }
+    if (truncated.length >= 3) {
+      formatted += ") ";
+    }
+    if (truncated.length > 3) {
+      formatted += truncated.slice(3, 6);
+    }
+    if (truncated.length >= 6) {
+      formatted += "-";
+    }
+    if (truncated.length > 6) {
+      formatted += truncated.slice(6, 10);
+    }
+    setFormPhone(formatted);
+    if (phoneTouched) {
+      validatePhone(formatted);
+    }
+  };
+
+  // Helper to validate Website
+  const validateWebsite = (val: string): boolean => {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setWebsiteError("Website is required.");
+      return false;
+    }
+    if (!trimmed.startsWith("https://")) {
+      setWebsiteError("Please enter a valid website in this format: https://www.website.com.");
+      return false;
+    }
+    const urlPattern = /^https:\/\/[A-Za-z0-9-_]+\.[A-Za-z0-9.\/?=&%#_:-]+$/;
+    if (!urlPattern.test(trimmed)) {
+      setWebsiteError("Please enter a valid website in this format: https://www.website.com.");
+      return false;
+    }
+    setWebsiteError("");
+    return true;
+  };
+
+  // Helper to validate Details
+  const validateDetails = (val: string): boolean => {
+    if (!val) {
+      setDetailsError("Details are required.");
+      return false;
+    }
+    const trimmed = val.trim();
+    if (trimmed.length > 0 && !/^[A-Z]/.test(trimmed)) {
+      setDetailsError("Please start the details with a capital letter and keep the text under 1,000 characters.");
+      return false;
+    }
+    setDetailsError("");
+    return true;
+  };
+
+  const handleDetailsChange = (val: string) => {
+    if (val.length > 1000) {
+      val = val.slice(0, 1000);
+    }
+    let formatted = val;
+    if (val.length > 0) {
+      formatted = val.charAt(0).toUpperCase() + val.slice(1);
+    }
+    setFormDetails(formatted);
+    if (detailsTouched) {
+      validateDetails(formatted);
+    }
+  };
 
   // Deep descriptions for each room simulation triggers
   const getRoomDescription = (room: string) => {
@@ -201,17 +362,68 @@ export default function DemoPage() {
     }, 1800);
   };
 
+  const checkFullNameValid = (val: string): boolean => {
+    const cleaned = val.trim().replace(/\s+/g, " ");
+    const parts = cleaned.split(" ");
+    if (parts.length < 2) return false;
+    return /^[A-Z]/.test(parts[0]) && /^[A-Z]/.test(parts[parts.length - 1]);
+  };
+
+  const checkEmailValid = (val: string): boolean => {
+    const trimmed = val.trim();
+    if (!trimmed.includes("@")) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  };
+
+  const checkPhoneValid = (val: string): boolean => {
+    return /^\(\d{3}\) \d{3}-\d{4}$/.test(val);
+  };
+
+  const checkWebsiteValid = (val: string): boolean => {
+    const trimmed = val.trim();
+    if (!trimmed.startsWith("https://")) return false;
+    return /^https:\/\/[A-Za-z0-9-_]+\.[A-Za-z0-9.\/?=&%#_:-]+$/.test(trimmed);
+  };
+
+  const checkDetailsValid = (val: string): boolean => {
+    const trimmed = val.trim();
+    if (trimmed.length === 0 || trimmed.length > 1000) return false;
+    return /^[A-Z]/.test(trimmed);
+  };
+
+  const isFormValid = 
+    checkFullNameValid(formFullName) &&
+    checkEmailValid(formEmail) &&
+    checkPhoneValid(formPhone) &&
+    checkWebsiteValid(formWebsite) &&
+    checkDetailsValid(formDetails);
+
   // Submit mock guest signin
   const handleDemoSignIn = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!guestName || !guestEmail) return;
     
-    if (!guestEmail.includes("@")) {
-      setEmailValidationError("Email address must contain the '@' symbol.");
-      return;
+    // Touch all fields to show validation on submit
+    setFullNameTouched(true);
+    setEmailTouched(true);
+    setPhoneTouched(true);
+    setWebsiteTouched(true);
+    setDetailsTouched(true);
+
+    const isNameV = validateFullName(formFullName);
+    const isEmailV = validateEmail(formEmail);
+    const isPhoneV = validatePhone(formPhone);
+    const isWebsiteV = validateWebsite(formWebsite);
+    const isDetailsV = validateDetails(formDetails);
+
+    if (isNameV && isEmailV && isPhoneV && isWebsiteV && isDetailsV) {
+      const trimmed = formFullName.trim().replace(/\s+/g, " ");
+      const formattedName = trimmed.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+      setGuestName(formattedName);
+      setIsRegistered(true);
+      toast.success(`Success! Registered visitor "${formattedName}" with pristine data validation.`);
+    } else {
+      toast.error("Form validation failed. Please make sure all required fields are correct.");
     }
-    setEmailValidationError("");
-    setIsRegistered(true);
   };
 
   return (
@@ -233,7 +445,7 @@ export default function DemoPage() {
             </h1>
             
             <p className="text-base md:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto font-normal">
-              Toggle between the Hands-Free AI tour narrator, custom tablet entryway sign-in kiosk, and pre-formatted flyers below to experience VertexAgent immediately first-hand!
+              Toggle between the Hands-Free AI tour narrator, custom tablet entryway sign-in kiosk, and pre-formatted flyers below to experience AI Open House Connect immediately first-hand!
             </p>
           </div>
         </section>
@@ -292,10 +504,10 @@ export default function DemoPage() {
                   <div className="space-y-4">
                     <h3 className="text-2xl font-extrabold text-slate-950 tracking-tight">Digital Sign-In Stand</h3>
                     <p className="text-slate-500 text-sm leading-relaxed">
-                      No more trying to read messy pencil clipboard details. Let buyers sign-in cleanly. If they select disclosures requests, VertexAgent delivers the PDF immediately.
+                      No more trying to read messy pencil clipboard details. Let buyers sign-in cleanly. If they select disclosures requests, AI Open House Connect delivers the PDF immediately.
                     </p>
                     <blockquote className="p-4 bg-slate-50 border-l-4 border-emerald-500 rounded-r-2xl italic text-xs text-slate-600">
-                      "Since launching Vertex Kiosks, our captured open house lead rate improved by 45% because visitor details are verified."
+                      "Since launching AI Open House Kiosks, our captured open house lead rate improved by 45% because visitor details are verified."
                     </blockquote>
                   </div>
                 )}
@@ -304,7 +516,7 @@ export default function DemoPage() {
                   <div className="space-y-4">
                     <h3 className="text-2xl font-extrabold text-slate-950 tracking-tight">Responsive Brand Flyers</h3>
                     <p className="text-slate-500 text-sm leading-relaxed">
-                      VertexAgent outputs dynamic PDF and image flyers complete with custom QR tags. Place these on yard signs or entry stands so guests scan, register, and talk to Sora hands-free on their own device.
+                      AI Open House Connect outputs dynamic PDF and image flyers complete with custom QR tags. Place these on yard signs or entry stands so guests scan, register, and talk to Sora hands-free on their own device.
                     </p>
                   </div>
                 )}
@@ -328,7 +540,7 @@ export default function DemoPage() {
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                   </div>
-                  <span>VertexAgent Platform Playback Sandbox</span>
+                  <span>AI Open House Connect Platform Playback Sandbox</span>
                   <span className="text-emerald-400">ACTIVE PLAY</span>
                 </div>
 
@@ -367,7 +579,7 @@ export default function DemoPage() {
                     <div className="p-5 bg-slate-950/80 border border-slate-850 rounded-2xl space-y-3 min-h-[160px] flex flex-col justify-center">
                       <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
                         <span>AUDIO SYNTHESIS SYSTEM</span>
-                        <span>{micActive ? "● AI IS PROCESSING..." : isPlaying ? "🔊 SORA IS SPEAKING..." : "NARRATOR IDLE"}</span>
+                        <span>{micActive ? "● AI IS PROCESSING..." : isPlaying ? "🔊 KORE VOICE SPEAKING..." : "NARRATOR IDLE"}</span>
                       </div>
 
                       {isAiResponding ? (
@@ -445,54 +657,274 @@ export default function DemoPage() {
                         <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
                           Our pipeline simulator successfully triggered! Disclosures and brochures have been dispatched. We've scored this lead and synced the cards to your CRM panel.
                         </p>
-                        <Button onClick={() => { setIsRegistered(false); setGuestName(""); setGuestEmail(""); }} className="text-xs bg-slate-800 text-white border border-slate-750 hover:bg-slate-700 rounded-xl">
+                        <Button 
+                          onClick={() => { 
+                            setIsRegistered(false); 
+                            setGuestName(""); 
+                            setFormFullName(""); 
+                            setFormEmail(""); 
+                            setFormPhone(""); 
+                            setFormWebsite(""); 
+                            setFormDetails(""); 
+                            setFullNameTouched(false); 
+                            setEmailTouched(false); 
+                            setPhoneTouched(false); 
+                            setWebsiteTouched(false); 
+                            setDetailsTouched(false); 
+                            setFullNameError(""); 
+                            setEmailError(""); 
+                            setPhoneError(""); 
+                            setWebsiteError(""); 
+                            setDetailsError(""); 
+                          }} 
+                          className="text-xs bg-slate-800 text-white border border-slate-750 hover:bg-slate-700 rounded-xl"
+                        >
                           Simulate another Guest registration
                         </Button>
                       </div>
                     ) : (
-                      <form onSubmit={handleDemoSignIn} className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 space-y-4">
-                        <div className="grid sm:grid-cols-2 gap-4 text-left">
+                      <form onSubmit={handleDemoSignIn} className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 space-y-4 text-left">
+                        
+                        {/* 1. Full Name */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <Label htmlFor="fullName" className="text-[10px] font-bold text-slate-400 uppercase">Full Name</Label>
+                            {fullNameTouched ? (
+                              fullNameError ? (
+                                <span className="text-rose-400 text-[9px] font-semibold">⚠️ Needs capitalization</span>
+                              ) : formFullName ? (
+                                <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                              ) : null
+                            ) : null}
+                          </div>
+                          <Input 
+                            id="fullName"
+                            value={formFullName}
+                            onChange={(e) => handleFullNameChange(e.target.value)}
+                            onBlur={() => {
+                              setFullNameTouched(true);
+                              validateFullName(formFullName);
+                            }}
+                            className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                              fullNameTouched 
+                                ? fullNameError 
+                                  ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
+                                  : formFullName 
+                                    ? "border-emerald-500 focus:ring-emerald-500 bg-emerald-950/10" 
+                                    : "border-slate-800"
+                                : "border-slate-800"
+                            }`}
+                            placeholder="John Smith"
+                            aria-invalid={fullNameTouched && !!fullNameError}
+                            aria-describedby={fullNameError ? "fullName-err" : undefined}
+                            required
+                          />
+                          {fullNameTouched && fullNameError && (
+                            <p id="fullName-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                              ⚠️ {fullNameError}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* 2. Email Address */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <Label htmlFor="emailAddress" className="text-[10px] font-bold text-slate-400 uppercase">Email Address</Label>
+                            {emailTouched ? (
+                              emailError ? (
+                                <span className="text-rose-400 text-[9px] font-semibold">⚠️ Invalid structure</span>
+                              ) : formEmail ? (
+                                <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                              ) : null
+                            ) : null}
+                          </div>
+                          <Input 
+                            id="emailAddress"
+                            type="email"
+                            value={formEmail}
+                            onChange={(e) => {
+                              setFormEmail(e.target.value);
+                              if (emailTouched) {
+                                validateEmail(e.target.value);
+                              }
+                            }}
+                            onBlur={() => {
+                              setEmailTouched(true);
+                              validateEmail(formEmail);
+                            }}
+                            className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                              emailTouched 
+                                ? emailError 
+                                  ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
+                                  : formEmail 
+                                    ? "border-emerald-500 focus:ring-emerald-500 bg-emerald-950/10" 
+                                    : "border-slate-800"
+                                : "border-slate-800"
+                            }`}
+                            placeholder="name@example.com"
+                            aria-invalid={emailTouched && !!emailError}
+                            aria-describedby={emailError ? "email-err" : undefined}
+                            required
+                          />
+                          {emailTouched && emailError && (
+                            <p id="email-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                              ⚠️ {emailError}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* 3 & 4. Phone and Website in responsive grid */}
+                        <div className="grid sm:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase">First & Last Name</Label>
+                            <div className="flex justify-between items-center">
+                              <Label htmlFor="phoneNumber" className="text-[10px] font-bold text-slate-400 uppercase">Phone Number</Label>
+                              {phoneTouched ? (
+                                phoneError ? (
+                                  <span className="text-rose-400 text-[9px] font-semibold">⚠️ Format error</span>
+                                ) : formPhone ? (
+                                  <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                                ) : null
+                              ) : null}
+                            </div>
                             <Input 
-                              value={guestName}
-                              onChange={(e) => setGuestName(e.target.value)}
-                              className="bg-slate-900 border-slate-800 h-10 text-xs rounded-xl text-white"
-                              placeholder="Sarah Connor"
+                              id="phoneNumber"
+                              type="tel"
+                              value={formPhone}
+                              onChange={(e) => handlePhoneChange(e.target.value)}
+                              onBlur={() => {
+                                setPhoneTouched(true);
+                                validatePhone(formPhone);
+                              }}
+                              className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                                phoneTouched 
+                                  ? phoneError 
+                                    ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
+                                    : formPhone 
+                                      ? "border-emerald-500 focus:ring-emerald-500 bg-emerald-950/10" 
+                                      : "border-slate-800"
+                                  : "border-slate-800"
+                              }`}
+                              placeholder="(289) 659-2541"
+                              aria-invalid={phoneTouched && !!phoneError}
+                              aria-describedby={phoneError ? "phone-err" : undefined}
                               required
                             />
+                            {phoneTouched && phoneError && (
+                              <p id="phone-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                                ⚠️ {phoneError}
+                              </p>
+                            )}
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold text-slate-400 uppercase">Email Address</Label>
+                            <div className="flex justify-between items-center">
+                              <Label htmlFor="websiteUrl" className="text-[10px] font-bold text-slate-400 uppercase">Website</Label>
+                              {websiteTouched ? (
+                                websiteError ? (
+                                  <span className="text-rose-400 text-[9px] font-semibold">⚠️ Full HTTPS url needed</span>
+                                ) : formWebsite ? (
+                                  <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                                ) : null
+                              ) : null}
+                            </div>
                             <Input 
-                              value={guestEmail}
+                              id="websiteUrl"
+                              type="url"
+                              value={formWebsite}
                               onChange={(e) => {
-                                setGuestEmail(e.target.value);
-                                if (e.target.value.includes("@")) {
-                                  setEmailValidationError("");
+                                setFormWebsite(e.target.value);
+                                if (websiteTouched) {
+                                  validateWebsite(e.target.value);
                                 }
                               }}
-                              className={`bg-slate-900 h-10 text-xs rounded-xl text-white ${
-                                emailValidationError ? "border-red-500 focus:ring-red-500 bg-red-950/20" : "border-slate-800"
+                              onBlur={() => {
+                                setWebsiteTouched(true);
+                                validateWebsite(formWebsite);
+                              }}
+                              className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                                websiteTouched 
+                                  ? websiteError 
+                                    ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
+                                    : formWebsite 
+                                      ? "border-emerald-500 focus:ring-emerald-500 bg-emerald-950/10" 
+                                      : "border-slate-800"
+                                  : "border-slate-800"
                               }`}
-                              placeholder="sarah@example.com"
-                              type="email"
+                              placeholder="https://www.website.com"
+                              aria-invalid={websiteTouched && !!websiteError}
+                              aria-describedby={websiteError ? "website-err" : undefined}
                               required
                             />
-                            {emailValidationError && (
-                              <p className="text-red-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
-                                ⚠️ {emailValidationError}
+                            {websiteTouched && websiteError && (
+                              <p id="website-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                                ⚠️ {websiteError}
                               </p>
                             )}
                           </div>
                         </div>
 
-                        <div className="p-3 bg-slate-900/80 rounded-xl text-[10px] text-slate-500 leading-normal text-left">
-                          <strong>Simulated compliance agreement:</strong> Placing a signature consent triggers immediate SMS brochure delivery matching MLS laws.
+                        {/* 5. Details Textarea */}
+                        <div className="space-y-1.5 relative">
+                          <div className="flex justify-between items-center">
+                            <Label htmlFor="detailsText" className="text-[10px] font-bold text-slate-400 uppercase">Details</Label>
+                            {detailsTouched ? (
+                              detailsError ? (
+                                <span className="text-rose-400 text-[9px] font-semibold">⚠️ Must capitalize start</span>
+                              ) : formDetails ? (
+                                <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                              ) : null
+                            ) : null}
+                          </div>
+                          <div className="relative">
+                            <textarea 
+                              id="detailsText"
+                              value={formDetails}
+                              onChange={(e) => handleDetailsChange(e.target.value)}
+                              onBlur={() => {
+                                setDetailsTouched(true);
+                                validateDetails(formDetails);
+                              }}
+                              placeholder="Enter up to 1000 characters"
+                              rows={4}
+                              aria-invalid={detailsTouched && !!detailsError}
+                              aria-describedby={detailsError ? "details-err" : undefined}
+                              className={`bg-slate-900 border text-xs rounded-xl text-white p-3 w-full outline-none focus:ring-1 focus:ring-blue-500 transition-all duration-200 resize-none ${
+                                detailsTouched 
+                                  ? detailsError 
+                                    ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
+                                    : formDetails 
+                                      ? "border-emerald-500 focus:ring-emerald-500 bg-emerald-950/10" 
+                                      : "border-slate-800"
+                                  : "border-slate-800"
+                              }`}
+                              maxLength={1000}
+                              required
+                            />
+                            {/* Live counter aligned bottom right within or below textarea */}
+                            <div className={`absolute bottom-2 right-3 text-[9px] font-mono select-none ${formDetails.length >= 750 ? 'text-amber-500 font-bold' : 'text-slate-500'}`}>
+                              {formDetails.length} / 1000 {formDetails.length >= 750 && <span className="animate-pulse font-normal">(75% Reached)</span>}
+                            </div>
+                          </div>
+                          {detailsTouched && detailsError && (
+                            <p id="details-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                              ⚠️ {detailsError}
+                            </p>
+                          )}
                         </div>
 
-                        <Button type="submit" className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded-xl flex gap-1.5">
+                        <div className="p-3 bg-slate-900/80 rounded-xl text-[10px] text-slate-400 leading-normal text-left">
+                          <strong>Live Validation Active:</strong> Submitting is disabled until the criteria for all five fields are completed.
+                        </div>
+
+                        <Button 
+                          type="submit" 
+                          disabled={!isFormValid}
+                          className={`w-full h-11 text-xs font-bold rounded-xl flex gap-1.5 transition-all duration-200 ${
+                            isFormValid 
+                              ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer" 
+                              : "bg-slate-800 text-slate-500 cursor-not-allowed opacity-50"
+                          }`}
+                        >
                           <Send className="h-4 w-4" /> Sign In (Simulate trigger)
                         </Button>
                       </form>

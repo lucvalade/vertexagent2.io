@@ -41,7 +41,7 @@ export default function HowItWorksPage() {
             className="space-y-6 text-left bg-white/70 backdrop-blur-md p-8 md:p-12 rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-100/50"
           >
             <p className="text-slate-700 text-lg md:text-xl leading-relaxed font-normal">
-              VertexAgent.io is an all-in-one AI-powered real estate, digital sign-in, and spatial voice narration platform tailored for property showcases, open houses, and automated lead capture. It lets real estate professionals and brokerages deploy smart tablet kiosk modes at properties to record digital visitor registrations with bulletproof compliance, while instantly generating immersive voice-guided tours led by Sora that guide visitors fluidly through each room environment.
+              AI Open House Connect is an all-in-one AI-powered real estate, digital sign-in, and spatial voice narration platform tailored for property showcases, open houses, and automated lead capture. It lets real estate professionals and brokerages deploy smart tablet kiosk modes at properties to record digital visitor registrations with bulletproof compliance, while instantly generating immersive voice-guided tours led by Sora that guide visitors fluidly through each room environment.
             </p>
 
             <p className="text-slate-700 text-lg md:text-xl leading-relaxed font-normal">

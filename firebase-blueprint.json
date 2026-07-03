@@ -10,8 +10,15 @@
         "brokerage": { "type": "string" },
         "role": { "type": "string", "enum": ["AGENT", "ADMIN"] },
         "defaultVoiceId": { "type": "string" },
+        "selectedCRM": { "type": "string" },
+        "selectedCRMUrl": { "type": "string" },
         "createdAt": { "type": "number" },
-        "updatedAt": { "type": "number" }
+        "updatedAt": { "type": "number" },
+        "createdAtDate": { "type": "string" },
+        "hasReadOnboarding": { "type": "boolean" },
+        "onboardingReadAt": { "type": "number" },
+        "hasDownloadedOnboardingPdf": { "type": "boolean" },
+        "onboardingDownloadedAt": { "type": "number" }
       },
       "required": ["email", "name", "role", "createdAt", "updatedAt"]
     },
@@ -97,7 +104,17 @@
         "phone": { "type": "string" },
         "email": { "type": "string" },
         "message": { "type": "string" },
-        "createdAt": { "type": "number" }
+        "createdAt": { "type": "number" },
+        "conversationSummary": {
+          "type": "object",
+          "properties": {
+            "expressedInterests": { "type": "array", "items": { "type": "string" } },
+            "questionsAsked": { "type": "array", "items": { "type": "string" } },
+            "highIntentIndicators": { "type": "array", "items": { "type": "string" } },
+            "formattedSummary": { "type": "string" },
+            "generatedAt": { "type": "number" }
+          }
+        }
       },
       "required": ["name", "createdAt"]
     },
@@ -183,9 +200,67 @@
         "source": { "type": "string" }
       },
       "required": ["fullName", "email", "createdAt"]
+    },
+    "DemoRequest": {
+      "title": "Demo Request",
+      "description": "Public demo request submission",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "brokerage": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["email", "name", "createdAt"]
+    },
+    "AnalyticsEvent": {
+      "title": "Analytics Event",
+      "description": "Tracking metrics for page events",
+      "type": "object",
+      "properties": {
+        "event": { "type": "string" },
+        "path": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["event", "timestamp"]
+    },
+    "SystemLog": {
+      "title": "System Log",
+      "description": "Event log for actions in the application",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "details": { "type": "string" }
+      },
+      "required": ["action", "timestamp"]
+    },
+    "OpenHouseSession": {
+      "title": "Open House Session",
+      "description": "A single scheduled or completed open house session",
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string" },
+        "listing_id": { "type": "string" },
+        "start_datetime": { "type": "string" },
+        "end_datetime": { "type": "string" },
+        "status": { "type": "string", "enum": ["scheduled", "completed"] },
+        "created_by": { "type": "string" },
+        "created_at": { "type": "number" },
+        "updated_at": { "type": "number" }
+      },
+      "required": ["session_id", "listing_id", "start_datetime", "end_datetime", "status", "created_by", "created_at", "updated_at"]
     }
   },
   "firestore": {
+    "open_house_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/OpenHouseSession" },
+      "description": "Scheduled and completed open house sessions for listings"
+    },
     "settings/{settingId}": {
       "schema": { "$ref": "#/entities/Settings" },
       "description": "Global application configuration"
@@ -217,6 +292,24 @@
     "conversations/{convoId}": {
       "schema": { "$ref": "#/entities/Conversation" },
       "description": "Conversation transcripts and call analytics"
+    },
+    "demo_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/DemoRequest" },
+      "description": "Public demo requests"
+    },
+    "analytics/{analyticsId}": {
+      "schema": { "$ref": "#/entities/AnalyticsEvent" },
+      "description": "Click event and performance metric tracking"
+    },
+    "system_logs/{logId}": {
+      "schema": { "$ref": "#/entities/SystemLog" },
+      "description": "Ad-hoc operational and validation audit trail"
+    },
+    "appConfig/{configId}": {
+      "description": "Global application configuration documents"
+    },
+    "platform_content_defaults/{localeId}": {
+      "description": "Translated welcome message standards and settings"
     }
   }
 }

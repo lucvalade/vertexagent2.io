@@ -30,12 +30,13 @@ export interface Listing {
   sqft?: number;
   propertyType?: string;
   mlsNumber?: string;
+  mlsCountry?: string;
   originatingSystemName?: string;
   country?: string;
   brokerageName?: string;
   brokerageLogo?: string;
   brandingTemplate?: "luxury" | "tech" | "standard";
-  qrDestination?: "sign-in" | "microsite" | "tour";
+  qrDestination?: "sign-in" | "microsite" | "tour" | "presentation";
   agentName?: string;
   agentPhone?: string;
   description?: string;
@@ -47,6 +48,7 @@ export interface Listing {
   voiceName?: string;
   tourDescriptors?: string[];
   openHouseDate?: string;
+  openHouseDateFormat?: string;
   openHouseTime?: string;
   welcome_en?: string;
   welcome_fr?: string;
@@ -58,9 +60,60 @@ export interface Listing {
   multilingualEnabled?: boolean;
   lenderHandoff?: boolean;
   selectedLenderName?: string;
+  enforcePhoneGate?: boolean;
+  enforceOptInConsent?: boolean;
+  status?: "Active" | "Inactive" | "Processing";
+  qrBrandingOption?: "logo" | "photo" | "none";
   ctas?: { label: string; action: string }[];
+  publishedAt?: string;
   createdAt: number;
   updatedAt: number;
+  isShared?: boolean;
+  assignmentContext?: any;
+  room_walkthrough_lang?: string;
+  qa_knowledge_lang?: string;
+  flyerHeroImage?: string;
+  excludedPhotos?: string[];
+  flyerHeadline?: string;
+  flyerSubHeadline?: string;
+  flyerDescription?: string;
+  flyerCta?: string;
+  flyerTemplate?: string;
+  flyerAccentColor?: string;
+  flyerOrientation?: string;
+  flyerTitleFont?: string;
+  flyerTitleSize?: string;
+  flyerTitleBold?: boolean;
+  flyerSubtitleFont?: string;
+  flyerSubtitleSize?: string;
+  flyerSubtitleBold?: boolean;
+  flyerDescriptionFont?: string;
+  flyerDescriptionSize?: string;
+  flyerDescriptionBold?: boolean;
+  flyerCtaFont?: string;
+  flyerCtaSize?: string;
+  flyerCtaBold?: boolean;
+  flyerStatusBadgeText?: string;
+  flyerOpenHouseTime?: string;
+  flyerIncludeLenderBlock?: boolean;
+  flyerLenderName?: string;
+  flyerLenderCta?: string;
+  flyerShowSecondaryPhotos?: boolean;
+  flyerQrBrandingOption?: string;
+  flyerQrDest?: string;
+  flyerCustomQrUrl?: string;
+  flyerAgentNameOverride?: string;
+  flyerAgentPhoneOverride?: string;
+  flyerBrokerageNameOverride?: string;
+  socialShareEnabled?: boolean;
+  socialShareOptions?: {
+    facebook?: boolean;
+    instagram?: boolean;
+    whatsapp?: boolean;
+    textMessage?: boolean;
+    email?: boolean;
+    copyLink?: boolean;
+  };
 }
 
 export interface Lead {
@@ -77,6 +130,81 @@ export interface Lead {
   isLaunchSignup?: boolean;
   notes?: string;
   verified?: boolean;
+  mortgageInterest?: boolean;
+  customAnswers?: any;
+  requestedDocs?: string[];
+  conversationSummary?: {
+    expressedInterests: string[];
+    questionsAsked: string[];
+    highIntentIndicators: string[];
+    formattedSummary: string;
+    generatedAt: number;
+  };
+  // Data Enrichment & Compliance fields
+  isVerified?: boolean;
+  confidenceScore?: "high" | "medium" | "low" | string;
+  occupation?: string;
+  employer?: string;
+  education?: string;
+  socialProfiles?: {
+    linkedin?: string;
+    facebook?: string;
+  };
+  waiverAccepted?: boolean;
+  waiverVersion?: string;
+  isShared?: boolean;
+  sharedListingAssignmentId?: string;
+  listingOwnerAgentId?: string;
+  hostingAgentId?: string;
+  capturedByAgentId?: string;
+  leadVisibility?: string;
+  mortgageConsent?: boolean;
+  ipAddress?: string;
+  detectedCountry?: string;
+  detectedRegion?: string;
+  detectedCity?: string;
+  geoProvider?: string;
+  jurisdictionRulesApplied?: string;
+}
+
+export async function generateLeadSummary(params: {
+  leadName: string;
+  leadMessage?: string;
+  listingAddress?: string;
+  listingDescription?: string;
+  talkingPoints?: string[];
+}) {
+  const response = await fetch("/api/leads/generate-summary", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params)
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "Failed to generate AI summary");
+  }
+  const data = await response.json();
+  return data.summary;
+}
+
+export async function enrichLeadData(params: {
+  name: string;
+  email?: string;
+  phone?: string;
+  waiverAccepted?: boolean;
+  waiverVersion?: string;
+}) {
+  const response = await fetch("/api/leads/enrich", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params)
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "Failed to enrich lead data");
+  }
+  const data = await response.json();
+  return data.data;
 }
 
 export async function updateLead(leadId: string, updates: Partial<Lead>) {
@@ -115,6 +243,36 @@ export async function deleteListingOp(listingId: string) {
   }
 }
 
+export async function getListingBasic(listingId: string): Promise<Pick<Listing, "id" | "address" | "ownerId" | "city" | "province" | "price" | "beds" | "baths" | "images" | "openHouseDate" | "openHouseTime" | "qrDestination" | "country" | "welcome_en" | "welcome_fr"> | null> {
+  const path = `listings/${listingId}`;
+  try {
+    const d = await getDoc(doc(db, "listings", listingId));
+    if (d.exists()) {
+      const data = d.data() as Listing;
+      return {
+        id: data.id,
+        address: data.address,
+        ownerId: data.ownerId,
+        city: data.city,
+        province: data.province,
+        price: data.price,
+        beds: data.beds,
+        baths: data.baths,
+        images: data.images,
+        openHouseDate: data.openHouseDate,
+        openHouseTime: data.openHouseTime,
+        qrDestination: data.qrDestination,
+        country: data.country,
+        welcome_en: data.welcome_en,
+        welcome_fr: data.welcome_fr
+      };
+    }
+    return null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+  }
+}
+
 export async function getListing(listingId: string): Promise<Listing | null> {
   const path = `listings/${listingId}`;
   try {
@@ -138,6 +296,19 @@ export async function getAgent(userId: string) {
     return null;
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, path);
+  }
+}
+
+export async function getTeamMembers(brokerageName: string) {
+  const path = "users";
+  try {
+    const q = brokerageName
+      ? query(collection(db, path), where("brokerage", "==", brokerageName))
+      : query(collection(db, path));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as any);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, path);
   }
 }
 
@@ -172,6 +343,150 @@ export async function getAllListings(): Promise<Listing[]> {
   }
 }
 
+export interface OpenHouseSession {
+  session_id: string;
+  listing_id: string;
+  start_datetime: string; // ISO String in UTC
+  end_datetime: string; // ISO String in UTC
+  status: "scheduled" | "completed";
+  created_by: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export function parseDateTimeToUTC(dateStr: string, timeRangeStr: string): { start: string; end: string } {
+  if (!dateStr) {
+    const defaultStart = new Date().toISOString();
+    const defaultEnd = new Date(Date.now() + 3 * 3600 * 1000).toISOString();
+    return { start: defaultStart, end: defaultEnd };
+  }
+  
+  let startTime = "09:00";
+  let endTime = "12:00";
+  if (timeRangeStr) {
+    const parts = timeRangeStr.split("-");
+    if (parts[0]) {
+      const parsedStart = parseTimeString(parts[0].trim());
+      if (parsedStart) startTime = parsedStart;
+    }
+    if (parts[1]) {
+      const parsedEnd = parseTimeString(parts[1].trim());
+      if (parsedEnd) endTime = parsedEnd;
+    }
+  }
+  
+  const startObj = new Date(`${dateStr}T${startTime}:00`);
+  const endObj = new Date(`${dateStr}T${endTime}:00`);
+  
+  return {
+    start: isNaN(startObj.getTime()) ? new Date().toISOString() : startObj.toISOString(),
+    end: isNaN(endObj.getTime()) ? new Date(Date.now() + 3 * 3600 * 1000).toISOString() : endObj.toISOString()
+  };
+}
+
+function parseTimeString(timeStr: string): string | null {
+  // First match H:MM AM/PM or H:MM
+  let match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = match[2];
+    const ampm = match[3];
+    
+    if (ampm) {
+      if (ampm.toUpperCase() === "PM" && hours < 12) {
+        hours += 12;
+      } else if (ampm.toUpperCase() === "AM" && hours === 12) {
+        hours = 0;
+      }
+    }
+    return `${hours.toString().padStart(2, "0")}:${minutes}`;
+  }
+  
+  // Otherwise match H AM/PM or H
+  match = timeStr.match(/(\d+)\s*(AM|PM)?/i);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = "00";
+    const ampm = match[2];
+    
+    if (ampm) {
+      if (ampm.toUpperCase() === "PM" && hours < 12) {
+        hours += 12;
+      } else if (ampm.toUpperCase() === "AM" && hours === 12) {
+        hours = 0;
+      }
+    }
+    return `${hours.toString().padStart(2, "0")}:${minutes}`;
+  }
+  
+  return null;
+}
+
+export async function createOpenHouseSession(session: Omit<OpenHouseSession, "status">): Promise<OpenHouseSession> {
+  const path = "open_house_sessions";
+  try {
+    const now = new Date().toISOString();
+    const status = now < session.end_datetime ? "scheduled" : "completed";
+    const fullSession: OpenHouseSession = {
+      ...session,
+      status,
+      updated_at: Date.now()
+    };
+    await setDoc(doc(db, path, session.session_id), fullSession);
+    return fullSession;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, path);
+    throw err;
+  }
+}
+
+export async function getOpenHouseSessions(listingId?: string): Promise<OpenHouseSession[]> {
+  const path = "open_house_sessions";
+  try {
+    let q;
+    if (listingId) {
+      q = query(collection(db, path), where("listing_id", "==", listingId));
+    } else {
+      q = query(collection(db, path));
+    }
+    const snapshot = await getDocs(q);
+    const now = new Date().toISOString();
+    return snapshot.docs.map(doc => {
+      const data = doc.data() as OpenHouseSession;
+      const computedStatus = now < data.end_datetime ? "scheduled" : "completed";
+      return {
+        ...data,
+        status: computedStatus
+      };
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, path);
+    return [];
+  }
+}
+
+export async function updateOpenHouseSession(sessionId: string, updates: Partial<OpenHouseSession>) {
+  const path = "open_house_sessions";
+  try {
+    const docRef = doc(db, path, sessionId);
+    await updateDoc(docRef, {
+      ...updates,
+      updated_at: Date.now()
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteOpenHouseSession(sessionId: string) {
+  const path = "open_house_sessions";
+  try {
+    await deleteDoc(doc(db, path, sessionId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
 export async function routeLeadToCRM(listing: Listing, lead: Lead) {
   if (!listing.webhookUrl) return;
   try {
@@ -200,6 +515,23 @@ export async function createLead(listingId: string, lead: Lead) {
         listingData = listingDoc.data() as Listing;
         lead.agentId = listingData.ownerId;
         lead.listingAddress = listingData.address;
+        
+        // Auto-generate AI lead summary on creation
+        try {
+          const summary = await generateLeadSummary({
+            leadName: lead.name,
+            leadMessage: lead.message,
+            listingAddress: listingData.address,
+            listingDescription: listingData.description,
+            talkingPoints: listingData.talkingPoints
+          });
+          lead.conversationSummary = {
+            ...summary,
+            generatedAt: Date.now()
+          };
+        } catch (summaryErr) {
+          console.error("Auto-generating lead summary failed on creation:", summaryErr);
+        }
         
         // Save to listing subcollection
         await setDoc(doc(db, "listings", listingId, "leads", lead.id), lead);
@@ -310,4 +642,78 @@ export async function saveGlobalPromptSettings(settings: { prompt?: string; pass
     console.error("Error saving global prompt settings:", err);
   }
 }
+
+export interface VoiceNote {
+  id: string;
+  propertyId: string;
+  userId: string;
+  userName: string;
+  roleType: 'buyer' | 'agent';
+  voiceNoteType: 'private' | 'team' | 'user-to-agent';
+  durationSeconds: number;
+  transcript: string;
+  audioUrl: string;
+  createdAt: number;
+  visibility: 'private' | 'team' | 'lead';
+  abuseFlagged?: boolean;
+  moderationStatus?: 'approved' | 'pending_review' | 'flagged';
+  room?: string;
+}
+
+export async function getVoiceNotes(propertyId: string): Promise<VoiceNote[]> {
+  try {
+    const q = query(collection(db, "voice_notes"), where("propertyId", "==", propertyId));
+    const snap = await getDocs(q);
+    const notes: VoiceNote[] = [];
+    snap.forEach((docSnap) => {
+      notes.push({ id: docSnap.id, ...docSnap.data() } as VoiceNote);
+    });
+    return notes.sort((a,b) => b.createdAt - a.createdAt);
+  } catch (err) {
+    console.error("Error fetching voice notes: ", err);
+    // Return empty array instead of letting the app fail
+    return [];
+  }
+}
+
+export async function createVoiceNote(note: Omit<VoiceNote, "id">): Promise<VoiceNote> {
+  const id = crypto.randomUUID();
+  const path = `voice_notes/${id}`;
+  try {
+    const docRef = doc(db, "voice_notes", id);
+    await setDoc(docRef, { ...note, id });
+    return { ...note, id };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, path);
+  }
+}
+
+export async function deleteVoiceNote(noteId: string, propertyId: string): Promise<void> {
+  const path = `voice_notes/${noteId}`;
+  try {
+    const docRef = doc(db, "voice_notes", noteId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, path);
+  }
+}
+
+export async function finishTourAndGetNotes(params: {
+  propertyId: string;
+  visitorEmail: string;
+  visitorName: string;
+  chatLogs?: any[];
+}) {
+  const response = await fetch("/api/tour/finish", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params)
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "Failed to finish tour & compile notes");
+  }
+  return await response.json();
+}
+
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, MoreVertical, Eye, Trash2, Edit, X, Calendar, Loader2 } from 'lucide-react';
+import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, MoreVertical, Eye, Trash2, Edit, X, Calendar, Loader2, Volume2, Upload } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
@@ -34,6 +34,8 @@ export default function AdminListings() {
   const [selectedListing, setSelectedListing] = useState<any>(null);
   const [editPrice, setEditPrice] = useState("");
   const [editStatus, setEditStatus] = useState("Active");
+  const [welcomeEn, setWelcomeEn] = useState("");
+  const [welcomeFr, setWelcomeFr] = useState("");
   const [showComplianceOnly, setShowComplianceOnly] = useState(false);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function AdminListings() {
           try {
             await updateDoc(doc(db, "listings", l.id), {
               voiceId: "2",
-              voiceName: "Professional Female",
+              voiceName: "Professional Female Synthetic",
               updatedAt: Date.now()
             });
           } catch (err) {
@@ -150,7 +152,37 @@ export default function AdminListings() {
     setSelectedListing(listing);
     setEditPrice(listing.price?.toString() || "");
     setEditStatus(listing.status || "Active");
+    setWelcomeEn(listing.welcome_en || "");
+    setWelcomeFr(listing.welcome_fr || "");
     setIsQuickEditOpen(true);
+  };
+
+  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>, lang: "en" | "fr") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("audio/") && !file.name.endsWith(".mp3")) {
+      toast.error("Please upload a valid .mp3 audio file.");
+      return;
+    }
+
+    if (file.size > 800 * 1024) {
+      toast.error("File exceeds limit. Keep welcome audio files under 800KB (approx. 1 minute) to optimize loading speed.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64String = reader.result as string;
+      if (lang === "en") {
+        setWelcomeEn(base64String);
+        toast.success("English Welcome Audio uploaded. Click Save Changes to persist!");
+      } else {
+        setWelcomeFr(base64String);
+        toast.success("French Welcome Audio uploaded. Click Save Changes to persist!");
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const trackShareActivity = async (listingId: string, type: 'QR' | 'SOCIAL') => {
@@ -177,6 +209,8 @@ export default function AdminListings() {
       await updateDoc(doc(db, "listings", selectedListing.id), {
         price: parseFloat(editPrice) || editPrice,
         status: editStatus,
+        welcome_en: welcomeEn || "",
+        welcome_fr: welcomeFr || "",
         updatedAt: Date.now()
       });
       toast.success("Listing updated successfully");
@@ -291,7 +325,7 @@ export default function AdminListings() {
           </div>
         )}
 
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-100">
               <tr>
@@ -417,7 +451,7 @@ export default function AdminListings() {
         </div>
 
         {/* Mobile View */}
-        <div className="md:hidden divide-y divide-slate-100">
+        <div className="lg:hidden divide-y divide-slate-100">
           {filteredAndSortedListings.map((listing) => (
             <div key={listing.id} className="p-4 space-y-4">
               <div className="flex items-center justify-between">
@@ -514,6 +548,98 @@ export default function AdminListings() {
                 <option value="Sold">Sold</option>
                 <option value="Off-Market">Off-Market</option>
               </select>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Volume2 className="h-4 w-4 text-blue-600" />
+                <span className="text-xs font-black uppercase tracking-wider text-slate-700">Sora Welcome Audio (.MP3 Upload)</span>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Upload pre-recorded welcome messages (.mp3) for English and French. These will play when visitors tap "Start Welcome Tour" in the virtual listing page, bypassing any auto-play blockages.
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* English Welcome */}
+                <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-600">English MP3</span>
+                    {welcomeEn ? (
+                      <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">Uploaded</span>
+                    ) : (
+                      <span className="text-[8px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded-full">Default</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center justify-center border border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 rounded-lg p-2 cursor-pointer text-center text-slate-500 hover:text-blue-600 transition-all">
+                      <Upload className="h-3 w-3 mr-1" />
+                      <span className="text-[9px] font-semibold">Choose English</span>
+                      <input 
+                        type="file" 
+                        accept="audio/mp3, audio/*" 
+                        className="hidden" 
+                        onChange={(e) => handleAudioUpload(e, "en")} 
+                      />
+                    </label>
+                    
+                    {welcomeEn && (
+                      <div className="flex items-center justify-between bg-white p-1 rounded border border-slate-150 text-[10px] gap-1">
+                        <audio src={welcomeEn} controls className="h-5 max-w-[90px]" />
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-red-500 hover:text-red-700 shrink-0"
+                          onClick={() => { setWelcomeEn(""); toast.success("Removed English welcome audio."); }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* French Welcome */}
+                <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-600">French MP3</span>
+                    {welcomeFr ? (
+                      <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">Uploaded</span>
+                    ) : (
+                      <span className="text-[8px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded-full">Default</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="flex items-center justify-center border border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 rounded-lg p-2 cursor-pointer text-center text-slate-500 hover:text-blue-600 transition-all">
+                      <Upload className="h-3 w-3 mr-1" />
+                      <span className="text-[9px] font-semibold">Choose French</span>
+                      <input 
+                        type="file" 
+                        accept="audio/mp3, audio/*" 
+                        className="hidden" 
+                        onChange={(e) => handleAudioUpload(e, "fr")} 
+                      />
+                    </label>
+                    
+                    {welcomeFr && (
+                      <div className="flex items-center justify-between bg-white p-1 rounded border border-slate-150 text-[10px] gap-1">
+                        <audio src={welcomeFr} controls className="h-5 max-w-[90px]" />
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-red-500 hover:text-red-700 shrink-0"
+                          onClick={() => { setWelcomeFr(""); toast.success("Removed French welcome audio."); }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-3">

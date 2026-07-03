@@ -1,0 +1,47 @@
+[
+  {
+    "listing_id": "3a801a86-316c-46c0-aa19-7498d2a76e62",
+    "agent_id": "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
+    "resolved_message_en": "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.",
+    "resolved_message_fr": "Bienvenue! Je suis Sora, votre assistante immobilière IA. Merci de visiter cette maison ouverte. N'hésitez pas à regarder autour de vous, à explorer les pièces et à me poser toutes vos questions.",
+    "original_welcome_en_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_en.mp3",
+    "original_welcome_fr_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_fr.mp3",
+    "welcome_message_type": "custom_override"
+  },
+  {
+    "listing_id": "624f7c64-8977-4b36-91d4-de118724885d",
+    "agent_id": "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
+    "resolved_message_en": "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.",
+    "resolved_message_fr": "Bienvenue! Je suis Sora, votre assistante immobilière IA. Merci de visiter cette maison ouverte. N'hésitez pas à regarder autour de vous, à explorer les pièces et à me poser toutes vos questions.",
+    "original_welcome_en_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/listings/624f7c64-8977-4b36-91d4-de118724885d/audio/welcome_en.wav",
+    "original_welcome_fr_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/listings/624f7c64-8977-4b36-91d4-de118724885d/audio/welcome_fr.wav",
+    "welcome_message_type": "custom_override"
+  },
+  {
+    "listing_id": "c3507e9a-b388-43ea-ac92-76d7d7a2154a",
+    "agent_id": "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
+    "resolved_message_en": "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.",
+    "resolved_message_fr": "Bienvenue! Je suis Sora, votre assistante immobilière IA. Merci de visiter cette maison ouverte. N'hésitez pas à regarder autour de vous, à explorer les pièces et à me poser toutes vos questions.",
+    "original_welcome_en_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_en.mp3",
+    "original_welcome_fr_field": null,
+    "welcome_message_type": "custom_override"
+  },
+  {
+    "listing_id": "f13d6b80-4391-4a1b-8d94-ff1bb7a70733",
+    "agent_id": "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
+    "resolved_message_en": "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.",
+    "resolved_message_fr": "Bienvenue! Je suis Sora, votre assistante immobilière IA. Merci de visiter cette maison ouverte. N'hésitez pas à regarder autour de vous, à explorer les pièces et à me poser toutes vos questions.",
+    "original_welcome_en_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/defaults/welcome_en_standard.mp3",
+    "original_welcome_fr_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/defaults/welcome_fr_standard.mp3",
+    "welcome_message_type": "platform_default_translated"
+  },
+  {
+    "listing_id": "f1fd37e3-8572-45c5-99b1-34e8b2b2cb36",
+    "agent_id": "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
+    "resolved_message_en": "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.",
+    "resolved_message_fr": "Bienvenue! Je suis Sora, votre assistante immobilière IA. Merci de visiter cette maison ouverte. N'hésitez pas à regarder autour de vous, à explorer les pièces et à me poser toutes vos questions.",
+    "original_welcome_en_field": "https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_en.mp3",
+    "original_welcome_fr_field": null,
+    "welcome_message_type": "platform_default_translated"
+  }
+]

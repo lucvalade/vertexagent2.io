@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import Logo from "@/components/Logo";
 import { ShieldAlert, BookOpen, CheckCircle, Fingerprint } from "lucide-react";
 
 export default function Compliance() {
@@ -9,13 +10,10 @@ export default function Compliance() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
       <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-50">
         <div 
-          className="flex items-center gap-2 font-bold text-xl tracking-tight cursor-pointer" 
+          className="cursor-pointer hover:opacity-90 transition-opacity" 
           onClick={() => navigate("/")}
         >
-          <div className="h-8 w-8 bg-blue-600 rounded flex items-center justify-center text-white text-lg font-black">
-            V
-          </div>
-          <span className="text-slate-900">VertexAgent.io</span>
+          <Logo variant="dark" iconClassName="h-8.5 w-8.5" />
         </div>
         <Button variant="ghost" onClick={() => navigate("/")} className="font-medium text-sm text-slate-600 hover:text-slate-900">
           Back to Home

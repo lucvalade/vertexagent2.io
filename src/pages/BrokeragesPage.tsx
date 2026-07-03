@@ -16,14 +16,14 @@ import {
 } from "lucide-react";
 
 export default function BrokeragesPage() {
-  const [activeBrand, setActiveBrand] = useState<"vertex" | "lux" | "remax">("vertex");
+  const [activeBrand, setActiveBrand] = useState<"aiopenhouseconnect" | "lux" | "remax">("aiopenhouseconnect");
 
   const brandPolicies = {
-    vertex: {
-      name: "Vertex Prestige Real Estate",
+    aiopenhouseconnect: {
+      name: "AI Open House Prestige Real Estate",
       color: "#2563eb",
-      terms: "© 2026 Vertex Corp. All transactions subject to pre-registration and local state board guidelines. MLS status verified.",
-      disclaimer: "Vertex Prestige enforces equal housing opportunities and strictly holds state-wide dual-agency transparency regulations."
+      terms: "© 2026 AI Open House Connect Corp. All transactions subject to pre-registration and local state board guidelines. MLS status verified.",
+      disclaimer: "AI Open House Prestige enforces equal housing opportunities and strictly holds state-wide dual-agency transparency regulations."
     },
     lux: {
       name: "Aether & Horizon Luxury Global",
@@ -126,14 +126,14 @@ export default function BrokeragesPage() {
                 
                 <div className="space-y-3">
                   <button 
-                    onClick={() => setActiveBrand("vertex")}
-                    className={`w-full p-4 rounded-2xl border text-left transition-all flex justify-between items-center ${activeBrand === "vertex" ? "border-blue-600 bg-blue-50/50 shadow-sm" : "border-slate-200 hover:bg-slate-50"}`}
+                    onClick={() => setActiveBrand("aiopenhouseconnect")}
+                    className={`w-full p-4 rounded-2xl border text-left transition-all flex justify-between items-center ${activeBrand === "aiopenhouseconnect" ? "border-blue-600 bg-blue-50/50 shadow-sm" : "border-slate-200 hover:bg-slate-50"}`}
                   >
                     <div>
-                      <h4 className="font-bold text-sm text-slate-900">01. Vertex Prestige Real Estate</h4>
+                      <h4 className="font-bold text-sm text-slate-900">01. AI Open House Prestige Real Estate</h4>
                       <p className="text-[11px] text-slate-500 mt-1">Sleek, high-contrast, modern local agency style.</p>
                     </div>
-                    {activeBrand === "vertex" && <CheckCircle2 className="h-4 w-4 text-blue-600" />}
+                    {activeBrand === "aiopenhouseconnect" && <CheckCircle2 className="h-4 w-4 text-blue-600" />}
                   </button>
 
                   <button 

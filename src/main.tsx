@@ -28,9 +28,11 @@ import Team from './pages/Team.tsx';
 import EditMember from './pages/EditMember.tsx';
 import Billing from './pages/Billing.tsx';
 import Settings from './pages/Settings.tsx';
+import WelcomeMessageDefaultsEmbed from './pages/WelcomeMessageDefaultsEmbed.tsx';
 import AdminDashboard from './pages/admin/AdminDashboard.tsx';
 import AdminUsers from './pages/admin/AdminUsers.tsx';
 import AdminListings from './pages/admin/AdminListings.tsx';
+import AdminWelcomeMessages from './pages/admin/AdminWelcomeMessages.tsx';
 import AdminNotifications from './pages/admin/AdminNotifications.tsx';
 import AdminLogs from './pages/admin/AdminLogs.tsx';
 import InviteAgent from './pages/admin/InviteAgent.tsx';
@@ -57,12 +59,60 @@ import PublicIntegrationsPage from './pages/PublicIntegrationsPage.tsx';
 import PricingPage from './pages/PricingPage.tsx';
 import DemoPage from './pages/DemoPage.tsx';
 import HowItWorksPage from './pages/HowItWorksPage.tsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
+import { db } from './lib/firebase.ts';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
+// Register global uncaught crash event listeners
+window.addEventListener("error", (event) => {
+  try {
+    addDoc(collection(db, "system_logs"), {
+      type: "CRASH",
+      message: `Global Uncaught: ${event.message || "Unknown error"}`,
+      timestamp: serverTimestamp(),
+      createdAt: Date.now(),
+      details: {
+        message: event.message || "",
+        filename: event.filename || "",
+        lineno: event.lineno || 0,
+        colno: event.colno || 0,
+        stack: event.error?.stack || "",
+        location: window.location.href,
+        userAgent: navigator.userAgent
+      },
+      userEmail: "system_global_listener"
+    });
+  } catch (err) {
+    console.error("Failed to log uncaught error to Firestore:", err);
+  }
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  try {
+    addDoc(collection(db, "system_logs"), {
+      type: "CRASH",
+      message: `Unhandled Rejection: ${event.reason?.message || String(event.reason)}`,
+      timestamp: serverTimestamp(),
+      createdAt: Date.now(),
+      details: {
+        reason: event.reason?.message || String(event.reason),
+        stack: event.reason?.stack || "",
+        location: window.location.href,
+        userAgent: navigator.userAgent
+      },
+      userEmail: "system_unhandled_rejection"
+    });
+  } catch (err) {
+    console.error("Failed to log unhandled rejection to Firestore:", err);
+  }
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider attribute="class" defaultTheme="light">
-      <AuthProvider>
-      <BrowserRouter>
+    <ErrorBoundary>
+      <ThemeProvider attribute="class" defaultTheme="light">
+        <AuthProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<App />}>
             <Route index element={<PublicSite />} />
@@ -74,10 +124,11 @@ createRoot(document.getElementById('root')!).render(
             <Route path="compliance" element={<Compliance />} />
             <Route path="tour/:listingId" element={<Tour />} />
             <Route path="microsite/:listingId" element={<ListingMicrosite />} />
+            <Route path="settings/embeds/welcome-message-defaults" element={<WelcomeMessageDefaultsEmbed />} />
             
             {/* New public subpages */}
             <Route path="product" element={<ProductPage />} />
-            <Route path="open-houses" element={<OpenHousesPage />} />
+            <Route path="open-houses/:listingId?" element={<OpenHousesPage />} />
             <Route path="url-import" element={<UrlImportPage />} />
             <Route path="brokerages" element={<BrokeragesPage />} />
             <Route path="integrations" element={<PublicIntegrationsPage />} />
@@ -117,6 +168,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="users/invite" element={<InviteAgent />} />
                 <Route path="listings" element={<AdminListings />} />
+                <Route path="welcomes" element={<AdminWelcomeMessages />} />
                 <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="logs" element={<AdminLogs />} />
                 <Route path="brokerage" element={<BrokerageSettings />} />
@@ -128,6 +180,7 @@ createRoot(document.getElementById('root')!).render(
       </BrowserRouter>
     </AuthProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );
 

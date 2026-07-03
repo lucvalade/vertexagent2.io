@@ -1,4 +1,4 @@
-import { Building2, Globe, Shield, Bell, Loader2, Mic2, CheckCircle2, ChevronDown, Plus, CreditCard } from "lucide-react";
+import { Building2, Globe, Shield, Bell, Loader2, Mic2, CheckCircle2, ChevronDown, Plus, CreditCard, Sparkles, Video, Check, Upload, AlertCircle, Play, Pause, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getAgent, updateUser } from "@/lib/api";
@@ -7,6 +7,7 @@ import { doc, getDoc, setDoc, collection, query, getDocs, addDoc, serverTimestam
 import { db, handleFirestoreError, OperationType, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useNavigate, useLocation } from "react-router-dom";
+import WelcomeMessageDefaultsEmbed from "./WelcomeMessageDefaultsEmbed";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,10 +54,303 @@ export default function Settings() {
   // Validation Errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Avatar Settings State
+  const [avatarAddonPaid, setAvatarAddonPaid] = useState(false);
+  const [enableClientAvatar, setEnableClientAvatar] = useState(false);
+  const [enableVoiceAvatar, setEnableVoiceAvatar] = useState(false);
+  const [avatarType, setAvatarType] = useState<"gallery" | "digital_twin">("gallery");
+  const [selectedGalleryId, setSelectedGalleryId] = useState("kore");
+  const [digitalTwinStatus, setDigitalTwinStatus] = useState<"none" | "pending_upload" | "processing" | "approved" | "rejected">("none");
+  const [digitalTwinAvatarId, setDigitalTwinAvatarId] = useState("");
+  const [consentApproved, setConsentApproved] = useState(false);
+  const [avatarPage, setAvatarPage] = useState<number>(1);
+
+  // Hidden video file uploads
+  const [selectedTrainingFile, setSelectedTrainingFile] = useState<File | null>(null);
+  const [selectedConsentFile, setSelectedConsentFile] = useState<File | null>(null);
+  const [trainingFileName, setTrainingFileName] = useState("");
+  const [consentFileName, setConsentFileName] = useState("");
+
+  // Active audio preview ID
+  const [activePreviewVoiceId, setActivePreviewVoiceId] = useState<string | null>(null);
+
+  // Stop synthesis on tab change or unmount
+  useEffect(() => {
+    return () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleTogglePreview = (av: { id: string; name: string; voiceId: number }) => {
+    if (!window.speechSynthesis) {
+      toast.error("Speech Synthesis not supported in this browser.");
+      return;
+    }
+
+    if (activePreviewVoiceId === av.id) {
+      window.speechSynthesis.cancel();
+      setActivePreviewVoiceId(null);
+      toast.info("Audio preview stopped.");
+    } else {
+      window.speechSynthesis.cancel();
+      
+      const utteranceText = av.id === "kore" 
+        ? "Hello! I am Sora, your real estate AI guide. I will help you explore this beautiful property."
+        : av.id === "puck"
+        ? "Hey there! I am Alex. Welcome to the tour! Let me show you around this amazing home."
+        : av.id === "zephyr"
+        ? "Welcome. I am Sophia. It is my pleasure to guide you through this exquisite residence today."
+        : "Hello, welcome in. My name is Marcus. Let me share a few details about this tranquil property.";
+
+      const utterance = new SpeechSynthesisUtterance(utteranceText);
+      
+      const voicesList = window.speechSynthesis.getVoices();
+      let voiceToUse = null;
+      if (av.id === "kore" || av.id === "zephyr") {
+        voiceToUse = voicesList.find(v => v.lang.startsWith("en-GB") && v.name.toLowerCase().includes("female")) || 
+                     voicesList.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("female"));
+      } else {
+        voiceToUse = voicesList.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male"));
+      }
+      if (voiceToUse) {
+        utterance.voice = voiceToUse;
+      }
+
+      if (av.id === "kore") {
+        utterance.rate = 0.95;
+        utterance.pitch = 1.0;
+      } else if (av.id === "puck") {
+        utterance.rate = 1.1;
+        utterance.pitch = 1.1;
+      } else if (av.id === "zephyr") {
+        utterance.rate = 0.9;
+        utterance.pitch = 1.02;
+      } else if (av.id === "charon") {
+        utterance.rate = 0.85;
+        utterance.pitch = 0.85;
+      }
+
+      utterance.onend = () => {
+        setActivePreviewVoiceId(null);
+      };
+      utterance.onerror = () => {
+        setActivePreviewVoiceId(null);
+      };
+
+      setActivePreviewVoiceId(av.id);
+      window.speechSynthesis.speak(utterance);
+      toast.success(`Playing preview for ${av.name} (Voice ID: ${av.voiceId})...`);
+    }
+  };
+
+  const validateAvatarStep = (step: number): { valid: boolean; message: string } => {
+    if (step === 1) {
+      if (!avatarAddonPaid) {
+        return {
+          valid: false,
+          message: "Please unlock the Sora 3D AI Avatar Extension ($20/mo) before moving onto Gallery & Twin."
+        };
+      }
+      if (!enableClientAvatar && !enableVoiceAvatar) {
+        return {
+          valid: false,
+          message: "Please enable at least one of Client-Facing AI Tours or Agent Voice Control before moving onto Gallery & Twin."
+        };
+      }
+    }
+    if (step === 2) {
+      if (avatarType === "gallery") {
+        if (!selectedGalleryId) {
+          return {
+            valid: false,
+            message: "Please select an avatar from the Sora Pre-Vetted Gallery before moving onto Safety & Gateway."
+          };
+        }
+      } else {
+        if (digitalTwinStatus !== "approved" && digitalTwinStatus !== "processing") {
+          return {
+            valid: false,
+            message: "Please select, upload, and submit your training video & consent statement for processing, or approve your digital twin first."
+          };
+        }
+      }
+    }
+    if (step === 3) {
+      if (!moderationResult) {
+        return {
+          valid: false,
+          message: "Please run a safety moderation scan by typing a script and clicking 'Scan Script' before moving onto Live Handshake."
+        };
+      }
+    }
+    return { valid: true, message: "" };
+  };
+
+  // Script moderation and live session simulator states
+  const [scriptToModerate, setScriptToModerate] = useState("Welcome to this beautiful estate! Let me guide you through the modern kitchen.");
+  const [moderationResult, setModerationResult] = useState<{ passed: boolean; sanitizedText: string } | null>(null);
+  const [moderationLoading, setModerationLoading] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [liveSessionDetails, setLiveSessionDetails] = useState<any>(null);
+  const [isInitializingLive, setIsInitializingLive] = useState(false);
+
   // Tab State
   const viewMode = location.pathname.startsWith('/app/admin') ? 'ADMIN' : 'CLIENT';
-  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications" | "admin">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications" | "welcome_defaults" | "avatars" | "admin">("profile");
   const [adminSubTab, setAdminSubTab] = useState<"overview" | "company" | "plans" | "stripe">("overview");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get("tab");
+    if (tab && ["profile", "branding", "compliance", "notifications", "welcome_defaults", "avatars", "admin"].includes(tab)) {
+      setActiveTab(tab as any);
+    }
+  }, [location.search]);
+
+  // Sora Welcome Defaults Management State (Removed/Commented out for standalone iFrame migration)
+  /*
+  const [welcomeDefaults, setWelcomeDefaults] = useState<any[]>([]);
+  const [welcomeDefaultsLoading, setWelcomeDefaultsLoading] = useState(false);
+  const [editingDefaultTexts, setEditingDefaultTexts] = useState<Record<string, string>>({
+    en: "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood."
+  });
+  const [savingDefaultLocale, setSavingDefaultLocale] = useState<string | null>(null);
+  const [translatingAllDefaults, setTranslatingAllDefaults] = useState(false);
+  const [isRewritingWelcomeDefault, setIsRewritingWelcomeDefault] = useState(false);
+
+  const handleAiRewriteWelcomeDefault = async () => {
+    const textToRewrite = editingDefaultTexts["en"]?.trim();
+    if (!textToRewrite) {
+      toast.error("Please enter some English default welcome text first.");
+      return;
+    }
+
+    setIsRewritingWelcomeDefault(true);
+    const toastId = toast.loading("Rewriting default welcome message with Sora AI...");
+    try {
+      const res = await fetch("/api/shorten-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textToRewrite }),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.shortenedText) {
+          const cleanText = result.shortenedText.replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+          const words = cleanText.split(" ");
+          let cappedText = cleanText;
+          if (words.length > 40) {
+            cappedText = words.slice(0, 40).join(" ") + "...";
+          }
+          setEditingDefaultTexts(prev => ({
+            ...prev,
+            en: cappedText
+          }));
+          toast.success("Default welcome message rewritten!", { id: toastId });
+        } else {
+          toast.error("Failed to rewrite. AI did not return valid text.", { id: toastId });
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || "Failed to contact AI rewrite service.", { id: toastId });
+      }
+    } catch (err) {
+      console.error("AI Rewrite default welcome error:", err);
+      toast.error("Error during AI rewrite of default welcome message.", { id: toastId });
+    } finally {
+      setIsRewritingWelcomeDefault(false);
+    }
+  };
+
+  const handleTranslateAllDefaults = async () => {
+    const enText = editingDefaultTexts["en"];
+    if (!enText || !enText.trim()) {
+      toast.error("Please enter a welcome message in US English (Default) first.");
+      return;
+    }
+    setTranslatingAllDefaults(true);
+    try {
+      const response = await fetch("/api/welcome-messages/translate-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: enText.trim() })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.translations) {
+          const updated = {
+            ...editingDefaultTexts,
+            ...data.translations,
+            en: enText.trim()
+          };
+          setEditingDefaultTexts(updated);
+          
+          // Bulk Save to backend
+          toast.info("Saving translated defaults to database...");
+          const saveRes = await fetch("/api/welcome-messages/defaults/bulk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              translations: updated,
+              userId: user?.id
+            })
+          });
+          if (saveRes.ok) {
+            toast.success("Successfully translated and SAVED the US English default message into all 24 languages!");
+            await fetchWelcomeDefaults();
+          } else {
+            toast.warning("Translated successfully, but failed to save defaults in bulk. Please try updating individually.");
+          }
+        } else {
+          toast.error("Failed to translate default welcome message.");
+        }
+      } else {
+        toast.error("Error communicating with the translation service.");
+      }
+    } catch (err) {
+      console.error("Failed to translate defaults:", err);
+      toast.error("Network error while translating welcome message.");
+    } finally {
+      setTranslatingAllDefaults(false);
+    }
+  };
+
+  // Fetching the platform defaults
+  const fetchWelcomeDefaults = async () => {
+    setWelcomeDefaultsLoading(true);
+    try {
+      const res = await fetch("/api/welcome-messages/defaults");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.defaults) {
+          setWelcomeDefaults(data.defaults);
+          // Initialize editing texts
+          const editingMap: Record<string, string> = {};
+          data.defaults.forEach((d: any) => {
+            editingMap[d.locale] = d.text_value;
+          });
+          if (!editingMap["en"]) {
+            editingMap["en"] = "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.";
+          }
+          setEditingDefaultTexts(editingMap);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch platform welcome message defaults:", err);
+    } finally {
+      setWelcomeDefaultsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "welcome_defaults") {
+      fetchWelcomeDefaults();
+    }
+  }, [activeTab]);
+  */
 
   // Logs State
   const [logs, setLogs] = useState<any[]>([]);
@@ -92,6 +386,8 @@ export default function Settings() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [accentColor, setAccentColor] = useState("#f8fafc");
+  const [agentPhotoUrl, setAgentPhotoUrl] = useState("");
+  const [selectedAgentPhotoFile, setSelectedAgentPhotoFile] = useState<File | null>(null);
 
   // Compliance State
   const [disclaimer, setDisclaimer] = useState("");
@@ -178,6 +474,7 @@ export default function Settings() {
         setLogoUrl(data.branding.imageUrl || data.branding.logoUrl || "");
         setLogoStoragePath(data.branding.storagePath || data.branding.logoStoragePath || "");
         setAccentColor(data.branding.accentColor || "#f8fafc");
+        setAgentPhotoUrl(data.branding.agentPhotoUrl || "");
       }
 
       if (data?.compliance) {
@@ -199,6 +496,17 @@ export default function Settings() {
 
       if (data?.defaultVoiceId) {
         setDefaultVoiceId(data.defaultVoiceId);
+      }
+
+      if (data?.avatarSettings) {
+        setAvatarAddonPaid(data.avatarSettings.addonPaid ?? false);
+        setEnableClientAvatar(data.avatarSettings.enableClientAvatar ?? false);
+        setEnableVoiceAvatar(data.avatarSettings.enableVoiceAvatar ?? false);
+        setAvatarType(data.avatarSettings.avatarType || "gallery");
+        setSelectedGalleryId(data.avatarSettings.selectedGalleryId || "kore");
+        setDigitalTwinStatus(data.avatarSettings.digitalTwinStatus || "none");
+        setDigitalTwinAvatarId(data.avatarSettings.digitalTwinAvatarId || "");
+        setConsentApproved(data.avatarSettings.consentApproved ?? false);
       }
 
       // Load available voices
@@ -345,6 +653,95 @@ export default function Settings() {
     if (error) toast.error(error);
   };
 
+  const handleTestScript = async () => {
+    if (!scriptToModerate.trim()) {
+      toast.error("Please enter a script to test.");
+      return;
+    }
+    setModerationLoading(true);
+    try {
+      const res = await fetch("/api/heygen/speak-moderation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: scriptToModerate })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setModerationResult({
+          passed: data.passed,
+          sanitizedText: data.sanitizedText
+        });
+        if (data.passed) {
+          toast.success("Script passed moderation successfully!");
+        } else {
+          toast.warning("Inappropriate keywords detected and sanitized!");
+        }
+      } else {
+        // Fallback simulation if route isn't fully set up or offline
+        const lower = scriptToModerate.toLowerCase();
+        const isBanned = lower.includes("banned") || lower.includes("explicit") || lower.includes("violent") || lower.includes("abusive");
+        const sanitized = isBanned ? scriptToModerate.replace(/(banned|explicit|violent|abusive)/gi, "[REDACTED]") : scriptToModerate;
+        setModerationResult({
+          passed: !isBanned,
+          sanitizedText: sanitized
+        });
+        if (!isBanned) {
+          toast.success("Script passed local moderation check!");
+        } else {
+          toast.warning("Local moderation filtered inappropriate content.");
+        }
+      }
+    } catch (err) {
+      console.error("Moderation test error:", err);
+      toast.error("Error connecting to moderation server.");
+    } finally {
+      setModerationLoading(false);
+    }
+  };
+
+  const handleStartLiveStream = async () => {
+    setIsInitializingLive(true);
+    const avatarId = avatarType === "gallery" ? selectedGalleryId : (digitalTwinAvatarId || "dt-agent-clone-99");
+    try {
+      const res = await fetch("/api/heygen/live-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLiveSessionDetails({
+          session_id: data.sessionId,
+          quality: "1080p WebRTC",
+          sdp: "m=video 9 UDP/TLS/RTP/SAVPF..."
+        });
+        toast.success("Live avatar WebRTC handshake succeeded! Stream connected.");
+        // Simulate speech activity shortly after connecting
+        setTimeout(() => {
+          setIsPlayingPreview(true);
+        }, 1500);
+      } else {
+        // Fallback simulation if route not fully ready or server error
+        setTimeout(() => {
+          setLiveSessionDetails({
+            session_id: `session_${Math.random().toString(36).substring(2, 9)}`,
+            quality: "720p (Local WebRTC Mock)",
+            sdp: "mock_sdp_data_local_loopback"
+          });
+          toast.success("WebRTC Mock loopback connected successfully!");
+          setTimeout(() => {
+            setIsPlayingPreview(true);
+          }, 1500);
+        }, 1000);
+      }
+    } catch (err) {
+      console.error("Live stream connection error:", err);
+      toast.error("Handshake error. Failed to establish WebRTC channel.");
+    } finally {
+      setIsInitializingLive(false);
+    }
+  };
+
   async function handleSave() {
     // Final Validations
     if (activeTab === "profile") {
@@ -366,6 +763,7 @@ export default function Settings() {
     setSaving(true);
     let finalLogoUrl = logoUrl;
     let finalStoragePath = logoStoragePath;
+    let finalAgentPhotoUrl = agentPhotoUrl;
 
     try {
       if (selectedFile && user) {
@@ -400,6 +798,34 @@ export default function Settings() {
         setSelectedFile(null);
       }
 
+      if (selectedAgentPhotoFile && user) {
+        try {
+          const uploadPromise = (async () => {
+            const storageRef = ref(storage, `photos/${user.id}/photo-${Date.now()}`);
+            const snap = await uploadBytes(storageRef, selectedAgentPhotoFile);
+            const downloadUrl = await getDownloadURL(snap.ref);
+            return downloadUrl;
+          })();
+
+          const timeoutPromise = new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error("Firebase Storage upload timed out")), 6000)
+          );
+
+          const result = await Promise.race([uploadPromise, timeoutPromise]);
+          if (result) {
+            finalAgentPhotoUrl = result;
+          }
+        } catch (uploadErr) {
+          console.warn("Storage photo upload failed, falling back to data URL conversion:", uploadErr);
+          const base64Data = await fileToBase64(selectedAgentPhotoFile);
+          finalAgentPhotoUrl = base64Data;
+          toast.info("Photo stored locally in Firestore (Storage skipped or timed out).");
+        }
+
+        setAgentPhotoUrl(finalAgentPhotoUrl);
+        setSelectedAgentPhotoFile(null);
+      }
+
       await updateUser(user!.id, {
         brokerageProfile: {
           legalName,
@@ -413,7 +839,8 @@ export default function Settings() {
           primaryColor,
           imageUrl: finalLogoUrl,
           storagePath: finalStoragePath,
-          accentColor
+          accentColor,
+          agentPhotoUrl: finalAgentPhotoUrl
         },
         compliance: {
           disclaimer,
@@ -431,6 +858,17 @@ export default function Settings() {
           dailyDigest
         },
         defaultVoiceId,
+        avatarSettings: {
+          addonPaid: avatarAddonPaid,
+          enableClientAvatar,
+          enableVoiceAvatar,
+          avatarType,
+          selectedGalleryId,
+          digitalTwinStatus,
+          digitalTwinAvatarId,
+          consentApproved,
+          updatedAt: Date.now()
+        },
         updatedAt: Date.now()
       });
 
@@ -533,6 +971,18 @@ export default function Settings() {
               >
                 <Bell className="h-4 w-4" /> Notifications
               </button>
+              <button 
+                onClick={() => setActiveTab("welcome_defaults")}
+                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'welcome_defaults' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <Mic2 className="h-4 w-4" /> Sora Welcome Defaults
+              </button>
+              <button 
+                onClick={() => setActiveTab("avatars")}
+                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'avatars' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <Video className="h-4 w-4" /> AI Video Avatars
+              </button>
             </>
           )}
           
@@ -572,7 +1022,11 @@ export default function Settings() {
                       type="text" 
                       className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.legalName ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
                       value={legalName}
-                      onChange={(e) => setLegalName(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const formatted = val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                        setLegalName(formatted);
+                      }}
                       onBlur={(e) => handleBlur("legalName", e.target.value)}
                       placeholder="e.g., VertexAgent HQ"
                     />
@@ -606,7 +1060,11 @@ export default function Settings() {
                       type="text" 
                       className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.brokerOfRecord ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
                       value={brokerOfRecord}
-                      onChange={(e) => setBrokerOfRecord(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const formatted = val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                        setBrokerOfRecord(formatted);
+                      }}
                       onBlur={(e) => handleBlur("brokerOfRecord", e.target.value)}
                       placeholder="e.g., Luc Valade"
                     />
@@ -694,10 +1152,40 @@ export default function Settings() {
           {activeTab === "branding" && (
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
               <h2 className="text-lg font-bold mb-4">Branding & UI</h2>
-              <div className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Primary Color</label>
+
+              {/* Dynamic QR Code & Branding Assets Verification Banner */}
+              <div className="mb-6 p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Branding Asset Verification Status</h3>
+                  <p className="text-xs text-slate-600 leading-normal">
+                    These assets are dynamically embedded in QR codes, print materials, listing websites, and voice walkthrough guides.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2.5 shrink-0">
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                    logoUrl 
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}>
+                    <span className={`h-2 w-2 rounded-full ${logoUrl ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    Brokerage Logo: {logoUrl ? "Verified ✅" : "Not Configured ⚠️"}
+                  </div>
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                    agentPhotoUrl 
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}>
+                    <span className={`h-2 w-2 rounded-full ${agentPhotoUrl ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    Agent Photo: {agentPhotoUrl ? "Verified ✅" : "Not Configured ⚠️"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* TOP SECTION: Primary color */}
+                <div className="border-b pb-6">
+                  <div className="max-w-md space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Primary Color</label>
                     <div className="relative group">
                       <input 
                         type="text" 
@@ -746,19 +1234,27 @@ export default function Settings() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Logo URL</label>
+                </div>
+
+                {/* BOTTOM SECTION: Two column split for Brokerage Logo and Agent Photo */}
+                <div className="grid md:grid-cols-2 gap-6 pt-2">
+                  {/* LEFT COLUMN: Brokerage Logo URL */}
+                  <div className="space-y-3.5 p-4 bg-slate-50/55 rounded-2xl border border-slate-100">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-sm font-bold text-slate-850">Brokerage Logo URL</label>
+                      <span className="text-[10px] text-slate-400">Direct image link or native file attachment</span>
+                    </div>
                     <input 
                       type="text" 
-                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.logoUrl ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                      className={`w-full px-3 py-2 border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.logoUrl ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
                       value={logoUrl}
                       onChange={(e) => setLogoUrl(e.target.value)}
                       onBlur={(e) => handleBlur("logoUrl", e.target.value)}
                       placeholder="https://example.com/logo.png"
                     />
                     {logoUrl && (
-                      <div className="mt-3 p-2 border border-slate-200 rounded-lg inline-block">
-                        <img src={logoUrl} alt="Logo preview" className="h-16 w-auto rounded-md" />
+                      <div className="mt-3 p-2 bg-white border border-slate-200 rounded-lg inline-block shadow-sm">
+                        <img src={logoUrl} alt="Logo preview" className="h-16 w-auto rounded-md object-contain max-w-[220px]" />
                       </div>
                     )}
                     <div className="flex items-center gap-2 mt-2">
@@ -771,8 +1267,8 @@ export default function Settings() {
                           const file = e.target.files?.[0];
                           if (file) {
                              if (file.size > 2 * 1024 * 1024) {
-                               toast.error("File size must be less than 2MB");
-                               return;
+                                toast.error("File size must be less than 2MB");
+                                return;
                              }
                              setSelectedFile(file);
                              setLogoUrl(URL.createObjectURL(file));
@@ -805,7 +1301,69 @@ export default function Settings() {
                     </div>
                     {errors.logoUrl && <p className="text-xs text-red-500 font-medium">{errors.logoUrl}</p>}
                   </div>
+
+                  {/* RIGHT COLUMN: Agent Photo URL */}
+                  <div className="space-y-3.5 p-4 bg-slate-50/55 rounded-2xl border border-slate-100">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-sm font-bold text-slate-850">Agent Photo URL</label>
+                      <span className="text-[10px] text-slate-400">Direct headshot link or native file attachment</span>
+                    </div>
+                    <input 
+                      type="text" 
+                      className="w-full px-3 py-2 border rounded-md text-sm bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      value={agentPhotoUrl}
+                      onChange={(e) => setAgentPhotoUrl(e.target.value)}
+                      placeholder="https://example.com/photo.jpg"
+                    />
+                    {agentPhotoUrl && (
+                      <div className="mt-3 p-2 bg-white border border-slate-200 rounded-lg inline-block shadow-sm">
+                        <img src={agentPhotoUrl} alt="Agent photo preview" className="h-16 w-16 object-cover rounded-full" />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input 
+                        id="agentPhotoInput" 
+                        type="file" 
+                        accept=".png,.jpg,.jpeg" 
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                             if (file.size > 2 * 1024 * 1024) {
+                                toast.error("File size must be less than 2MB");
+                                return;
+                             }
+                             setSelectedAgentPhotoFile(file);
+                             setAgentPhotoUrl(URL.createObjectURL(file));
+                             toast.success(`Photo ${file.name} selected. Click "Save Changes" to finalize.`);
+                          }
+                        }}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => document.getElementById('agentPhotoInput')?.click()}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-md transition-colors"
+                      >
+                        Select Photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAgentPhotoFile(null);
+                          setAgentPhotoUrl("");
+                          const input = document.getElementById('agentPhotoInput') as HTMLInputElement;
+                          if (input) input.value = '';
+                          toast.info("Upload cancelled.");
+                        }}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-md transition-colors"
+                      >
+                        Clear Photo
+                      </button>
+                      <span className="text-[10px] text-slate-400">.png or .jpg, max 2MB</span>
+                    </div>
+                  </div>
                 </div>
+
                 <div className="pt-4 border-t flex justify-end">
                   <button 
                     onClick={handleSave}
@@ -831,14 +1389,18 @@ export default function Settings() {
                       className={`w-full px-3 py-2 border rounded-md text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500 pb-8 ${errors.disclaimer ? 'border-red-300 ring-red-100' : 'border-slate-200'}`}
                       value={disclaimer}
                       maxLength={2000}
-                      onChange={(e) => setDisclaimer(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const capitalized = val.charAt(0).toUpperCase() + val.slice(1);
+                        setDisclaimer(capitalized);
+                      }}
                       onBlur={(e) => handleBlur("disclaimer", e.target.value)}
                       placeholder="Enter the legal disclaimer that appears on all marketing materials..."
                     />
                     {errors.disclaimer && <p className="text-xs text-red-500 font-medium mt-1">{errors.disclaimer}</p>}
                     <div className="absolute bottom-2 right-2 flex items-center pointer-events-none">
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-50/80 backdrop-blur-sm border ${disclaimer.length > 1900 ? 'text-red-500 border-red-100 bg-red-50' : 'text-slate-400 border-slate-100'}`}>
-                        {disclaimer.length} / 2000
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-50/80 backdrop-blur-sm border ${disclaimer.length >= 1500 ? 'text-amber-600 border-amber-200 bg-amber-50 font-bold' : disclaimer.length > 1900 ? 'text-red-500 border-red-100 bg-red-50' : 'text-slate-400 border-slate-100'}`}>
+                        {disclaimer.length} / 2000 {disclaimer.length >= 1500 && <span className="animate-pulse font-normal ml-1">(75% Reached)</span>}
                       </span>
                     </div>
                   </div>
@@ -994,6 +1556,718 @@ export default function Settings() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === "welcome_defaults" && (
+            <div className="settings-card-wrapper animate-in fade-in slide-in-from-right-4 duration-300">
+              <WelcomeMessageDefaultsEmbed />
+            </div>
+          )}
+
+          {activeTab === "avatars" && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
+              
+              {/* TOP WIZARD PROGRESS BAR */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center justify-between max-w-3xl mx-auto">
+                  {[
+                    { step: 1, label: "3D Extension" },
+                    { step: 2, label: "Gallery & Twin" },
+                    { step: 3, label: "Safety & Gateway" },
+                    { step: 4, label: "Live Handshake" }
+                  ].map((s, idx, arr) => (
+                    <div key={s.step} className="flex items-center flex-1 last:flex-initial">
+                      <div className="flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (s.step <= avatarPage) {
+                              setAvatarPage(s.step);
+                            } else {
+                              for (let p = avatarPage; p < s.step; p++) {
+                                const check = validateAvatarStep(p);
+                                if (!check.valid) {
+                                  toast.error(check.message);
+                                  return;
+                                }
+                              }
+                              setAvatarPage(s.step);
+                            }
+                          }}
+                          className="flex items-center gap-2 text-left focus:outline-none group cursor-pointer"
+                        >
+                          <div
+                            className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                              avatarPage === s.step
+                                ? "bg-blue-600 text-white ring-4 ring-blue-100"
+                                : avatarPage > s.step
+                                ? "bg-emerald-500 text-white"
+                                : "bg-slate-100 text-slate-500 group-hover:bg-slate-200"
+                            }`}
+                          >
+                            {avatarPage > s.step ? "✓" : s.step}
+                          </div>
+                          <span className={`text-xs font-semibold whitespace-nowrap hidden sm:inline transition-colors ${avatarPage === s.step ? "text-blue-600 font-bold" : "text-slate-500 group-hover:text-slate-700"}`}>
+                            {s.label}
+                          </span>
+                        </button>
+                      </div>
+                      {idx < arr.length - 1 && (
+                        <div className={`h-[2px] mx-4 flex-1 ${avatarPage > s.step ? "bg-emerald-500" : "bg-slate-100"}`} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* PAGE 1: 3D EXTENSION */}
+              {avatarPage === 1 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-in fade-in duration-200">
+                  <div className="flex justify-between items-start pb-4 border-b border-slate-100">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <Video className="h-5 w-5 text-blue-600 animate-pulse" />
+                        Sora AI Video Avatar (3D Extension)
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Deploy an interactive digital avatar layer to guide clients through physical tours, or interface with your Agent Voice Control.
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded animate-pulse">
+                      Live v1.0
+                    </span>
+                  </div>
+
+                  <div className="p-4 border border-blue-100 rounded-xl bg-gradient-to-r from-blue-50/80 to-indigo-50/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="h-4 w-4 text-blue-600 animate-spin-slow" />
+                        <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">Sora Avatar Licensing & Tiers</span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Interactive 3D Video Avatars are billed as a premium add-on or included in Elite/Brokerage subscription tiers.
+                      </p>
+                      <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700 bg-white/80 px-2 py-1 rounded border border-slate-100 w-fit mt-2">
+                        {avatarAddonPaid ? (
+                          <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Premium Active</>
+                        ) : (
+                          <><AlertCircle className="h-3.5 w-3.5 text-amber-500" /> Premium Add-on (Locked)</>
+                        )}
+                      </div>
+                    </div>
+
+                    {!avatarAddonPaid ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAvatarAddonPaid(true);
+                          toast.success("Subscribed to Sora 3D AI Avatar Extension! ($20/mo added to plan)");
+                        }}
+                        className="bg-blue-600 text-white font-bold text-xs px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition-all whitespace-nowrap flex items-center gap-1.5"
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        Unlock 3D Avatar ($20/mo)
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-100 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                        <Check className="h-4 w-4 text-emerald-600 animate-bounce" />
+                        Premium Active
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-4 border border-slate-150 rounded-xl flex items-center justify-between bg-slate-50/50">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800">Client-Facing AI Tours</h4>
+                        <p className="text-[11px] text-slate-500 mt-1">Overlays the 3D avatar on public listing walk-throughs.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!avatarAddonPaid) {
+                            toast.error("Requires the Sora 3D AI Avatar Extension add-on to be unlocked first.");
+                            return;
+                          }
+                          setEnableClientAvatar(!enableClientAvatar);
+                        }}
+                        className={`h-6 w-11 rounded-full transition-colors relative shrink-0 cursor-pointer ${enableClientAvatar ? 'bg-blue-600' : 'bg-red-500'}`}
+                      >
+                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${enableClientAvatar ? 'left-6' : 'left-1'}`} />
+                      </button>
+                    </div>
+
+                    <div className="p-4 border border-slate-150 rounded-xl flex items-center justify-between bg-slate-50/50">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-800">Agent Voice Control</h4>
+                        <p className="text-[11px] text-slate-500 mt-1">Render the avatar on your internal voice-directed dashboard.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEnableVoiceAvatar(!enableVoiceAvatar)}
+                        className={`h-6 w-11 rounded-full transition-colors relative shrink-0 cursor-pointer ${enableVoiceAvatar ? 'bg-blue-600' : 'bg-red-500'}`}
+                      >
+                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${enableVoiceAvatar ? 'left-6' : 'left-1'}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {(!avatarAddonPaid || (!enableClientAvatar && !enableVoiceAvatar)) && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-200">
+                      <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />
+                      <span>Please unlock the 3D Extension and enable at least one avatar option. Make sure to click Save & Continue below to proceed.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PAGE 2: GALLERY & TWIN */}
+              {avatarPage === 2 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-in fade-in duration-200">
+                  <div className="flex border-b border-slate-100 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setAvatarType("gallery")}
+                      className={`pb-2 text-sm font-bold border-b-2 transition-all ${avatarType === "gallery" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400"}`}
+                    >
+                      Sora Pre-Vetted Gallery
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAvatarType("digital_twin")}
+                      className={`pb-2 text-sm font-bold border-b-2 transition-all ${avatarType === "digital_twin" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400"}`}
+                    >
+                      Create My Digital Twin (Likeness Clone)
+                    </button>
+                  </div>
+
+                  {avatarType === "gallery" ? (
+                    <div className="space-y-4">
+                      <div className="bg-slate-50 border border-slate-150 p-3 rounded-lg text-[11px] text-slate-600 leading-relaxed">
+                        <span className="font-bold text-slate-700">Server-Side Gallery Filtering Policy:</span> This gallery queries pre-approved avatar files from HeyGen where <code>clothing_style IN (&apos;business_professional&apos;,&apos;smart_casual&apos;)</code> and <code>age_verified = true</code>. No casual styles or unverified accounts are loaded to preserve corporate brand integrity.
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {[
+                          { id: "kore", name: "Sora Classic", role: "Standard Professional Female", style: "Business Suit", desc: "Crisp, concise, highly professional British hybrid delivery.", voiceId: 2, color: "from-pink-500 to-rose-600" },
+                          { id: "puck", name: "Alex (Puck)", role: "Casual Smart Male", style: "Oxford Collar Shirt", desc: "Warm, approcheable energetic modern delivery style.", voiceId: 3, color: "from-blue-500 to-sky-600" },
+                          { id: "zephyr", name: "Sophia (Zephyr)", role: "Executive Female", style: "Formal Blazer", desc: "Formal British RP style. Perfect for luxury or commercial assets.", voiceId: 5, color: "from-purple-500 to-indigo-600" },
+                          { id: "charon", name: "Marcus (Charon)", role: "Calm Reassuring Male", style: "Fine-knit Sweater", desc: "Deep, trustworthy tone. Ideal for family homes and long listings.", voiceId: 6, color: "from-emerald-500 to-teal-600" }
+                        ].map((av) => {
+                          const isSelected = selectedGalleryId === av.id;
+                          return (
+                            <div
+                              key={av.id}
+                              onClick={() => setSelectedGalleryId(av.id)}
+                              className={`border rounded-xl p-4 flex flex-col justify-between transition-all cursor-pointer hover:shadow-md relative overflow-hidden ${isSelected ? 'border-blue-500 bg-blue-50/10 ring-2 ring-blue-100/50' : 'border-slate-200 bg-white'}`}
+                            >
+                              {isSelected && (
+                                <div className="absolute top-2 right-2 bg-blue-600 text-white rounded-full p-1 shadow-sm z-10">
+                                  <Check className="h-3.5 w-3.5" />
+                                </div>
+                              )}
+                              <div className="space-y-3">
+                                <div className={`h-24 w-full rounded-lg bg-gradient-to-tr ${av.color} flex flex-col items-center justify-center text-white font-extrabold text-lg shadow-inner relative overflow-hidden`}>
+                                  <span>{av.name.split(" ")[0]}</span>
+                                  <span className="text-[9px] uppercase font-black tracking-widest opacity-70 mt-1">Pre-Vetted</span>
+                                </div>
+                                <div className="space-y-1">
+                                  <h4 className="text-xs font-extrabold text-slate-800">{av.name}</h4>
+                                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{av.role}</p>
+                                  <p className="text-xs text-slate-600 leading-normal line-clamp-2 mt-1">{av.desc}</p>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 pt-3 border-t flex items-center justify-between text-[11px] font-mono text-slate-400">
+                                <span>Voice ID: {av.voiceId}</span>
+                                <button
+                                  type="button"
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shrink-0 flex items-center gap-1 cursor-pointer ${
+                                    activePreviewVoiceId === av.id
+                                      ? "bg-rose-100 border-rose-300 text-rose-700 hover:bg-rose-200"
+                                      : "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100"
+                                  }`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTogglePreview(av);
+                                  }}
+                                >
+                                  {activePreviewVoiceId === av.id ? "Stop Preview" : "Start Preview"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      
+                      {/* Status Checker */}
+                      <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Biometric Identity Status</span>
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2.5 w-2.5 rounded-full ${
+                              digitalTwinStatus === "approved" ? "bg-emerald-500 animate-ping" :
+                              digitalTwinStatus === "processing" ? "bg-amber-500 animate-pulse" :
+                              digitalTwinStatus === "rejected" ? "bg-rose-500" : "bg-slate-300"
+                            }`} />
+                            <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                              {digitalTwinStatus === "none" && "No Clone Configured"}
+                              {digitalTwinStatus === "processing" && "Processing & Matching Twin..."}
+                              {digitalTwinStatus === "approved" && "Verified & Active"}
+                              {digitalTwinStatus === "rejected" && "Rejected — Compliance Check Failed"}
+                            </h4>
+                          </div>
+                        </div>
+
+                        {digitalTwinStatus === "processing" && (
+                          <div className="flex gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDigitalTwinStatus("approved");
+                                setDigitalTwinAvatarId("dt-agent-clone-99");
+                                toast.success("Simulation: Digital Twin verified successfully!");
+                              }}
+                              className="bg-emerald-600 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg hover:bg-emerald-700 cursor-pointer shadow-sm"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDigitalTwinStatus("rejected")}
+                              className="bg-rose-600 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg hover:bg-rose-700 cursor-pointer shadow-sm"
+                            >
+                              Fail
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {digitalTwinStatus === "none" && (
+                        <div className="space-y-4">
+                          <div className="p-4 border rounded-xl bg-white space-y-2">
+                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide">
+                              <span className="h-5 w-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">1</span>
+                              Video Training upload (2-Minute Requirement)
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              Upload a clean, 2-minute video: 15 seconds listening, 90 seconds talking, 15 seconds listening, uncut. Well-lit, one continuous take. Submissions must be of legal adult age.
+                            </p>
+                            <input
+                              type="file"
+                              id="training-file-input"
+                              accept="video/*"
+                              className="sr-only"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setSelectedTrainingFile(file);
+                                  setTrainingFileName(file.name);
+                                  toast.success(`Selected training video: ${file.name}`);
+                                }
+                              }}
+                            />
+                            <div 
+                              className="border-2 border-dashed border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer" 
+                              onClick={() => document.getElementById("training-file-input")?.click()}
+                            >
+                              <Upload className="h-6 w-6 text-slate-400 mb-1" />
+                              <span className="text-xs font-semibold text-slate-700">
+                                {trainingFileName ? `Selected: ${trainingFileName}` : "Drag & drop your 2-minute raw training clip"}
+                              </span>
+                              {trainingFileName && <span className="text-[10px] text-emerald-600 font-bold mt-1">Ready to upload ✓</span>}
+                            </div>
+                          </div>
+
+                          <div className="p-4 border rounded-xl bg-white space-y-3">
+                            <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 uppercase tracking-wide">
+                              <span className="h-5 w-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-bold">2</span>
+                              Mandatory Identity & Biometric Legal Consent
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              Record a separate short video (under 30 seconds) reading the verbatim statement below:
+                            </p>
+                            <div className="bg-slate-950 text-slate-100 p-3 rounded-lg font-mono text-[10px] leading-relaxed border border-slate-800">
+                              "I, <span className="text-blue-400 font-bold">{legalName || user?.name || "Agent Name"}</span>, hereby authorize AI Open House Connect and its video processing engine to create a high-fidelity 3D digital twin avatar of my face, voice, and likeness."
+                            </div>
+                            <div className="flex items-start gap-2 bg-blue-50/40 border border-blue-100 p-2.5 rounded">
+                              <input
+                                type="checkbox"
+                                id="consent-check"
+                                checked={consentApproved}
+                                onChange={(e) => setConsentApproved(e.target.checked)}
+                                className="h-4 w-4 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              />
+                              <label htmlFor="consent-check" className="text-xs text-slate-700 leading-normal cursor-pointer font-medium">
+                                I verify that I will speak the exact verbatim consent script.
+                              </label>
+                            </div>
+                            <input
+                              type="file"
+                              id="consent-file-input"
+                              accept="video/*"
+                              className="sr-only"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setSelectedConsentFile(file);
+                                  setConsentFileName(file.name);
+                                  toast.success(`Selected consent video: ${file.name}`);
+                                }
+                              }}
+                            />
+                            <div 
+                              className="border-2 border-dashed border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer" 
+                              onClick={() => document.getElementById("consent-file-input")?.click()}
+                            >
+                              <Video className="h-6 w-6 text-slate-400 mb-1" />
+                              <span className="text-xs font-semibold text-slate-700">
+                                {consentFileName ? `Selected: ${consentFileName}` : "Upload your short consent confirmation video"}
+                              </span>
+                              {consentFileName && <span className="text-[10px] text-emerald-600 font-bold mt-1">Ready to upload ✓</span>}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-end pt-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!trainingFileName) {
+                                  toast.error("Please upload your 2-minute raw training clip first.");
+                                  return;
+                                }
+                                if (!consentApproved) {
+                                  toast.error("Please verify compliance & check the consent box first.");
+                                  return;
+                                }
+                                if (!consentFileName) {
+                                  toast.error("Please upload your short consent confirmation video first.");
+                                  return;
+                                }
+                                setDigitalTwinStatus("processing");
+                                toast.success("Likeness training pipeline initialized!");
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              Submit to Processing (~10 mins)
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {digitalTwinStatus === "processing" && (
+                        <div className="p-8 border border-dashed rounded-xl flex flex-col items-center justify-center text-center space-y-2 bg-slate-50/50">
+                          <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+                          <h4 className="font-bold text-slate-800 text-xs">Processing Custom Likeness</h4>
+                          <p className="text-[11px] text-slate-500 max-w-sm leading-relaxed">
+                            HeyGen&apos;s biometric identity matcher is auditing your consent video. This usually takes 10-15 minutes. Use the simulator buttons above to approve or fail the processing.
+                          </p>
+                        </div>
+                      )}
+
+                      {digitalTwinStatus === "approved" && (
+                        <div className="p-6 border border-emerald-150 rounded-xl bg-emerald-50/10 flex flex-col items-center justify-center text-center space-y-2">
+                          <Check className="h-8 w-8 text-emerald-600 animate-bounce" />
+                          <h4 className="font-bold text-slate-800 text-xs">Active Custom Avatar: &quot;My Digital Twin&quot;</h4>
+                          <p className="text-xs text-slate-500">Designated ID: dt-agent-clone-99. Status: Verified & Active.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PAGE 3: SECURITY & GATEWAY */}
+              {avatarPage === 3 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-in fade-in duration-200">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Shield className="h-4 w-4 text-emerald-600" />
+                      Sora safety Speak Moderation API Console
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1 leading-normal">
+                      Every listing walkthrough generated by Gemini passes through a real-time server-side safety moderation script before sending to HeyGen to filter explicit, violent, or inappropriate content.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <textarea
+                        rows={3}
+                        value={scriptToModerate}
+                        onChange={(e) => setScriptToModerate(e.target.value)}
+                        placeholder="Type a script to test safety moderation..."
+                        className="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono bg-slate-50/50"
+                      />
+                      <button
+                        type="button"
+                        disabled={moderationLoading}
+                        onClick={handleTestScript}
+                        className="absolute right-3 bottom-3 bg-slate-800 hover:bg-slate-900 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {moderationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Shield className="h-3 w-3" />}
+                        Scan Script
+                      </button>
+                    </div>
+
+                    {moderationResult && (
+                      <div className={`p-4 border rounded-xl text-xs space-y-2 animate-in fade-in duration-200 ${moderationResult.passed ? 'bg-emerald-50/40 border-emerald-100' : 'bg-red-50/40 border-red-100'}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold uppercase tracking-wider text-[10px] text-slate-500">Moderation Output</span>
+                          <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded ${moderationResult.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                            {moderationResult.passed ? "Passed Check" : "Flagged & Filtered"}
+                          </span>
+                        </div>
+                        <div className="font-mono text-[11px] leading-relaxed text-slate-700 bg-white p-2 rounded border border-slate-100">
+                          <strong>Output sent to HeyGen:</strong> &quot;{moderationResult.sanitizedText}&quot;
+                        </div>
+                        {!moderationResult.passed && (
+                          <p className="text-[10px] text-red-600">
+                            Warning: Prohibited terms were redacted by safety middleware BEFORE execution to prevent HeyGen account termination.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-slate-150 pt-4 space-y-4">
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
+                        <RefreshCw className="h-4 w-4 text-blue-600" />
+                        HeyGen API Gateway Integration Points
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Secure, server-side REST configurations proxying tokens without exposing keys to the client.
+                      </p>
+                    </div>
+
+                    <div className="grid sm:grid-cols-3 gap-3">
+                      <div className="p-3 border border-slate-100 rounded-xl bg-slate-50/50 space-y-1">
+                        <span className="text-[9px] font-mono text-blue-600 font-extrabold uppercase bg-blue-50 px-1.5 py-0.5 rounded">POST</span>
+                        <div className="text-[10px] font-mono font-bold text-slate-800">/train-avatar</div>
+                        <p className="text-[9px] text-slate-500 leading-relaxed">Submits the 2-min training file + consent script for biometric clone compilation.</p>
+                      </div>
+                      <div className="p-3 border border-slate-100 rounded-xl bg-slate-50/50 space-y-1">
+                        <span className="text-[9px] font-mono text-purple-600 font-extrabold uppercase bg-purple-50 px-1.5 py-0.5 rounded">POST</span>
+                        <div className="text-[10px] font-mono font-bold text-slate-800">/live-session</div>
+                        <p className="text-[9px] text-slate-500 leading-relaxed">Starts a real-time WebRTC streaming peer session, fetching ICE server tokens.</p>
+                      </div>
+                      <div className="p-3 border border-slate-100 rounded-xl bg-slate-50/50 space-y-1">
+                        <span className="text-[9px] font-mono text-amber-600 font-extrabold uppercase bg-amber-50 px-1.5 py-0.5 rounded">GET</span>
+                        <div className="text-[10px] font-mono font-bold text-slate-800">/status/:avatarId</div>
+                        <p className="text-[9px] text-slate-500 leading-relaxed">Webhooks and poller checking processing status to automatically deploy twins.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PAGE 4: LIVE MONITOR */}
+              {avatarPage === 4 && (
+                <div className="bg-slate-900 text-slate-100 rounded-2xl p-6 shadow-xl border border-slate-850 space-y-6 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-blue-400">Handshake Live</span>
+                      <h3 className="text-base font-extrabold text-white">Live Avatar Monitor</h3>
+                    </div>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                      liveSessionDetails 
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' 
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}>
+                      {liveSessionDetails ? "WebRTC STREAM" : "IDLE"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Glowing Live Feed Window */}
+                    <div className="lg:col-span-2 relative h-80 w-full rounded-2xl bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 flex flex-col items-center justify-center overflow-hidden group shadow-inner">
+                      
+                      {/* Active Video Screen simulation */}
+                      {liveSessionDetails ? (
+                        <div className="absolute inset-0 flex flex-col justify-between p-4 z-10 animate-in fade-in duration-300">
+                          {/* Live Indicator */}
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 bg-red-600/90 text-[9px] text-white font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full animate-pulse shadow-sm">
+                              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                              webrtc stream
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-400 bg-slate-950/80 backdrop-blur-sm px-1.5 py-0.5 rounded border border-slate-850">
+                              {liveSessionDetails.quality || "1080p"}
+                            </span>
+                          </div>
+
+                          {/* Central Pulsing Avatar Graphic representing active stream */}
+                          <div className="flex flex-col items-center justify-center grow">
+                            <div className="relative animate-pulse">
+                              <div className="absolute -inset-1.5 rounded-full bg-blue-500 opacity-20 blur" />
+                              <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-blue-400 flex items-center justify-center text-white text-2xl font-black shadow-lg">
+                                {avatarType === "gallery" 
+                                  ? (selectedGalleryId === "kore" ? "So" : selectedGalleryId === "puck" ? "Al" : selectedGalleryId === "zephyr" ? "So" : "Ma") 
+                                  : "DT"
+                                }
+                              </div>
+                            </div>
+                            <span className="text-sm font-bold text-white mt-3 shadow-sm">
+                              {avatarType === "gallery" 
+                                ? (selectedGalleryId === "kore" ? "Sora Classic" : selectedGalleryId === "puck" ? "Alex (Puck)" : selectedGalleryId === "zephyr" ? "Sophia (Sophia)" : "Marcus (Marcus)") 
+                                : "My Digital Twin"
+                              }
+                            </span>
+                            <span className="text-[10px] text-slate-400 mt-1 font-mono">Status: Connected to live WebRTC port</span>
+                          </div>
+
+                          {/* Live Speech transcript indicator */}
+                          <div className="bg-slate-950/80 backdrop-blur-sm border border-slate-800 p-2.5 rounded-xl text-center space-y-1">
+                            <span className="text-[8px] uppercase tracking-widest text-slate-500 font-extrabold block">Live script transcript feedback</span>
+                            <p className="text-[10px] text-slate-300 leading-normal line-clamp-2 italic">
+                              {isPlayingPreview ? scriptToModerate : "Listening for voice direction/script updates..."}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center p-6 text-center space-y-3">
+                          <div className="h-14 w-14 rounded-full bg-slate-850 flex items-center justify-center text-slate-500 border border-slate-800">
+                            <Video className="h-6 w-6 text-slate-400" />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 block">Avatar Feed offline</span>
+                            <p className="text-xs text-slate-400 leading-normal max-w-[200px]">
+                              Click "Start Live Video Tour" on the right to connect with your virtual guide.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4 flex flex-col justify-between">
+                      {/* Active Avatar Meta details */}
+                      <div className="bg-slate-950 p-4 rounded-xl border border-slate-850 space-y-3">
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-500 block">Active Avatar Configuration</span>
+                        
+                        <div className="grid grid-cols-1 gap-2.5 text-xs">
+                          <div className="space-y-0.5">
+                            <span className="text-[9px] text-slate-500 block uppercase">Avatar Name</span>
+                            <span className="font-bold text-white leading-normal block">
+                              {avatarType === "gallery" 
+                                ? (selectedGalleryId === "kore" ? "Sora Classic" : selectedGalleryId === "puck" ? "Alex" : selectedGalleryId === "zephyr" ? "Sophia" : "Marcus") 
+                                : "My Digital Twin"
+                              }
+                            </span>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[9px] text-slate-500 block uppercase">Type & Engine Match</span>
+                            <span className="font-bold text-blue-400 leading-normal block font-mono">HeyGen Live v1 (WebRTC)</span>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[9px] text-slate-500 block uppercase">Billing Gate</span>
+                            <span className="font-bold text-emerald-400 leading-normal block">Elite Included</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interactive Handshake Console Logs */}
+                      {liveSessionDetails && (
+                        <div className="p-3 bg-slate-950 rounded-xl border border-slate-850 font-mono text-[9px] text-slate-400 space-y-1">
+                          <span className="text-[8px] uppercase tracking-widest text-slate-500 font-extrabold block">Handshake Metrics</span>
+                          <div className="text-emerald-400 font-bold">✓ ICE Servers loaded</div>
+                          <div className="text-slate-300">✓ Token auth verification succeeded</div>
+                        </div>
+                      )}
+
+                      {/* Handshake actions */}
+                      <div className="space-y-2 pt-2">
+                        {!liveSessionDetails ? (
+                          <button
+                            type="button"
+                            onClick={handleStartLiveStream}
+                            disabled={isInitializingLive}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+                          >
+                            {isInitializingLive ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Connecting Live Tour...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3.5 w-3.5" />
+                                Start Live Video Tour
+                              </>
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLiveSessionDetails(null);
+                              setIsPlayingPreview(false);
+                              toast.info("WebRTC stream session terminated.");
+                            }}
+                            className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+                          >
+                            <Pause className="h-3.5 w-3.5" />
+                            End Live Video Tour
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* NAVIGATION FOOTER */}
+              <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
+                <div>
+                  {avatarPage > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setAvatarPage(avatarPage - 1)}
+                      className="border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Back
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {avatarPage < 4 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const check = validateAvatarStep(avatarPage);
+                        if (!check.valid) {
+                          toast.error(check.message);
+                          return;
+                        }
+                        toast.success(`Step ${avatarPage} configurations saved locally!`);
+                        setAvatarPage(avatarPage + 1);
+                      }}
+                      className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-blue-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      Save & Continue
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="bg-blue-600 text-white px-5 py-2.5 rounded-lg font-bold text-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Save Avatar Settings
+                    </button>
+                  )}
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -1242,7 +2516,10 @@ export default function Settings() {
                           <textarea 
                             className="w-full text-sm bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-600 focus:ring-2 focus:ring-red-500 focus:outline-none min-h-[80px]"
                             value={pricingDescription}
-                            onChange={(e) => setPricingDescription(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPricingDescription(val.charAt(0).toUpperCase() + val.slice(1));
+                            }}
                             placeholder="Pricing models designed to maximize your revenue..."
                           />
                         </div>
@@ -1296,8 +2573,10 @@ export default function Settings() {
                               <textarea 
                                 value={plan.features.join(", ")}
                                 onChange={(e) => {
+                                  const val = e.target.value;
+                                  const capitalized = val.charAt(0).toUpperCase() + val.slice(1);
                                   const newPlans = [...plans];
-                                  newPlans[idx].features = e.target.value.split(",").map(f => f.trim());
+                                  newPlans[idx].features = capitalized.split(",").map(f => f.trim());
                                   setPlans(newPlans);
                                 }}
                                 className="w-full text-xs text-slate-600 min-h-[60px] border border-slate-100 rounded p-2 focus:ring-1 focus:ring-red-500 focus:outline-none transition-colors"

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Phone, Mail, Calendar, MapPin, CheckCircle, Clock, Send, Database, ExternalLink, Loader2, Save } from "lucide-react";
-import { getLead, Lead, sendEmail, updateLead } from "@/lib/api";
+import { ArrowLeft, Phone, Mail, Calendar, MapPin, CheckCircle, Clock, Send, Database, ExternalLink, Loader2, Save, Sparkles, Brain, Lightbulb, Target, Briefcase, GraduationCap, ShieldCheck, Scale, Link2, Linkedin, Users } from "lucide-react";
+import { getLead, Lead, sendEmail, updateLead, getListing, routeLeadToCRM, generateLeadSummary } from "@/lib/api";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import ProspectInsightReport from "@/components/ProspectInsightReport";
 
 export default function LeadDetails() {
   const { leadId } = useParams();
@@ -24,6 +25,7 @@ export default function LeadDetails() {
   const [notes, setNotes] = useState("");
   const [isVerified, setIsVerified] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   useEffect(() => {
     if (leadId) {
@@ -65,6 +67,44 @@ export default function LeadDetails() {
     }
   };
 
+  const handleGenerateSummary = async () => {
+    if (!lead) return;
+    setGeneratingSummary(true);
+    try {
+      // First, get listing details for deep context
+      const listing = await getListing(lead.listingId).catch(() => null);
+      const summaryResult = await generateLeadSummary({
+        leadName: lead.name,
+        leadMessage: lead.message || "",
+        listingAddress: lead.listingAddress,
+        listingDescription: listing?.description || "",
+        talkingPoints: listing?.talkingPoints || []
+      });
+      
+      const updatedSummary = {
+        ...summaryResult,
+        generatedAt: Date.now()
+      };
+
+      // Save to Firebase
+      await updateLead(lead.id, {
+        conversationSummary: updatedSummary
+      });
+
+      // Reload lead
+      await loadLead(lead.id);
+      toast.success("AI Conversation Summary Generated", {
+        description: "Expressed interests, questions, and high-intent indicators are now active."
+      });
+    } catch (err: any) {
+      toast.error("Failed to generate summary", {
+        description: err.message || "An unexpected error occurred."
+      });
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-20">
@@ -92,23 +132,57 @@ export default function LeadDetails() {
     setSendingEmail(true);
     
     try {
+      // Build lead details email with any available summary
+      let summaryHtml = "";
+      if (lead.conversationSummary) {
+        summaryHtml = `
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+          <h2 style="color: #2563eb; font-size: 18px; margin-bottom: 12px; font-family: sans-serif;">Sora Conversation Summary</h2>
+          <p style="font-weight: bold; color: #475569; font-size: 14px; margin-bottom: 6px;">Professional AI Analysis:</p>
+          <p style="font-style: italic; color: #334155; background-color: #f1f5f9; padding: 12px 16px; border-left: 4px solid #2563eb; border-radius: 4px; margin-top: 0; line-height: 1.5; font-size: 14px; white-space: pre-wrap;">
+            "${lead.conversationSummary.formattedSummary}"
+          </p>
+          
+          <div style="margin-top: 16px;">
+            <p style="font-weight: bold; margin-bottom: 6px; color: #1e3a8a; font-size: 14px;">🎯 Expressed Interests:</p>
+            <ul style="margin: 0 0 16px 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.4;">
+              ${lead.conversationSummary.expressedInterests.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+
+            <p style="font-weight: bold; margin-bottom: 6px; color: #0f766e; font-size: 14px;">❓ Anticipated / Asked Questions:</p>
+            <ul style="margin: 0 0 16px 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.4;">
+              ${lead.conversationSummary.questionsAsked.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+
+            <p style="font-weight: bold; margin-bottom: 6px; color: #b45309; font-size: 14px;">⚡ High-Intent Indicators:</p>
+            <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #475569; line-height: 1.4;">
+              ${lead.conversationSummary.highIntentIndicators.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+
       await sendEmail({
         to: recipientEmail,
         subject: `Prospect Insight Report: ${lead.name}`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #334155;">
-            <h1 style="color: #2563eb;">Prospect Insight Report</h1>
-            <p>Here is the detailed information for the lead captured via VertexAgent.</p>
+            <h1 style="color: #2563eb; font-size: 24px;">Prospect Insight Report</h1>
+            <p>Here is the detailed information for the lead captured via AI Open House Connect.</p>
             <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
-              <h2 style="margin-top: 0;">Contact Details</h2>
-              <p><strong>Name:</strong> ${lead.name}</p>
-              <p><strong>Email:</strong> ${lead.email || "Not provided"}</p>
-              <p><strong>Phone:</strong> ${lead.phone || "Not provided"}</p>
+              <h2 style="margin-top: 0; font-size: 18px; color: #1e293b;">Contact Details</h2>
+              <p style="margin: 6px 0;"><strong>Name:</strong> ${lead.name}</p>
+              <p style="margin: 6px 0;"><strong>Email:</strong> ${lead.email || "Not provided"}</p>
+              <p style="margin: 6px 0;"><strong>Phone:</strong> ${lead.phone || "Not provided"}</p>
+              
               <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-              <h2>Interaction History</h2>
-              <p><strong>Property:</strong> ${lead.listingAddress}</p>
-              <p><strong>Status:</strong> ${lead.status || 'New'}</p>
-              <p><strong>Captured On:</strong> ${format(lead.createdAt, "PPP")}</p>
+              
+              <h2 style="font-size: 18px; color: #1e293b; margin-top: 0;">Interaction History</h2>
+              <p style="margin: 6px 0;"><strong>Property:</strong> ${lead.listingAddress}</p>
+              <p style="margin: 6px 0;"><strong>Status:</strong> ${lead.status || 'New'}</p>
+              <p style="margin: 6px 0;"><strong>Captured On:</strong> ${format(lead.createdAt, "PPP")}</p>
+              
+              ${summaryHtml}
             </div>
             
             <div style="margin-top: 24px; text-align: center; border-radius: 8px;">
@@ -116,7 +190,7 @@ export default function LeadDetails() {
             </div>
 
             <p style="font-size: 11px; color: #94a3b8; margin-top: 20px; text-align: center;">
-              Generated by VertexAgent AI Core. Proprietary and Confidential.
+              Generated by AI Open House Connect — Guided by Sora AI. Proprietary and Confidential.
             </p>
           </div>
         `,
@@ -136,14 +210,32 @@ export default function LeadDetails() {
     }
   };
 
-  const handlePushCRM = () => {
-    toast.error("CRM Integration Not Set Up", {
-      description: "Please configure a CRM webhook in Listing Settings or Integrations page first.",
-      action: {
-        label: "Fix Now",
-        onClick: () => navigate("/app/integrations")
+  const handlePushCRM = async () => {
+    if (!lead) return;
+    setPushing(true);
+    try {
+      const listing = await getListing(lead.listingId);
+      if (listing && listing.webhookUrl) {
+        await routeLeadToCRM(listing, lead);
+        toast.success("Successfully Pushed to CRM Webhook", {
+          description: `Lead info and Sora Prospect Summary pushed to ${listing.webhookUrl}`
+        });
+      } else {
+        toast.error("CRM Webhook Not Configured", {
+          description: "This listing does not have a CRM webhook configured. You can set one up in the Listing Edit page.",
+          action: {
+            label: "Go to Listings",
+            onClick: () => navigate("/app/listings")
+          }
+        });
       }
-    });
+    } catch (err: any) {
+      toast.error("Failed to push to CRM", {
+        description: err.message || "An unexpected error occurred."
+      });
+    } finally {
+      setPushing(false);
+    }
   };
 
   return (
@@ -168,120 +260,65 @@ export default function LeadDetails() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white border rounded-xl p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 border-b pb-2 text-left">Contact Details</h2>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 text-slate-400" />
-              <div className="text-left">
-                <div className="text-sm text-slate-500">Phone</div>
-                {lead.phone ? (
-                  <a href={`tel:${lead.phone.replace(/[^0-9+]/g, '')}`} className="font-medium text-blue-600 hover:underline">{lead.phone}</a>
-                ) : (
-                  <span className="text-slate-400 italic">Not provided</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Mail className="h-5 w-5 text-slate-400" />
-              <div className="text-left">
-                <div className="text-sm text-slate-500">Email</div>
-                {lead.email ? (
-                  <a href={`mailto:${lead.email}`} className="font-medium text-blue-600 hover:underline">{lead.email}</a>
-                ) : (
-                  <span className="text-slate-400 italic">Not provided</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle className={`h-5 w-5 ${isVerified ? 'text-green-500' : 'text-slate-400'}`} />
-              <div className="text-left">
-                <div className="text-sm text-slate-500 flex items-center justify-between gap-4">
-                    Status
-                    {isVerified && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded uppercase font-bold">Verified</span>}
-                </div>
-                <span className={`px-2.5 py-0.5 mt-1 inline-block rounded-full text-xs font-semibold
-                    ${lead.status === 'Hot' ? 'bg-red-100 text-red-700' : ''}
-                    ${lead.status === 'Warm' ? 'bg-orange-100 text-orange-700' : ''}
-                    ${lead.status === 'Cold' ? 'bg-blue-100 text-blue-700' : ''}
-                    ${lead.status === 'New' || !lead.status ? 'bg-green-100 text-green-700' : ''}
-                  `}>
-                  {lead.status || 'New'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border rounded-xl p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4 border-b pb-2 text-left">Interaction History</h2>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <MapPin className="h-5 w-5 text-slate-400" />
-              <div className="text-left">
-                <div className="text-sm text-slate-500">Interested Property</div>
-                <div className="font-medium">{lead.listingAddress}</div>
-                <div className="text-[10px] text-slate-400">ID: {lead.listingId}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 text-slate-400" />
-              <div className="text-left">
-                <div className="text-sm text-slate-500">Captured On</div>
-                <div className="font-medium">{format(lead.createdAt, "PPP 'at' p")}</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Primary Comprehensive Prospect Insight Report View */}
+      <div className="bg-slate-950 p-1 md:p-4 rounded-2xl border border-white/5 shadow-xl">
+        <ProspectInsightReport
+          lead={lead}
+          onSaveNotes={async (notesText, tagsArray) => {
+            setNotes(notesText);
+            setLead(prev => prev ? {
+              ...prev,
+              notes: notesText,
+              customAnswers: {
+                ...(prev.customAnswers || {}),
+                tags: tagsArray
+              }
+            } : null);
+            try {
+              await updateLead(lead.id, {
+                notes: notesText,
+                customAnswers: {
+                  ...(lead.customAnswers || {}),
+                  tags: tagsArray
+                }
+              });
+              toast.success("Progress persisted successfully.");
+            } catch (err) {
+              console.error("Firestore sync error:", err);
+            }
+          }}
+        />
       </div>
 
-      <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4 border-b pb-2 text-left">Visitor Message</h2>
-        <div className="p-4 bg-slate-50 rounded-lg text-slate-700 text-left whitespace-pre-wrap">
-          {lead.message || "No message provided."}
-        </div>
-      </div>
-
-      <div className="bg-white border rounded-xl p-6 shadow-sm">
-        <div className="flex justify-between items-center mb-4 border-b pb-2">
-          <h2 className="text-lg font-semibold">Lead Workspace</h2>
-          <Button onClick={handleSaveWorkspace} disabled={saving} size="sm" className="gap-2 font-bold">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Changes
-          </Button>
-        </div>
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-lg border border-blue-100 max-w-sm">
-            <div className="relative flex items-center">
-              <input 
-                type="checkbox" 
-                id="verified" 
-                checked={isVerified} 
-                onChange={() => setIsVerified(!isVerified)} 
-                className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
-              />
+{/* Shared Listing Cross-Hosting Panel */}
+      {lead.isShared && (
+        <div className="bg-gradient-to-r from-amber-500/5 to-transparent border border-amber-200 rounded-xl p-6 shadow-sm text-left">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="h-5 w-5 text-amber-600" />
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+              Cross-Hosted / Shared Property Assignment Details
+            </h2>
+          </div>
+          <p className="text-xs text-slate-600 leading-relaxed mb-4">
+            This lead was captured during a Cross-Hosted Open House event. Specific permissions, ownership, and lender consent properties are listed below:
+          </p>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div className="p-3 bg-white rounded-lg border border-slate-150 shadow-xs">
+              <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">Listing Owner ID</div>
+              <div className="font-mono font-semibold text-slate-800 text-xs truncate" title={lead.listingOwnerAgentId}>{lead.listingOwnerAgentId || "Listing Owner"}</div>
             </div>
-            <Label htmlFor="verified" className="font-semibold text-slate-800 cursor-pointer select-none">
-              Prospect Verified ✓
-            </Label>
-          </div>
-          <div className="space-y-2 text-left">
-            <Label htmlFor="notes" className="font-semibold text-slate-700">Notes (First letter capitalized)</Label>
-            <Textarea 
-              id="notes" 
-              value={notes} 
-              onChange={(e) => {
-                const val = e.target.value;
-                const capitalized = val.replace(/^\s*([a-z])/, (match) => match.toUpperCase());
-                setNotes(capitalized);
-              }} 
-              placeholder="Add agent notes here..." 
-              className="min-h-[120px] bg-slate-50 focus:bg-white transition-all text-slate-800"
-            />
+            <div className="p-3 bg-white rounded-lg border border-slate-150 shadow-xs">
+              <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">Device Captured By</div>
+              <div className="font-mono font-semibold text-slate-800 text-xs truncate" title={lead.capturedByAgentId}>{lead.capturedByAgentId || "Hosting Agent"}</div>
+            </div>
+            <div className="p-3 bg-white rounded-lg border border-slate-150 shadow-xs">
+              <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">Lead Visibility Rule</div>
+              <div className="font-semibold text-amber-700 text-xs capitalize">{lead.leadVisibility?.replace("_", " ") || "Host Receives"}</div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
 
       <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
         <DialogContent className="sm:max-w-md">

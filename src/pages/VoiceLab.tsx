@@ -35,17 +35,17 @@ interface Voice {
 }
 
 const INITIAL_VOICES: Voice[] = [
-  { id: "v1", name: "Sora Welcome (Kore)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 124, tags: ["Female", "Warm", "First Touch"], isDefault: true },
-  { id: "v2", name: "Open House Sign-In (Kore)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 95, tags: ["Female", "Polished", "Front Desk"] },
+  { id: "v1", name: "Sora Welcome (Sora)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 124, tags: ["Female", "Warm", "First Touch"], isDefault: true },
+  { id: "v2", name: "Open House Sign-In (Sora)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 95, tags: ["Female", "Polished", "Front Desk"] },
   { id: "v3", name: "AI Tour Intro (Aoede)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 202, tags: ["Female", "Tour Guide", "Expressive"] },
-  { id: "v4", name: "Lender Handoff (Kore)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 78, tags: ["Female", "High-Trust", "Financing"] },
+  { id: "v4", name: "Lender Handoff (Sora)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 78, tags: ["Female", "High-Trust", "Financing"] },
   { id: "v5", name: "Follow-Up Message (Umbriel)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 147, tags: ["Female", "Refined", "Nurture"] },
-  { id: "2", name: "Professional Female (Kore)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 45, tags: ["Female", "Professional"] },
-  { id: "5", name: "Executive British (Zephyr)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 22, tags: ["Female", "British", "Executive"] },
-  { id: "7", name: "Dynamic Storyteller (Aoede)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 56, tags: ["Female", "British", "Expressive"] },
-  { id: "3", name: "Warm Energetic Male (Puck)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 32, tags: ["Male", "Warm", "Energetic"] },
-  { id: "6", name: "Calm Reassuring Male (Charon)", status: "Active", type: "Synthetic", rating: 4.6, ratingCount: 19, tags: ["Male", "Calm", "Warm"] },
-  { id: "8", name: "Deep Narrator (Fenrir)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 28, tags: ["Male", "Deep", "Narrative"] },
+  { id: "2", name: "Professional Female Synthetic (Sora)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 45, tags: ["Female", "Professional", "Sora"] },
+  { id: "5", name: "Executive British (Female) Synthetic", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 22, tags: ["Female", "British", "Executive", "Zephyr"] },
+  { id: "7", name: "Dynamic Storyteller (British Female) Synthetic", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 56, tags: ["Female", "British", "Expressive", "Aoede"] },
+  { id: "3", name: "Warm Energetic Male Synthetic (Puck)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 32, tags: ["Male", "Warm", "Energetic", "Puck"] },
+  { id: "6", name: "Calm Reassuring Male Synthetic (Charon)", status: "Active", type: "Synthetic", rating: 4.6, ratingCount: 19, tags: ["Male", "Calm", "Warm", "Charon"] },
+  { id: "8", name: "Deep Narrator Synthetic (Fenrir)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 28, tags: ["Male", "Deep", "Narrative", "Fenrir"] },
 ];
 
 export default function VoiceLab() {
@@ -223,13 +223,13 @@ export default function VoiceLab() {
 
       if (lowerName.includes('welcome') || lowerName.includes('first touch')) {
         voiceName = 'Kore';
-        styleInstruction = `Configure Voice: Kore.
+        styleInstruction = `Configure Voice: Sora.
 Audio Profile: Polished, warm, smooth, stable, and premium female persona. Sounds trustworthy, elegant, and highly professional, fitting a luxury real estate brand.
 Scene: Greeting a guest or guiding an open house experience for the first time.
 Director's Notes: Deliver with a smooth, warm, client-friendly tone. Pacing must be calm, relaxed, and completely natural. Do not sound high-pitched, excited, rushed, or robotic. Speak with absolute confidence and clarity. Use natural breathing pauses.`;
       } else if (lowerName.includes('sign-in')) {
         voiceName = 'Kore';
-        styleInstruction = `Configure Voice: Kore.
+        styleInstruction = `Configure Voice: Sora.
 Audio Profile: Clear, highly polished, professional female assistant designed for modern transactional/digital environments. Sound articulate, calm, reassuring, and easy to follow.
 Scene: Guiding a visitor through a touchless open house sign-in flow.
 Director's Notes: Prioritize data trust and structural clarity. Delivery must remain polite, concise, low-pressure, informative, and highly approachable.`;
@@ -241,7 +241,7 @@ Scene: Initiating an interactive, self-guided property tour.
 Director's Notes: Sound warm, highly informative, and confident. Keep the pace completely relaxed. The buyer should feel fluidly guided and educated, never hard-sold.`;
       } else if (lowerName.includes('lender') || lowerName.includes('financing')) {
         voiceName = 'Kore';
-        styleInstruction = `Configure Voice: Kore.
+        styleInstruction = `Configure Voice: Sora.
 Audio Profile: High-trust, mature, exceptionally composed, warm, and helpful female assistant handling sensitive real estate financing handoffs.
 Scene: Introducing an optional mortgage pre-approval or financing handoff.
 Director's Notes: Maintain a deeply respectful, supportive, steady, trustworthy, and non-pushy tone. Project calm authority and neutral helpfulness.`;
@@ -1038,7 +1038,10 @@ Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the c
               <label className="text-xs font-bold uppercase text-slate-400">Sample Text</label>
               <textarea 
                 value={testText}
-                onChange={e => setTestText(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  setTestText(val.charAt(0).toUpperCase() + val.slice(1));
+                }}
                 className="w-full h-28 p-4 rounded-xl border border-slate-200 bg-slate-50 resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed"
               />
             </div>

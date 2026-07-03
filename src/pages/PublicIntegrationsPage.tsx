@@ -42,7 +42,7 @@ export default function PublicIntegrationsPage() {
           lastname: "Connor",
           email: "sarah.c@gmail.com",
           phone: "+14158882940",
-          lead_source: "VertexAgent Open House Sign-In",
+          lead_source: "AI Open House Connect Open House Sign-In",
           brokerage_compliance_consent: "True",
           listing_address_visited: "888 Bel Air Road",
           showing_timeline_interest: "Immediate (1-3 months)",
@@ -62,7 +62,7 @@ export default function PublicIntegrationsPage() {
           lastName: "Connor",
           emails: [{ value: "sarah.c@gmail.com", type: "home", primary: true }],
           phones: [{ value: "+14158882940", type: "mobile", primary: true }],
-          source: "VertexAgent",
+          source: "AI Open House Connect",
           tags: ["Open House guest", "High Score Lead", "Bel Air Listing"],
           background: "Speech transcript: requested disclosure documents and requested contact info."
         }
@@ -80,7 +80,7 @@ export default function PublicIntegrationsPage() {
           address: "888 Bel Air Road",
           mls_number: "20526767",
           listing_agent: "Cassandra Vance",
-          brokerage: "Vertex Prestige"
+          brokerage: "AI Open House Prestige"
         },
         visitor: {
           full_name: "Sarah Connor",

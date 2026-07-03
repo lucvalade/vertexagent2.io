@@ -27,6 +27,8 @@ interface LaunchNotification {
   referrals: { email: string; type: string }[];
   createdAt: any;
   source: string;
+  propertyViewed?: string;
+  address?: string;
 }
 
 export default function AdminNotifications() {
@@ -354,6 +356,12 @@ export default function AdminNotifications() {
                         <Bell className="h-3.5 w-3.5 shrink-0" /> {n.createdAt ? format(n.createdAt.toDate(), 'MMM d, yyyy h:mm a') : 'Just now'}
                       </div>
                     </div>
+                    <div className="mt-3 text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span className="text-slate-400 font-semibold">Property Viewed:</span>
+                      <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-0.5 rounded-lg text-[10.5px] font-mono font-black">
+                        {n.propertyViewed || n.address || "888 Bel Air Rd, Los Angeles"}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -491,7 +499,10 @@ export default function AdminNotifications() {
               <textarea 
                 className="w-full min-h-[150px] bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none text-slate-600 leading-relaxed"
                 value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEmailBody(val.charAt(0).toUpperCase() + val.slice(1));
+                }}
               />
             </div>
 

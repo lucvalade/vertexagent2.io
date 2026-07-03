@@ -16,6 +16,8 @@ import {
   VolumeX, 
   Globe2, 
   ChevronRight, 
+  ChevronUp,
+  ChevronDown,
   BookmarkCheck, 
   MessageSquare, 
   ArrowRight, 
@@ -53,6 +55,14 @@ export default function AiTours() {
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
 
+  // Sequence and Popup confirmation states
+  const [confirmDeleteRoomId, setConfirmDeleteRoomId] = useState<string | null>(null);
+  const [confirmDeleteQaIdx, setConfirmDeleteQaIdx] = useState<number | null>(null);
+
+  // Language Conflict Dialog states
+  const [langConflictOpen, setLangConflictOpen] = useState(false);
+  const [langConflictType, setLangConflictType] = useState<"rooms" | "qas" | "both">("rooms");
+
   // Tour properties/options
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [multilingualEnabled, setMultilingualEnabled] = useState(false);
@@ -67,6 +77,74 @@ export default function AiTours() {
   ]);
   const [newCtaLabel, setNewCtaLabel] = useState("");
   const [newCtaAction, setNewCtaAction] = useState("calendar");
+  const [ctaToDelete, setCtaToDelete] = useState<{ index: number; label: string } | null>(null);
+
+  // Helper for dynamic translation of CTA and action buttons
+  const getWalkthroughTranslations = (lang: string) => {
+    const dictionary: Record<string, { preview: string; translateRoom: string; translateAnswer: string }> = {
+      French: {
+        preview: "Écouter la voix de Sora (Français)",
+        translateRoom: "Traduire en Français",
+        translateAnswer: "Traduire la resposta en Français"
+      },
+      Spanish: {
+        preview: "Escuchar la voz de Sora (Español)",
+        translateRoom: "Traducir al Español",
+        translateAnswer: "Traducir respuesta al Español"
+      },
+      German: {
+        preview: "Sora-Stimme anhören (Deutsch)",
+        translateRoom: "Auf Deutsch übersetzen",
+        translateAnswer: "Antwort auf Deutsch übersetzen"
+      },
+      Italian: {
+        preview: "Ascolta la voce di Sora (Italiano)",
+        translateRoom: "Traduci in Italiano",
+        translateAnswer: "Traduci la risposta in Italiano"
+      },
+      Portuguese: {
+        preview: "Ouvir a voz de Sora (Português)",
+        translateRoom: "Traduzir para Português",
+        translateAnswer: "Traduzir resposta para Português"
+      },
+      Mandarin: {
+        preview: "预览Sora语音 (中文)",
+        translateRoom: "翻译成中文",
+        translateAnswer: "将回答翻译成中文"
+      },
+      Japanese: {
+        preview: "Soraの音声プレビュー (日本語)",
+        translateRoom: "日本語に翻訳",
+        translateAnswer: "回答を日本語に翻訳"
+      },
+      Dutch: {
+        preview: "Sora-stem beluisteren (Nederlands)",
+        translateRoom: "Vertaal naar het Nederlands",
+        translateAnswer: "Vertaal antwoord naar het Nederlands"
+      },
+      Russian: {
+        preview: "Прослушать голос Sora (Русский)",
+        translateRoom: "Перевести на русский",
+        translateAnswer: "Перевести ответ на русский"
+      },
+      Arabic: {
+        preview: "معاينة صوت سورا (العربية)",
+        translateRoom: "ترجم إلى العربية",
+        translateAnswer: "ترجم الإجابة إلى العربية"
+      },
+      English: {
+        preview: "Preview Sora Voice (English)",
+        translateRoom: "Translate to English",
+        translateAnswer: "Translate Answer to English"
+      }
+    };
+
+    return dictionary[lang] || {
+      preview: `Preview Sora Voice (${lang})`,
+      translateRoom: `Translate to ${lang}`,
+      translateAnswer: `Translate Answer to ${lang}`
+    };
+  };
 
   // AI (Sora) Loading State
   const [soraGenerating, setSoraGenerating] = useState(false);
@@ -77,6 +155,9 @@ export default function AiTours() {
   const [qaTargetLang, setQaTargetLang] = useState("French");
   const [welcomeOtherScript, setWelcomeOtherScript] = useState("");
   const [translating, setTranslating] = useState(false);
+  const [shortening, setShortening] = useState(false);
+  const [shorteningFr, setShorteningFr] = useState(false);
+  const [shorteningOther, setShorteningOther] = useState(false);
   const [playingLang, setPlayingLang] = useState<string | null>(null); // "en" | "fr" | "other"
 
   const [translatingRoomId, setTranslatingRoomId] = useState<string | null>(null);
@@ -122,15 +203,10 @@ export default function AiTours() {
       return;
     }
 
-    // Stop any existing playing audio first
-    if ((window as any)._vertexCurrentAudio) {
-      try {
-        (window as any)._vertexCurrentAudio.pause();
-      } catch (e) {}
-      (window as any)._vertexCurrentAudio = null;
-    }
+    // Stop any existing playing audio or speech first
+    stopSpeaking();
 
-    const detectedLang = detectLanguage(text, langName);
+    const detectedLang = langName || "English";
 
     setPlayingLang(trackingKey);
     const toastId = toast.loading(`Connecting to Sora's premium voice servers for ${detectedLang}...`);
@@ -147,15 +223,30 @@ export default function AiTours() {
       }
       const data = await response.json();
       if (data.success && data.base64Audio) {
-        const audio = new Audio("data:audio/mp3;base64," + data.base64Audio);
+        const mimeType = data.mimeType || "audio/wav";
+        const binary = atob(data.base64Audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        
+        const blob = new Blob([bytes], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        
         (window as any)._vertexCurrentAudio = audio;
+        
         audio.onended = () => {
           setPlayingLang(null);
+          URL.revokeObjectURL(url);
         };
-        audio.onerror = () => {
+        
+        audio.onerror = (e) => {
+          console.error("Audio playback error", e);
           setPlayingLang(null);
-          toast.error("Failed to play Sora Voice audio.");
+          URL.revokeObjectURL(url);
         };
+        
         await audio.play();
       } else {
         throw new Error(data.error || "No audio returned from Gemini.");
@@ -169,7 +260,24 @@ export default function AiTours() {
         const langCode = trackingKey === "en" ? "en-US" : (trackingKey === "fr" ? "fr-FR" : getLangCode(detectedLang));
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = langCode;
+        
+        // Ensure we try to find a female voice to represent Sora
+        if (window.speechSynthesis.getVoices) {
+          const voices = window.speechSynthesis.getVoices();
+          const femaleWords = ["female", "sami", "samantha", "zira", "amelie", "hazel", "marta", "elsa", "sora", "google"];
+          const matchedVoice = voices.find(v => 
+            v.lang.startsWith(langCode.substring(0, 2)) && 
+            femaleWords.some(word => v.name.toLowerCase().includes(word))
+          ) || voices.find(v => v.lang.startsWith(langCode.substring(0, 2)));
+          if (matchedVoice) {
+            utterance.voice = matchedVoice;
+          }
+        }
+
         utterance.onend = () => {
+          setPlayingLang(null);
+        };
+        utterance.onerror = () => {
           setPlayingLang(null);
         };
         window.speechSynthesis.speak(utterance);
@@ -183,9 +291,19 @@ export default function AiTours() {
   const stopSpeaking = () => {
     if ((window as any)._vertexCurrentAudio) {
       try {
-        (window as any)._vertexCurrentAudio.pause();
+        if (typeof (window as any)._vertexCurrentAudio.stop === "function") {
+          (window as any)._vertexCurrentAudio.stop();
+        } else if (typeof (window as any)._vertexCurrentAudio.pause === "function") {
+          (window as any)._vertexCurrentAudio.pause();
+        }
       } catch (e) {}
       (window as any)._vertexCurrentAudio = null;
+    }
+    if ((window as any)._vertexCurrentAudioContext) {
+      try {
+        (window as any)._vertexCurrentAudioContext.close();
+      } catch (e) {}
+      (window as any)._vertexCurrentAudioContext = null;
     }
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -321,7 +439,7 @@ export default function AiTours() {
     } else if (listing.welcome_en && !listing.welcome_en.startsWith("data:audio") && !listing.welcome_en.endsWith(".mp3") && listing.welcome_en.length < 1000) {
       initialEnScript = listing.welcome_en;
     } else {
-      initialEnScript = `Hello and welcome to the exquisite property at ${listing.address}. I am Sora, your personal AI property guide. I am thrilled to accompany you on this digital walkthrough. Let's begin the tour!`;
+      initialEnScript = "Hi, I'm Sora, your AI property assistant. This tour shows how I connect listings, answer client questions, book showings, and run your open house gate and lead sign-in. Tap each step to follow along.";
     }
     setWelcomeEn(initialEnScript);
 
@@ -332,7 +450,7 @@ export default function AiTours() {
     } else if (listing.welcome_fr && !listing.welcome_fr.startsWith("data:audio") && !listing.welcome_fr.endsWith(".mp3") && listing.welcome_fr.length < 1000) {
       initialFrScript = listing.welcome_fr;
     } else {
-      initialFrScript = `Bonjour et bienvenue au ${listing.address}. Je suis Sora, votre guide immobilier personnel IA. Je suis ravie de vous accompagner aujourd'hui.`;
+      initialFrScript = "Bonjour, je suis Sora, votre assistante immobilière IA. Cette visite guidée vous montre comment je mets en relation les annonces, réponds aux questions des clients, planifie les visites et gère l'accueil des visiteurs lors des journées portes ouvertes et l'inscription des prospects. Touchez chaque étape pour suivre le tutoriel.";
     }
     setWelcomeFr(initialFrScript);
 
@@ -425,6 +543,46 @@ export default function AiTours() {
     }, 1200);
   };
 
+  const handleShortenScript = async (type: "en" | "fr" | "other") => {
+    const textToShorten = type === "en" ? welcomeEn : (type === "fr" ? welcomeFr : welcomeOtherScript);
+    if (!textToShorten) {
+      toast.error("There is no script text to condense. Please generate or enter script first.");
+      return;
+    }
+    
+    if (type === "en") setShortening(true);
+    else if (type === "fr") setShorteningFr(true);
+    else setShorteningOther(true);
+
+    try {
+      const response = await fetch("/api/shorten-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textToShorten })
+      });
+      if (!response.ok) throw new Error("Failed to condense script via server proxy.");
+      const data = await response.json();
+      if (data.success) {
+        if (type === "en") {
+          setWelcomeEn(data.shortenedText);
+        } else if (type === "fr") {
+          setWelcomeFr(data.shortenedText);
+        } else {
+          setWelcomeOtherScript(data.shortenedText);
+        }
+        toast.success("Script successfully condensed by Sora into a fast-speaking, premium concise format!");
+      } else {
+        toast.error(data.error || "Failed to shorten script.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred while calling the condense API.");
+    } finally {
+      setShortening(false);
+      setShorteningFr(false);
+      setShorteningOther(false);
+    }
+  };
+
   const handleAddRoom = () => {
     if (!newRoomName || !newRoomScript || !selectedListing) {
       toast.error("Please provide both a room name and voice-ready script");
@@ -452,6 +610,40 @@ export default function AiTours() {
     toast.info("Room removed from tour");
   };
 
+  const handleMoveRoomUp = (index: number) => {
+    if (index === 0 || !selectedListing) return;
+    const updated = [...rooms];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    
+    // Update order values sequentially
+    updated.forEach((r, idx) => {
+      r.order = idx + 1;
+    });
+
+    setRooms(updated);
+    localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
+    toast.success("Room moved up sequence successfully!");
+  };
+
+  const handleMoveRoomDown = (index: number) => {
+    if (index === rooms.length - 1 || !selectedListing) return;
+    const updated = [...rooms];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+
+    // Update order values sequentially
+    updated.forEach((r, idx) => {
+      r.order = idx + 1;
+    });
+
+    setRooms(updated);
+    localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
+    toast.success("Room moved down sequence successfully!");
+  };
+
   const handleAddPoint = () => {
     if (!newPoint) return;
     const updated = [...talkingPoints, newPoint];
@@ -469,7 +661,16 @@ export default function AiTours() {
       toast.error("Please provide both question and answer");
       return;
     }
-    const updated = [...qas, { question: newQuestion, answer: newAnswer }];
+    const cleanQuestion = newQuestion.trim();
+    const cleanAnswer = newAnswer.trim();
+    if (!cleanQuestion || !cleanAnswer) {
+      toast.error("Question and answer cannot be empty.");
+      return;
+    }
+    const formattedQuestion = cleanQuestion.charAt(0).toUpperCase() + cleanQuestion.slice(1);
+    const formattedAnswer = cleanAnswer.charAt(0).toUpperCase() + cleanAnswer.slice(1);
+
+    const updated = [...qas, { question: formattedQuestion, answer: formattedAnswer }];
     setQas(updated);
     localStorage.setItem(`qas_tour_${selectedListing.id}`, JSON.stringify(updated));
     setNewQuestion("");
@@ -485,11 +686,12 @@ export default function AiTours() {
   };
 
   const handleAddCta = () => {
-    if (!newCtaLabel) return;
-    let formatted = newCtaLabel.trim();
-    if (formatted.length > 0) {
-      formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    if (!newCtaLabel || !newCtaLabel.trim()) {
+      toast.error("Please enter text for the Custom Interactive CTA Button first.");
+      return;
     }
+    const words = newCtaLabel.trim().split(/\s+/);
+    const formatted = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
     const updated = [...ctas, { label: formatted, action: newCtaAction }];
     setCtas(updated);
     if (selectedListing) {
@@ -505,44 +707,76 @@ export default function AiTours() {
     if (selectedListing) {
       localStorage.setItem(`ctas_tour_${selectedListing.id}`, JSON.stringify(updated));
     }
+    setCtaToDelete(null);
     toast.success("Removed client-facing interactive button.");
   };
 
-  const handlePublishTour = async () => {
+  const translateAllToTarget = async () => {
     if (!selectedListing) return;
+    const toastId = toast.loading(`Sora is translating walkthrough and Q&A to ${targetLang}...`);
+    try {
+      let updatedRooms = [...rooms];
+      let updatedQas = [...qas];
 
-    if (roomTargetLang !== targetLang) {
-      toast.error("Language Alignment Conflict", {
-        description: `Your Room-by-Room Walkthrough target language (${roomTargetLang}) does not match your Welcome translation language (${targetLang}). All sections must target the same language before publishing.`,
-        duration: 8000
-      });
-      const el = document.getElementById("room-lang-select-container");
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("ring-2", "ring-amber-500", "ring-offset-4", "transition-all", "duration-500");
-        setTimeout(() => {
-          el.classList.remove("ring-2", "ring-amber-500", "ring-offset-4");
-        }, 4000);
+      const roomsMismatch = roomTargetLang !== targetLang;
+      const qasMismatch = qaTargetLang !== targetLang;
+
+      if (roomsMismatch) {
+        updatedRooms = await Promise.all(rooms.map(async (room) => {
+          try {
+            const response = await fetch("/api/translate-script", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: room.script, targetLanguage: targetLang })
+            });
+            if (!response.ok) return room;
+            const data = await response.json();
+            return data.success ? { ...room, script: data.translatedText } : room;
+          } catch (err) {
+            return room;
+          }
+        }));
+        setRooms(updatedRooms);
+        setRoomTargetLang(targetLang);
+        localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updatedRooms));
       }
-      return;
-    }
 
-    if (qaTargetLang !== targetLang) {
-      toast.error("Language Alignment Conflict", {
-        description: `Your Sora Knowledge Base target language (${qaTargetLang}) does not match your Welcome translation language (${targetLang}). All sections must target the same language before publishing.`,
-        duration: 8000
-      });
-      const el = document.getElementById("qa-lang-select-container");
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.classList.add("ring-2", "ring-amber-500", "ring-offset-4", "transition-all", "duration-500");
-        setTimeout(() => {
-          el.classList.remove("ring-2", "ring-amber-500", "ring-offset-4");
-        }, 4000);
+      if (qasMismatch) {
+        updatedQas = await Promise.all(qas.map(async (qa) => {
+          try {
+            const response = await fetch("/api/translate-script", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: qa.answer, targetLanguage: targetLang })
+            });
+            if (!response.ok) return qa;
+            const data = await response.json();
+            return data.success ? { ...qa, answer: data.translatedText } : qa;
+          } catch (err) {
+            return qa;
+          }
+        }));
+        setQas(updatedQas);
+        setQaTargetLang(targetLang);
+        localStorage.setItem(`qas_tour_${selectedListing.id}`, JSON.stringify(updatedQas));
       }
-      return;
-    }
 
+      toast.success(`Successfully aligned and translated walkthrough materials to ${targetLang}! Saving now...`, { id: toastId });
+      
+      // Call executePublish directly with updated states
+      await executePublish(updatedRooms, updatedQas, targetLang, targetLang);
+    } catch (err) {
+      toast.error("Failed to complete automatic translations.", { id: toastId });
+    }
+  };
+
+  const executePublish = async (
+    pubRooms = rooms,
+    pubQas = qas,
+    pubRoomLang = roomTargetLang,
+    pubQaLang = qaTargetLang
+  ) => {
+    if (!selectedListing) return;
     setLoading(true);
     try {
       // Save elements directly into the listing model in Firestore
@@ -551,6 +785,8 @@ export default function AiTours() {
         welcome_fr_script: welcomeFr,
         welcome_other_lang: targetLang,
         welcome_other_script: welcomeOtherScript,
+        room_walkthrough_lang: pubRoomLang,
+        qa_knowledge_lang: pubQaLang,
         // Bypass text scripts if the existing field values are voice base64 URLs
         ...(selectedListing.welcome_en?.startsWith("data:audio") ? {} : { welcome_en: welcomeEn }),
         ...(selectedListing.welcome_fr?.startsWith("data:audio") ? {} : { welcome_fr: welcomeFr }),
@@ -561,12 +797,13 @@ export default function AiTours() {
         multilingualEnabled: multilingualEnabled,
         lenderHandoff: lenderHandoff,
         selectedLenderName: selectedLenderName,
-        ctas: ctas
+        ctas: ctas,
+        publishedAt: new Date().toISOString()
       });
 
       // Show immediate response
       toast.success(`🎉 Excellent! "${selectedListing.address}" AI Voice Tour is compiled and published live!`, {
-        description: "Your guest-facing microsite, flyers, and dynamic open house QR code destinations are safely synced with Sora's updated tour sequence.",
+        description: `Your guest-facing microsite, flyers, and dynamic open house QR code destinations are safely synced. Active languages: Welcome: ${targetLang}, Walkthrough: ${pubRoomLang}, Q&A: ${pubQaLang}.`,
         duration: 8000
       });
 
@@ -574,6 +811,58 @@ export default function AiTours() {
       await loadListings(selectedListing.id);
     } catch (err) {
       toast.error("Failed to commit settings to Cloud Firestore");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePublishTour = async () => {
+    if (!selectedListing) return;
+
+    if (!voiceEnabled && !multilingualEnabled && !lenderHandoff) {
+      toast.error("Enabled Features Error", {
+        description: "Please select at least one feature (Voice, Multilingual, or Lender Handoff) under Verification & Gating Rules before publishing."
+      });
+      return;
+    }
+
+    const roomsMismatch = roomTargetLang !== targetLang;
+    const qasMismatch = qaTargetLang !== targetLang;
+
+    if (roomsMismatch || qasMismatch) {
+      if (roomsMismatch && qasMismatch) {
+        setLangConflictType("both");
+      } else if (roomsMismatch) {
+        setLangConflictType("rooms");
+      } else {
+        setLangConflictType("qas");
+      }
+      setLangConflictOpen(true);
+      return;
+    }
+
+    await executePublish(rooms, qas, roomTargetLang, qaTargetLang);
+  };
+
+  const handleSaveGatingRules = async () => {
+    if (!selectedListing) return;
+    setLoading(true);
+    try {
+      await updateListing(selectedListing.id, {
+        qrDestination: signInPrompt === "start" ? "sign-in" : "tour",
+        voiceName: voiceEnabled ? "Sora Studio Male/Female (Neural)" : "Disabled",
+        voiceEnabled: voiceEnabled,
+        multilingualEnabled: multilingualEnabled,
+        lenderHandoff: lenderHandoff,
+        selectedLenderName: selectedLenderName,
+        updatedAt: Date.now()
+      });
+      toast.success("Verification & Gating Rules saved successfully!", {
+        description: "Gating mechanics, sign-in flows, and active features updated on Firestore."
+      });
+      await loadListings(selectedListing.id);
+    } catch (err) {
+      toast.error("Failed to save gating rules on Firestore");
     } finally {
       setLoading(false);
     }
@@ -596,7 +885,7 @@ export default function AiTours() {
         </div>
         
         <div className="flex items-center gap-2">
-          <Label className="text-xs font-bold uppercase tracking-wider text-stone-500 whitespace-nowrap">Configure Property:</Label>
+          <Label className="text-xs font-extrabold uppercase tracking-wider text-black whitespace-nowrap">Configure Property:</Label>
           <select 
             className="bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500 text-stone-800"
             value={selectedListing?.id || ""}
@@ -626,63 +915,72 @@ export default function AiTours() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-5 w-full">
           
           {/* Main Workspace Column */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 min-w-0 w-full">
             
             {/* Sora Welcome Script */}
-            <Card className="border-blue-900 shadow-sm bg-blue-950 rounded-2xl w-[calc(100%-15px)]">
-              <CardHeader className="pb-3 border-b border-blue-900 bg-blue-900">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base font-bold flex items-center gap-2 text-white">
-                      <Sparkles className="h-5 w-5 text-amber-500 fill-amber-300 animate-spin-slow" /> Sora Welcome Script
+            <Card className="w-full border-blue-900 shadow-sm bg-blue-950 rounded-2xl overflow-hidden mx-0">
+              <CardHeader className="py-2.5 px-3.5 border-b border-blue-900 bg-blue-900">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-white">
+                      <Sparkles className="h-4 w-4 text-amber-500 fill-amber-300 animate-spin-slow" /> Sora Welcome Script
                     </CardTitle>
-                    <CardDescription className="text-xs">Configure the narrative script that playing tourists will hear instantly upon scanning.</CardDescription>
+                    <CardDescription className="text-[10px] text-white font-medium">Configure the narrative script that playing tourists will hear instantly upon scanning.</CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                     <Button 
                       onClick={handleGenerateTourIntro} 
                       disabled={soraGenerating}
                       variant="outline" 
-                      className="border-amber-200 text-amber-800 hover:bg-amber-50 text-[10px] uppercase font-black tracking-wider gap-1 h-8"
+                      className="border-amber-200 text-amber-800 hover:bg-amber-50 text-[9px] uppercase font-black tracking-wider gap-0.5 h-7 px-2.5"
                     >
                       {soraGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                      Generate Tour Intro
+                      Generate Intro
                     </Button>
                     <Button 
                       onClick={handleRewriteTour}
                       disabled={soraGenerating}
                       variant="ghost" 
-                      className="hover:bg-slate-100 text-[10px] uppercase font-bold tracking-wider gap-1 h-8"
+                      className="border border-white hover:bg-white hover:text-blue-950 text-white text-[9px] uppercase font-bold tracking-wider gap-1 h-7 px-2.5 transition-colors duration-200"
                     >
-                      <ListRestart className="h-3 w-3 text-slate-500" />
+                      <ListRestart className="h-3 w-3 text-white group-hover:text-blue-950" />
                       Rewrite Luxury
                     </Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-6 space-y-4">
+              <CardContent className="p-4 space-y-4">
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-xs font-black uppercase text-stone-700">English Script (Welcome Prompt)</Label>
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                    <Label className="text-[11px] font-black uppercase text-white font-bold">English Script (Welcome Prompt)</Label>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Button 
+                        onClick={() => handleShortenScript("en")}
+                        disabled={shortening || !welcomeEn}
+                        variant="outline"
+                        className="h-6 text-[9px] py-1 px-2 font-black uppercase border-amber-200 bg-white hover:bg-amber-100 text-black"
+                      >
+                        {shortening ? <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" /> : <Sparkles className="h-2.5 w-2.5 mr-1 text-amber-500" />}
+                        Shorten
+                      </Button>
                       {playingLang === "en" ? (
                         <Button 
                           onClick={stopSpeaking}
                           variant="destructive"
-                          className="h-7 text-[10px] py-1 px-2.5 font-bold uppercase"
+                          className="h-6 text-[9px] py-1 px-2 font-black uppercase bg-red-600 hover:bg-red-700 text-white animate-pulse"
                         >
-                          <Square className="h-3 w-3 mr-1 fill-white" /> Stop Voice
+                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> STOP
                         </Button>
                       ) : (
                         <Button 
                           onClick={() => speakText(welcomeEn, "English", "en")}
                           variant="outline"
-                          className="h-7 text-[10px] py-1 px-2.5 font-bold uppercase border-emerald-200 text-emerald-800 hover:bg-emerald-50"
+                          className="h-6 text-[9px] py-1 px-2 font-bold uppercase border-emerald-300 bg-white hover:bg-emerald-100 text-black"
                         >
-                          <Play className="h-3 w-3 mr-1 fill-emerald-800" /> Speak English
+                          <Play className="h-2.5 w-2.5 mr-1 fill-emerald-800 text-emerald-800" /> Speak English
                         </Button>
                       )}
                     </div>
@@ -690,66 +988,75 @@ export default function AiTours() {
                   <Textarea 
                     value={welcomeEn} 
                     onChange={(e) => setWelcomeEn(e.target.value)} 
-                    rows={4} 
-                    className="text-xs font-sans text-stone-850 focus-visible:ring-1 focus-visible:ring-amber-500 bg-stone-50/50"
+                    rows={3} 
+                    className="text-xs font-sans text-white focus-visible:ring-1 focus-visible:ring-amber-500 bg-[#192f72]"
                   />
-                  <p className="text-[10px] text-stone-400 italic font-medium leading-tight">This represents Sora's initial greeting block before moving to specific rooms.</p>
+                  <p className="text-[9px] text-blue-200 italic font-medium leading-tight">This represents Sora's initial greeting block before moving to specific rooms.</p>
                 </div>
 
-                <div className="space-y-2 border-t pt-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-xs font-black uppercase text-stone-700">French Script (Bonjour Évaluateurs)</Label>
-                    <div className="flex items-center gap-1.5">
+                <div className="space-y-2 border-t border-blue-900 pt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                    <Label className="text-[11px] font-black uppercase text-white font-bold">French Script (Bonjour Évaluateurs)</Label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button 
+                        onClick={() => handleShortenScript("fr")}
+                        disabled={shorteningFr || !welcomeFr}
+                        variant="outline"
+                        className="h-6 text-[9px] py-1 px-2 font-black uppercase border-amber-200 bg-white hover:bg-amber-100 text-black"
+                      >
+                        {shorteningFr ? <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" /> : <Sparkles className="h-2.5 w-2.5 mr-1 text-amber-500" />}
+                        Shorten
+                      </Button>
                       {playingLang === "fr" ? (
                         <Button 
                           onClick={stopSpeaking}
                           variant="destructive"
-                          className="h-7 text-[10px] py-1 px-2.5 font-bold uppercase"
+                          className="h-6 text-[9px] py-1 px-2 font-black uppercase bg-red-600 hover:bg-red-700 text-white animate-pulse"
                         >
-                          <Square className="h-3 w-3 mr-1 fill-white" /> Stop Voice
+                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> STOP
                         </Button>
                       ) : (
                         <Button 
                           onClick={() => speakText(welcomeFr, "French", "fr")}
                           variant="outline"
-                          className="h-7 text-[10px] py-1 px-2.5 font-bold uppercase border-emerald-200 text-emerald-800 hover:bg-emerald-50"
+                          className="h-6 text-[9px] py-1 px-2 font-bold uppercase border-emerald-300 bg-white hover:bg-emerald-100 text-black"
                         >
-                          <Play className="h-3 w-3 mr-1 fill-emerald-800" /> Speak French
+                          <Play className="h-2.5 w-2.5 mr-1 fill-emerald-500 text-emerald-800" /> Parlons Français
                         </Button>
                       )}
-                      <span className="text-[10px] font-bold text-amber-700 px-1.5 py-0.5 bg-amber-50 border border-amber-100 rounded uppercase">Multilingual Active</span>
+                      <span className="text-[9px] font-bold text-amber-750 px-1 py-0.5 bg-amber-50 border border-amber-100 rounded uppercase">Multilingual Active</span>
                     </div>
                   </div>
                   <Textarea 
                     value={welcomeFr} 
                     onChange={(e) => setWelcomeFr(e.target.value)} 
-                    rows={3} 
-                    className="text-xs font-sans text-stone-800 focus-visible:ring-1 focus-visible:ring-amber-500 bg-stone-50/50"
+                    rows={2} 
+                    className="text-xs font-sans text-white focus-visible:ring-1 focus-visible:ring-amber-500 bg-[#192f72]"
                   />
                 </div>
               </CardContent>
             </Card>
 
             {/* Multilingual Scripts Companion Card */}
-            <Card className="border-stone-200 shadow-sm bg-white rounded-2xl w-[calc(100%-15px)]">
-              <CardHeader className="pb-3 border-b border-slate-100 bg-amber-50/50">
+            <Card className="w-full border-stone-200 shadow-sm bg-white rounded-2xl overflow-hidden mx-0">
+              <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-amber-50/50">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-black flex items-center gap-2 text-stone-900 uppercase tracking-tight">
+                    <CardTitle className="text-xs font-black flex items-center gap-1.5 text-stone-900 uppercase tracking-tight">
                       <Globe2 className="h-4 w-4 text-emerald-600" /> Multilingual Scripts & Translation
                     </CardTitle>
-                    <CardDescription className="text-xs font-medium text-left">Convert your English script into other global languages instantly in a single click using Gemini neural translation.</CardDescription>
+                    <CardDescription className="text-[10px] font-medium text-left">Convert your English script into other global languages instantly in a single click using Gemini neural translation.</CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="p-6 space-y-4">
-                <div className="grid sm:grid-cols-3 gap-4 items-end">
-                  <div className="sm:col-span-2 space-y-1.5 text-left">
-                    <Label className="text-xs font-bold uppercase text-stone-700">Choose Welcome Translation Language</Label>
+              <CardContent className="p-4 space-y-3">
+                <div className="grid sm:grid-cols-3 gap-3 items-end">
+                  <div className="sm:col-span-2 space-y-1 text-left">
+                    <Label className="text-[10px] font-extrabold uppercase text-black">Choose Welcome Translation Language</Label>
                     <select 
                       value={targetLang}
                       onChange={(e) => setTargetLang(e.target.value)}
-                      className="w-full h-10 px-3 bg-white border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-amber-500 font-sans cursor-pointer text-stone-850"
+                      className="w-full h-8 px-2 bg-white border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-amber-500 font-sans cursor-pointer text-stone-850"
                     >
                       <option value="French">French (Français)</option>
                       <option value="Spanish">Spanish (Español)</option>
@@ -768,33 +1075,42 @@ export default function AiTours() {
                     <Button 
                       onClick={handleTranslateScript} 
                       disabled={translating || !welcomeEn}
-                      className="w-full h-10 bg-emerald-600 hover:bg-emerald-500 text-[10px] uppercase font-black tracking-wider text-white flex items-center justify-center gap-1.5 shadow-sm"
+                      className="w-full h-8 bg-emerald-600 hover:bg-emerald-500 text-[9px] uppercase font-black tracking-wider text-white flex items-center justify-center gap-1 shadow-sm"
                     >
-                      {translating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      {translating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                       Convert Script
                     </Button>
                   </div>
                 </div>
 
-                <div className="space-y-2 border-t pt-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <Label className="text-xs font-black uppercase text-stone-700">{targetLang} Translation Draft</Label>
-                    <div className="flex items-center gap-1.5">
+                <div className="space-y-1.5 border-t pt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
+                    <Label className="text-[11px] font-black uppercase text-stone-700">{targetLang} Translation Draft</Label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button 
+                        onClick={() => handleShortenScript("other")}
+                        disabled={shorteningOther || !welcomeOtherScript}
+                        variant="outline"
+                        className="h-6 text-[9px] py-1 px-2 font-black uppercase border-amber-200 text-amber-800 hover:bg-amber-50"
+                      >
+                        {shorteningOther ? <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" /> : <Sparkles className="h-2.5 w-2.5 mr-1 text-amber-850" />}
+                        Shorten
+                      </Button>
                       {playingLang === "other" ? (
                         <Button 
                           onClick={stopSpeaking}
                           variant="destructive"
-                          className="h-7 text-[10px] py-1 px-2.5 font-bold uppercase animate-pulse"
+                          className="h-6 text-[9px] py-1 px-2 font-black uppercase bg-red-600 hover:bg-red-700 text-white animate-pulse"
                         >
-                          <Square className="h-3 w-3 mr-1 fill-white" /> Stop Voice
+                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> STOP
                         </Button>
                       ) : (
                         <Button 
                           onClick={() => speakText(welcomeOtherScript, targetLang, "other")}
                           variant="outline"
-                          className="h-7 text-[10px] py-1 px-2.5 font-bold uppercase border-emerald-200 text-emerald-800 hover:bg-emerald-50"
+                          className="h-6 text-[9px] py-1 px-2 font-bold uppercase border-emerald-200 text-emerald-800 hover:bg-emerald-50 text-left whitespace-normal leading-normal"
                         >
-                          <Play className="h-3 w-3 mr-1 fill-emerald-800" /> Preview Sora Voice
+                          <Play className="h-2.5 w-2.5 mr-1 fill-emerald-850 text-emerald-850 shrink-0" /> {getWalkthroughTranslations(targetLang).preview}
                         </Button>
                       )}
                     </div>
@@ -802,35 +1118,35 @@ export default function AiTours() {
                   <Textarea 
                     value={welcomeOtherScript} 
                     onChange={(e) => setWelcomeOtherScript(e.target.value)} 
-                    rows={4} 
+                    rows={3} 
                     placeholder={`The computed ${targetLang} welcome script will display here once converted. You can also manually paste/edit translations.`}
                     className="text-xs font-sans text-stone-850 focus-visible:ring-1 focus-visible:ring-amber-500 bg-stone-50/50"
                   />
-                  <p className="text-[10px] text-stone-400 italic font-medium leading-tight">This translated script is stored securely and activates when foreign visitors access multilingual mode.</p>
+                  <p className="text-[9px] text-stone-400 italic font-medium leading-tight">This translated script is stored securely and activates when foreign visitors access multilingual mode.</p>
                 </div>
               </CardContent>
             </Card>
 
             {/* Room-by-room audio sequences */}
-            <Card className="border-blue-900 shadow-sm bg-blue-950 rounded-2xl w-[calc(100%-15px)]">
-              <CardHeader className="pb-3 border-b border-blue-900 bg-blue-900">
-                <CardTitle className="text-base font-bold flex items-center gap-2 text-white">
-                  <Layers className="h-5 w-5 text-amber-600" /> Room-by-Room Walkthrough content
+            <Card className="w-full border-blue-900 shadow-sm bg-blue-950 rounded-2xl overflow-hidden mx-0">
+              <CardHeader className="py-2 px-3.5 border-b border-blue-900 bg-blue-900">
+                <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-white">
+                  <Layers className="h-4 w-4 text-amber-600" /> Room-by-Room Walkthrough content
                 </CardTitle>
-                <CardDescription className="text-xs font-medium">Define high-fidelity scripts to narrate key areas of the home when visitors select a room.</CardDescription>
+                <CardDescription className="text-[10px] text-white font-medium">Define high-fidelity scripts to narrate key areas of the home when visitors select a room.</CardDescription>
               </CardHeader>
               
-              <CardContent className="p-6 space-y-4">
+              <CardContent className="p-4 space-y-3">
                 {/* Dedicated Walkthrough translation dropdown selector */}
-                <div id="room-lang-select-container" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-amber-50/20 rounded-xl border border-stone-200 text-left">
+                <div id="room-lang-select-container" className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-blue-900/50 rounded-xl border border-blue-800 text-left">
                   <div className="space-y-0.5">
-                    <Label className="text-xs font-black uppercase text-stone-700 tracking-wider">Walkthrough language</Label>
-                    <p className="text-[10px] text-stone-500 font-medium font-sans">Select a translation language to convert/preview individual rooms.</p>
+                    <Label className="text-[10px] font-black uppercase text-white tracking-wider font-bold">Walkthrough language</Label>
+                    <p className="text-[9px] text-blue-200 font-medium font-sans">Select a translation language to convert/preview individual rooms.</p>
                   </div>
                   <select 
                     value={roomTargetLang}
                     onChange={(e) => setRoomTargetLang(e.target.value)}
-                    className="h-8 min-w-[140px] px-2.5 bg-white border border-stone-250 rounded-lg text-xs font-bold focus:ring-1 focus:ring-amber-500 cursor-pointer text-stone-850"
+                    className="h-7 min-w-[130px] px-2 bg-white border border-stone-250 rounded-lg text-xs font-bold focus:ring-1 focus:ring-amber-500 cursor-pointer text-stone-850"
                   >
                     <option value="French">French (Français)</option>
                     <option value="Spanish">Spanish (Español)</option>
@@ -846,25 +1162,77 @@ export default function AiTours() {
                   </select>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {rooms.map((room, idx) => (
-                    <div key={room.id} className="p-4 border rounded-xl border-stone-200 bg-stone-50/30 flex flex-col sm:flex-row items-start gap-4">
-                      <div className="h-6 w-6 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center shrink-0">
+                    <div key={room.id} className="p-3 border rounded-xl border-blue-900 bg-blue-900/30 flex flex-col sm:flex-row items-start gap-3">
+                      <div className="h-5 w-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center shrink-0">
                         {idx + 1}
                       </div>
-                      <div className="flex-1 space-y-1 w-full">
-                        <div className="flex items-center justify-between font-sans">
-                          <p className="text-xs font-bold text-stone-900 uppercase tracking-wider">{room.name}</p>
-                          <button 
-                            onClick={() => handleDeleteRoom(room.id)}
-                            className="text-stone-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                      <div className="flex-1 space-y-0.5 w-full">
+                        <div className="flex items-center justify-between font-sans gap-2 flex-wrap">
+                          <p className="text-xs font-bold text-white uppercase tracking-wider">{room.name}</p>
+                          <div className="flex items-center gap-1">
+                            {/* Sequence Position adjustment buttons */}
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={idx === 0}
+                              onClick={() => handleMoveRoomUp(idx)}
+                              className="h-6 w-6 text-blue-300 hover:text-white disabled:opacity-30 bg-transparent shrink-0"
+                              title="Move Up"
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              disabled={idx === rooms.length - 1}
+                              onClick={() => handleMoveRoomDown(idx)}
+                              className="h-6 w-6 text-blue-300 hover:text-white disabled:opacity-30 bg-transparent shrink-0"
+                              title="Move Down"
+                            >
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </Button>
+
+                            {/* Safe iFrame-Friendly Deletion Popup */}
+                            {confirmDeleteRoomId === room.id ? (
+                              <div className="flex items-center gap-1 p-1 bg-red-950/80 rounded border border-red-800 animate-in fade-in zoom-in-95 text-left ml-1 shrink-0">
+                                <span className="text-[9px] font-bold text-red-200 px-1">Delete?</span>
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => {
+                                    handleDeleteRoom(room.id);
+                                    setConfirmDeleteRoomId(null);
+                                  }}
+                                  className="h-5 px-1.5 text-[8px] bg-red-650 hover:bg-red-750 font-bold uppercase text-white cursor-pointer"
+                                >
+                                  Yes, Delete
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => setConfirmDeleteRoomId(null)}
+                                  className="h-5 px-1.5 text-[8px] text-stone-300 hover:text-white cursor-pointer"
+                                >
+                                  No, Keep
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setConfirmDeleteRoomId(room.id)}
+                                className="h-6 w-6 text-blue-300 hover:text-rose-400 bg-transparent shrink-0 transition-colors"
+                                title="Delete Room"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-[11px] text-stone-600 leading-normal font-sans italic pr-4">"{room.script}"</p>
+                        <p className="text-[10px] text-blue-100 leading-normal font-sans italic pr-4">"{room.script}"</p>
                         
-                        <div className="flex flex-wrap gap-2 pt-2 mt-2 border-t border-dashed border-stone-250">
+                        <div className="flex flex-wrap gap-1.5 pt-1.5 mt-1.5 border-t border-dashed border-blue-900">
                           <Button
                             onClick={() => {
                               if (playingLang === `room_${room.id}`) {
@@ -874,15 +1242,15 @@ export default function AiTours() {
                               }
                             }}
                             variant="outline"
-                            className="h-6 text-[9px] py-1 px-2.5 font-bold uppercase border-stone-200 text-stone-700 hover:bg-stone-50 select-none"
+                            className="whitespace-normal h-auto min-h-5.5 py-1 px-2 text-[9px] font-bold uppercase border-blue-800 text-blue-200 hover:bg-blue-900 select-none bg-blue-950/40 text-left"
                           >
                             {playingLang === `room_${room.id}` ? (
                               <>
-                                <Square className="h-2.5 w-2.5 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Voice
+                                <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Voice
                               </>
                             ) : (
                               <>
-                                <Play className="h-2.5 w-2.5 mr-1 fill-stone-700 text-stone-700" /> Preview Sora Voice ({roomTargetLang})
+                                <Play className="h-2 w-2 mr-1 fill-blue-200 text-blue-200" /> {getWalkthroughTranslations(roomTargetLang).preview}
                               </>
                             )}
                           </Button>
@@ -890,15 +1258,18 @@ export default function AiTours() {
                           <Button
                             onClick={() => handleTranslateRoomScript(room.id)}
                             disabled={translatingRoomId === room.id}
-                            variant="outline"
-                            className="h-6 text-[9px] py-1 px-2.5 font-bold uppercase border-emerald-100 text-emerald-800 bg-emerald-50/20 hover:bg-emerald-50 select-none"
+                            className={`whitespace-normal h-auto min-h-5.5 py-1 px-2 text-[9px] font-bold uppercase select-none transition-all duration-300 text-left ${
+                              translatingRoomId === room.id 
+                                ? 'bg-blue-400 hover:bg-blue-500 border border-blue-400 text-white font-bold' 
+                                : 'bg-white hover:bg-slate-50 text-black border border-stone-200'
+                            }`}
                           >
                             {translatingRoomId === room.id ? (
-                              <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />
+                              <Loader2 className="h-2 w-2 animate-spin mr-1" />
                             ) : (
-                              <Sparkles className="h-2.5 w-2.5 mr-1" />
+                              <Sparkles className="h-2 w-2 mr-1" />
                             )}
-                            Translate to {roomTargetLang}
+                            {getWalkthroughTranslations(roomTargetLang).translateRoom}
                           </Button>
                         </div>
                       </div>
@@ -907,36 +1278,36 @@ export default function AiTours() {
                 </div>
 
                 {/* Add room console */}
-                <div className="border-t border-stone-100 pt-4 space-y-3 bg-[#faf9f6]/40 p-4 rounded-xl border border-stone-200 mt-2">
-                  <p className="text-[10px] font-black uppercase text-stone-700 tracking-wider flex items-center gap-1">
+                <div className="border-t border-blue-900 pt-3 space-y-2 bg-blue-900/30 p-3 rounded-xl border border-blue-800 mt-1">
+                  <p className="text-[10px] font-black uppercase text-white tracking-wider flex items-center gap-1">
                     <Plus className="h-3 w-3 text-amber-600" /> Add Tour Room Sequence
                   </p>
                   <div className="grid sm:grid-cols-3 gap-2">
                     <div className="sm:col-span-1">
-                      <Label htmlFor="room-name" className="text-[10px] uppercase font-bold text-stone-500">Room Title</Label>
+                      <Label htmlFor="room-name" className="text-[9px] uppercase font-bold text-blue-200">Room Title</Label>
                       <Input 
                         id="room-name"
                         placeholder="e.g., Wine Cellar, Patio" 
                         value={newRoomName}
                         onChange={(e) => setNewRoomName(e.target.value)}
-                        className="h-9 text-xs mt-1 bg-white" 
+                        className="h-8 text-xs mt-0.5 bg-white text-stone-900" 
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Label htmlFor="room-script" className="text-[10px] uppercase font-bold text-stone-500">Voice Tour Script (Speak out)</Label>
+                      <Label htmlFor="room-script" className="text-[9px] uppercase font-bold text-blue-200">Voice Tour Script (Speak out)</Label>
                       <Input 
                         id="room-script"
                         placeholder="Underneath the stairs lies our climate-gated cellar space..." 
                         value={newRoomScript}
                         onChange={(e) => setNewRoomScript(e.target.value)}
-                        className="h-9 text-xs mt-1 bg-white" 
+                        className="h-8 text-xs mt-0.5 bg-white text-stone-900" 
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end pt-1">
+                  <div className="flex justify-end pt-0.5">
                     <Button 
                       onClick={handleAddRoom}
-                      className="bg-amber-600 hover:bg-amber-500 text-[10px] font-black uppercase h-8"
+                      className="bg-amber-600 hover:bg-amber-500 text-[9px] font-black uppercase h-7 px-3.5"
                     >
                       Add Room Block
                     </Button>
@@ -946,25 +1317,25 @@ export default function AiTours() {
             </Card>
 
             {/* Buyer Q&A Repository */}
-            <Card className="border-stone-200 shadow-sm bg-white rounded-2xl w-[calc(100%-15px)]">
-              <CardHeader className="pb-3 border-b border-slate-100 bg-white">
-                <CardTitle className="text-base font-bold flex items-center gap-2 text-stone-900">
-                  <MessageSquare className="h-5 w-5 text-amber-600" /> Sora's Knowledge Base (Buyer Q&A)
+            <Card className="w-full border-stone-200 shadow-sm bg-white rounded-2xl overflow-hidden mx-0">
+              <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-white">
+                <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-stone-900">
+                  <MessageSquare className="h-4 w-4 text-amber-600" /> Sora's Knowledge Base (Buyer Q&A)
                 </CardTitle>
-                <CardDescription className="text-xs">Teach Sora listing facts. If a consumer asks these questions, Sora responds with these exact vetted answers.</CardDescription>
+                <CardDescription className="text-[10px] text-stone-500 font-medium">Teach Sora listing facts. If a consumer asks these questions, Sora responds with these exact vetted answers.</CardDescription>
               </CardHeader>
               
-              <CardContent className="p-6 space-y-4">
+              <CardContent className="p-4 space-y-3">
                 {/* Dedicated Q&A translation dropdown selector */}
-                <div id="qa-lang-select-container" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-amber-50/20 rounded-xl border border-stone-200 text-left">
+                <div id="qa-lang-select-container" className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-amber-50/20 rounded-xl border border-stone-200 text-left">
                   <div className="space-y-0.5">
-                    <Label className="text-xs font-black uppercase text-stone-700 tracking-wider">Q&A translation language</Label>
-                    <p className="text-[10px] text-stone-500 font-medium font-sans">Select a translation language to convert/preview individual answers.</p>
+                    <Label className="text-[10px] font-black uppercase text-stone-700 tracking-wider">Q&A translation language</Label>
+                    <p className="text-[9px] text-stone-500 font-medium font-sans">Select a translation language to convert/preview individual answers.</p>
                   </div>
                   <select 
                     value={qaTargetLang}
                     onChange={(e) => setQaTargetLang(e.target.value)}
-                    className="h-8 min-w-[140px] px-2.5 bg-white border border-stone-250 rounded-lg text-xs font-bold focus:ring-1 focus:ring-amber-500 cursor-pointer text-stone-850"
+                    className="h-7 min-w-[130px] px-2 bg-white border border-stone-250 rounded-lg text-xs font-bold focus:ring-1 focus:ring-amber-500 cursor-pointer text-stone-850"
                   >
                     <option value="French">French (Français)</option>
                     <option value="Spanish">Spanish (Español)</option>
@@ -980,21 +1351,48 @@ export default function AiTours() {
                   </select>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {qas.map((qaItem, idx) => (
-                    <div key={idx} className="p-3 bg-stone-50/20 border rounded-xl border-stone-200 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-stone-850">Q: {qaItem.question}</p>
-                        <button 
-                          onClick={() => handleDeleteQa(idx)}
-                          className="text-stone-400 hover:text-rose-500 text-xs font-bold transition-colors"
-                        >
-                          Delete
-                        </button>
+                    <div key={idx} className="p-2.5 bg-stone-50/20 border rounded-xl border-stone-200 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-[11px] font-bold text-stone-850">Q: {qaItem.question}</p>
+                        
+                        {/* Safe iFrame-Friendly Deletion Popup */}
+                        {confirmDeleteQaIdx === idx ? (
+                          <div className="flex items-center gap-1.5 p-1 bg-rose-50 rounded border border-rose-200 animate-in fade-in zoom-in-95 text-left shrink-0">
+                            <span className="text-[9px] font-bold text-rose-800 px-1">Delete?</span>
+                            <Button 
+                              size="sm" 
+                              onClick={() => {
+                                handleDeleteQa(idx);
+                                setConfirmDeleteQaIdx(null);
+                              }}
+                              className="h-5 px-1.5 text-[8px] bg-red-650 hover:bg-red-700 font-bold uppercase text-white cursor-pointer"
+                            >
+                              Yes, Delete
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => setConfirmDeleteQaIdx(null)}
+                              className="h-5 px-1.5 text-[8px] border-slate-200 hover:bg-slate-50 font-bold uppercase text-stone-700 bg-white cursor-pointer"
+                            >
+                              No, Keep
+                            </Button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => setConfirmDeleteQaIdx(idx)}
+                            className="text-stone-400 hover:text-rose-600 transition-colors shrink-0 p-1"
+                            title="Delete Fact"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
-                      <p className="text-[11px] text-stone-600 leading-normal pl-4 border-l border-amber-300 font-sans italic">A: {qaItem.answer}</p>
+                      <p className="text-[10px] text-stone-600 leading-normal pl-3 border-l-2 border-amber-300 font-sans italic">A: {qaItem.answer}</p>
                       
-                      <div className="flex flex-wrap gap-2 pt-2 border-t border-dashed border-stone-200/80">
+                      <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-dashed border-stone-200/80">
                         <Button
                           onClick={() => {
                             if (playingLang === `qa_${idx}`) {
@@ -1004,15 +1402,15 @@ export default function AiTours() {
                             }
                           }}
                           variant="outline"
-                          className="h-6 text-[9px] py-1 px-2.5 font-bold uppercase border-stone-200 text-stone-700 hover:bg-stone-50 select-none"
+                          className="whitespace-normal h-auto min-h-5.5 py-1 px-2 text-[9px] font-bold uppercase border-stone-200 text-stone-700 hover:bg-stone-50 select-none text-left"
                         >
                           {playingLang === `qa_${idx}` ? (
                             <>
-                              <Square className="h-2.5 w-2.5 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Voice
+                              <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Voice
                             </>
                           ) : (
                             <>
-                              <Play className="h-2.5 w-2.5 mr-1 fill-stone-700 text-stone-700" /> Preview Sora Voice ({qaTargetLang})
+                              <Play className="h-2 w-2 mr-1 fill-stone-700 text-stone-700" /> {getWalkthroughTranslations(qaTargetLang).preview}
                             </>
                           )}
                         </Button>
@@ -1020,39 +1418,50 @@ export default function AiTours() {
                         <Button
                           onClick={() => handleTranslateQaAnswer(idx)}
                           disabled={translatingQaIdx === idx}
-                          variant="outline"
-                          className="h-6 text-[9px] py-1 px-2.5 font-bold uppercase border-emerald-100 text-emerald-800 bg-emerald-50/20 hover:bg-emerald-50 select-none"
+                          className={`whitespace-normal h-auto min-h-5.5 py-1 px-2 text-[9px] font-bold uppercase select-none transition-all duration-300 text-left ${
+                            translatingQaIdx === idx 
+                              ? 'bg-blue-400 hover:bg-blue-500 border border-blue-400 text-white font-bold' 
+                              : 'bg-white hover:bg-slate-50 text-black border border-stone-200'
+                          }`}
                         >
                           {translatingQaIdx === idx ? (
-                            <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />
+                            <Loader2 className="h-2 w-2 animate-spin mr-1" />
                           ) : (
-                            <Sparkles className="h-2.5 w-2.5 mr-1" />
+                            <Sparkles className="h-2 w-2 mr-1" />
                           )}
-                          Translate Answer to {qaTargetLang}
+                          {getWalkthroughTranslations(qaTargetLang).translateAnswer}
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="border-t border-stone-100 pt-4 space-y-2">
+                <div className="border-t border-stone-100 pt-3 space-y-1.5">
                   <p className="text-[10px] font-black uppercase text-stone-700">Add Custom Listing Fact</p>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Input 
                       placeholder="e.g., What are the school zonings?" 
                       value={newQuestion}
-                      onChange={(e) => setNewQuestion(e.target.value)}
-                      className="h-9 text-xs" 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const formatted = val.charAt(0).toUpperCase() + val.slice(1);
+                        setNewQuestion(formatted);
+                      }}
+                      className="h-8 text-xs" 
                     />
                     <Textarea 
                       placeholder="Sighted inside the coveted Hilltop Elementary and Westlake High jurisdictions, ranking among the top 5% provincially..." 
                       value={newAnswer}
-                      onChange={(e) => setNewAnswer(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const formatted = val.charAt(0).toUpperCase() + val.slice(1);
+                        setNewAnswer(formatted);
+                      }}
                       rows={2}
                       className="text-xs" 
                     />
                     <div className="flex justify-end">
-                      <Button onClick={handleAddQa} className="bg-amber-600 hover:bg-amber-500 text-[10px] font-black uppercase h-8">
+                      <Button onClick={handleAddQa} className="bg-amber-600 hover:bg-amber-500 text-[9px] font-black uppercase h-7 px-3.5">
                         Add Question Fact
                       </Button>
                     </div>
@@ -1064,81 +1473,138 @@ export default function AiTours() {
           </div>
 
           {/* Settings / Controls Column */}
-          <div className="space-y-6">
+          <div className="space-y-4 min-w-0 w-full">
             
             {/* Action panel & CTAs */}
-            <Card className="border-blue-900 shadow-sm bg-blue-950 rounded-2xl">
-              <CardHeader className="pb-3 border-b border-blue-900 bg-blue-900">
+            <Card className="border-blue-900 shadow-sm bg-blue-950 rounded-2xl overflow-hidden w-full mx-0">
+              <CardHeader className="py-2.5 px-4 border-b border-blue-900 bg-blue-900">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-black uppercase text-white tracking-wider">Deploy & Publish Status</CardTitle>
+                  <CardTitle className="text-xs font-black uppercase text-white tracking-wider">Deploy & Publish Status</CardTitle>
                   {isDirty ? (
-                    <span className="text-[10px] font-black uppercase text-amber-700 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded animate-pulse">Draft</span>
+                    <span className="text-[9px] font-black uppercase text-amber-700 px-1.5 py-0.2 bg-amber-50 border border-amber-200 rounded animate-pulse">Draft</span>
                   ) : (
-                    <span className="text-[10px] font-black uppercase text-emerald-700 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded">Saved</span>
+                    <span className="text-[9px] font-black uppercase text-emerald-700 px-1.5 py-0.2 bg-emerald-50 border border-emerald-200 rounded">Saved</span>
                   )}
                 </div>
-                <CardDescription className="text-xs">Publish your changes to sync across print flyers, tablets, and QR paths.</CardDescription>
+                <CardDescription className="text-[10px] text-white font-medium">Publish your changes to sync across print flyers, tablets, and QR paths.</CardDescription>
               </CardHeader>
-              <CardContent className="p-6 space-y-4 bg-white">
-                <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100 text-[11px] text-amber-900 leading-normal">
-                  <p className="font-bold uppercase tracking-wide text-[9px] text-amber-700 mb-1">Live Endpoint</p>
+              <CardContent className="p-4 space-y-3 bg-white">
+                <div className="p-2.5 bg-amber-50/50 rounded-lg border border-amber-100 text-[10px] text-amber-900 leading-normal font-sans">
+                  <p className="font-bold uppercase tracking-wide text-[8px] text-amber-700 mb-0.5">Live Endpoint</p>
                   Your guided property tour is configured at: <br/>
-                  <span className="font-mono bg-white px-1 border border-amber-100 rounded text-blue-600 font-bold block mt-1 truncate">
+                  <span className="font-mono bg-white px-1 border border-amber-100 rounded text-blue-600 font-bold block mt-0.5 truncate text-[10px]">
                     {window.location.origin}/tour/{selectedListing.id}
                   </span>
                 </div>
 
-                <div className="space-y-2 pt-2">
+                <div className="space-y-2 pt-1 font-sans">
                   <Button 
                     onClick={handlePublishTour}
-                    className="w-full bg-amber-600 hover:bg-amber-500 font-bold text-xs h-10 tracking-wider uppercase flex items-center justify-center gap-1.5"
+                    className="w-full bg-amber-600 hover:bg-amber-500 font-black text-[11px] h-8.5 tracking-wider uppercase flex items-center justify-center gap-1 shadow-sm"
                   >
                     <BookmarkCheck className="h-4 w-4" /> Publish Active Tour
                   </Button>
+                  
+                  <div className="text-center pt-0.5">
+                    <p className="text-stone-500 font-mono text-[9px] font-medium leading-none">
+                      Last Published: {selectedListing?.publishedAt ? (() => {
+                        const d = new Date(selectedListing.publishedAt);
+                        const optionsDate: Intl.DateTimeFormatOptions = { month: 'short', day: '2-digit', year: 'numeric' };
+                        const dateFormatted = d.toLocaleDateString('en-US', optionsDate);
+                        
+                        let hours = d.getHours();
+                        const minutes = d.getMinutes().toString().padStart(2, '0');
+                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                        hours = hours % 12;
+                        hours = hours ? hours : 12;
+                        const timeFormatted = `${hours}:${minutes} ${ampm}`;
+                        
+                        return `${dateFormatted}, ${timeFormatted}`;
+                      })() : "Jun 10, 2026, 3:39 PM"}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
             {/* Tour CTA Config */}
-            <Card className="border-stone-200 shadow-sm bg-white rounded-2xl">
-              <CardHeader className="pb-3 border-b border-slate-100 bg-white">
+            <Card className="border-stone-200 shadow-sm bg-white rounded-2xl overflow-hidden w-full mx-0">
+              <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-white">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider text-stone-850">Client-facing Interactive Buttons</CardTitle>
-                <CardDescription className="text-xs">Set clickable action prompts shown on client smartphones while listening.</CardDescription>
+                <CardDescription className="text-[10px] text-stone-500 font-medium">Set clickable action prompts shown on client smartphones while listening.</CardDescription>
               </CardHeader>
-              <CardContent className="p-5 space-y-4">
-                <div className="space-y-1.5">
+              <CardContent className="p-4 space-y-3">
+                <div className="space-y-1 font-sans">
                   {ctas.map((cta, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-stone-50 p-2.5 rounded-lg border border-stone-200">
-                      <div className="text-[11px] font-bold text-stone-800">
-                        {cta.label} <span className="text-[9px] font-normal text-stone-500">({cta.action})</span>
+                    <div key={idx} className="flex justify-between items-center bg-stone-50 p-2 rounded-lg border border-stone-200">
+                      <div className="text-[10px] font-bold text-stone-800 leading-tight">
+                        {cta.label} <span className="text-[8px] font-normal text-stone-500">({cta.action})</span>
                       </div>
                       <button 
-                        onClick={() => handleDeleteCta(idx)}
-                        className="text-stone-400 hover:text-rose-500 text-xs font-bold"
+                        type="button"
+                        onClick={() => setCtaToDelete({ index: idx, label: cta.label })}
+                        className="text-stone-400 hover:text-rose-500 hover:bg-rose-50 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider cursor-pointer transition-all"
                       >
-                        Remove
+                        Delete
                       </button>
                     </div>
                   ))}
                 </div>
 
-                <div className="border-t pt-3 space-y-2">
+                {/* Delete interactive button confirm modal */}
+                {ctaToDelete !== null && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+                    <div className="relative w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 text-center space-y-4 animate-scale-up font-sans">
+                      <div className="flex justify-center">
+                        <div className="p-3 bg-red-105 text-red-650 rounded-full bg-red-50">
+                          <Trash2 className="h-6 w-6 text-red-600" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 text-center">
+                        <h4 className="text-sm font-black text-slate-800 uppercase tracking-wide">Confirm Deletion</h4>
+                        <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          Do you want this <span className="font-bold text-slate-900">({ctaToDelete.label})</span> deleted?
+                        </p>
+                      </div>
+                      <div className="flex gap-3 justify-center pt-2">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            handleDeleteCta(ctaToDelete.index);
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs h-9 px-5 rounded-xl cursor-pointer min-w-[80px]"
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCtaToDelete(null)}
+                          className="border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs h-9 px-5 rounded-xl cursor-pointer min-w-[80px]"
+                        >
+                          No
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="border-t pt-2.5 space-y-1.5">
                   <p className="text-[10px] uppercase font-black text-stone-500">Insert Custom Interactive CTA Button</p>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 font-sans">
                     <Input 
                       placeholder="e.g. Schedule Private Viewing" 
                       value={newCtaLabel}
                       onChange={(e) => {
                         let val = e.target.value;
-                        if (val.length > 0) {
-                          val = val.charAt(0).toUpperCase() + val.slice(1);
-                        }
-                        setNewCtaLabel(val);
+                        const words = val.split(" ");
+                        const formatted = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                        setNewCtaLabel(formatted);
                       }}
                       className="h-8 text-xs bg-white" 
                     />
                     <select 
-                      className="bg-white border text-xs w-full h-8 rounded-lg outline-none px-2 focus:ring-1 focus:ring-amber-500"
+                      className="bg-white border text-xs w-full h-8 rounded-lg outline-none px-2 focus:ring-1 focus:ring-amber-500 text-stone-700"
                       value={newCtaAction}
                       onChange={(e) => setNewCtaAction(e.target.value)}
                     >
@@ -1146,7 +1612,7 @@ export default function AiTours() {
                       <option value="documents">Action: Request Document Package</option>
                       <option value="lender">Action: Request Financing Options</option>
                     </select>
-                    <Button onClick={handleAddCta} className="w-full bg-amber-600 hover:bg-amber-500 text-[10px] font-black uppercase h-8 mt-1">
+                    <Button onClick={handleAddCta} className="w-full bg-amber-600 hover:bg-amber-500 text-[9px] font-black uppercase h-7 mt-0.5">
                       Add Interaction Key
                     </Button>
                   </div>
@@ -1155,64 +1621,93 @@ export default function AiTours() {
             </Card>
 
             {/* AI Tour Entry Gates & Flow */}
-            <Card className="border-blue-900 shadow-sm bg-blue-950 rounded-2xl">
-              <CardHeader className="pb-3 border-b border-blue-900 bg-blue-900">
+            <Card className="border-blue-900 shadow-sm bg-blue-950 rounded-2xl overflow-hidden w-full mx-0 flex flex-col justify-between">
+              <CardHeader className="py-2.5 px-4 border-b border-blue-900 bg-blue-900">
                 <CardTitle className="text-xs font-bold uppercase tracking-wider text-white">Verification & Gating Rules</CardTitle>
-                <CardDescription className="text-xs">Govern when playing tours prompt and lock behind guest sign-ins.</CardDescription>
+                <CardDescription className="text-[10px] text-white font-medium">Govern when playing tours prompt and lock behind guest sign-ins.</CardDescription>
               </CardHeader>
-              <CardContent className="p-5 space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase text-stone-500">Open House Entry Sign-In Gate</Label>
-                  <div className="grid grid-cols-2 gap-1">
+              <CardContent className="p-4 space-y-3">
+                <div className="space-y-1.5 font-sans">
+                  <Label className="text-[10px] font-black uppercase text-blue-200 font-bold">Open House Entry Sign-In Gate</Label>
+                  <div className="grid grid-cols-2 gap-1 font-sans">
                     <button 
                       onClick={() => setSignInPrompt("start")}
-                      className={`px-3 py-2 text-[10px] font-bold rounded-lg border text-center ${signInPrompt === 'start' ? 'bg-amber-50 border-amber-500 text-amber-800 font-extrabold' : 'bg-white text-stone-600 hover:bg-stone-50'}`}
+                      className={`px-2 py-1.5 text-[9px] rounded-lg border text-center transition-all duration-200 cursor-pointer ${
+                        signInPrompt === 'start' 
+                          ? 'bg-amber-50 border-amber-500 text-amber-800 font-extrabold' 
+                          : 'bg-white text-stone-600 border-stone-200 font-bold'
+                      } hover:bg-[#e17100] hover:text-white hover:font-bold hover:border-[#e17100]`}
                     >
                       Mandatory (Prompt First)
                     </button>
                     <button 
                       onClick={() => setSignInPrompt("none")}
-                      className={`px-3 py-2 text-[10px] font-bold rounded-lg border text-center ${signInPrompt === 'none' ? 'bg-amber-50 border-amber-500 text-amber-800 font-extrabold' : 'bg-white text-stone-600 hover:bg-stone-50'}`}
+                      className={`px-2 py-1.5 text-[9px] rounded-lg border text-center transition-all duration-200 cursor-pointer ${
+                        signInPrompt === 'none' 
+                          ? 'bg-amber-50 border-amber-500 text-amber-800 font-extrabold' 
+                          : 'bg-white text-stone-600 border-stone-200 font-bold'
+                      } hover:bg-[#e17100] hover:text-white hover:font-bold hover:border-[#e17100]`}
                     >
                       No Gate (Direct)
                     </button>
                   </div>
-                  <p className="text-[10px] text-stone-400 italic font-medium leading-tight mt-1">
+                  <p className="text-[9px] text-blue-200 italic font-medium leading-tight mt-0.5">
                     Mandatory requires full check-in before Sora narrate the room scriptures. No Gate allows instant access.
                   </p>
                 </div>
 
-                <div className="space-y-2 border-t pt-3">
+                <div className="space-y-1.5 border-t border-blue-900 pt-2.5 font-sans text-left">
                   <div className="flex items-center justify-between">
-                    <Label className="text-[10px] font-black uppercase text-stone-500">Enabled Features</Label>
+                    <Label className="text-[10px] font-black uppercase text-blue-200 font-bold">Enabled Features</Label>
                   </div>
                   
-                  <div className="space-y-1.5 pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-700">
+                  <div className="space-y-1 pt-0.5">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white">
                       <input 
                         type="checkbox" 
                         checked={voiceEnabled} 
-                        onChange={(e) => setVoiceEnabled(e.target.checked)}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          if (!val && !multilingualEnabled && !lenderHandoff) {
+                            toast.error("At least one enabled feature must be selected under Verification & Gating Rules.");
+                            return;
+                          }
+                          setVoiceEnabled(val);
+                        }}
                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600"
                       />
                       Enable Sora voice synthetic audio
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-700">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white">
                       <input 
                         type="checkbox" 
                         checked={multilingualEnabled} 
-                        onChange={(e) => setMultilingualEnabled(e.target.checked)}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          if (!val && !voiceEnabled && !lenderHandoff) {
+                            toast.error("At least one enabled feature must be selected under Verification & Gating Rules.");
+                            return;
+                          }
+                          setMultilingualEnabled(val);
+                        }}
                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600"
                       />
                       Enable Multilingual Support (75+ languages)
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-stone-700 mt-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white mt-0.5">
                       <input 
                         type="checkbox" 
                         checked={lenderHandoff} 
-                        onChange={(e) => setLenderHandoff(e.target.checked)}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          if (!val && !voiceEnabled && !multilingualEnabled) {
+                            toast.error("At least one enabled feature must be selected under Verification & Gating Rules.");
+                            return;
+                          }
+                          setLenderHandoff(val);
+                        }}
                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600"
                       />
                       Active Lender Handoff
@@ -1220,26 +1715,108 @@ export default function AiTours() {
                   </div>
 
                   {lenderHandoff && (
-                    <div className="p-3 bg-stone-50 rounded-xl border space-y-1 mt-2.5">
-                      <Label className="text-[9px] font-black uppercase text-stone-500">Paired Mortgage Specialist</Label>
+                    <div className="p-2 bg-blue-900/50 rounded-lg border border-blue-800 space-y-1 mt-2 text-left">
+                      <Label className="text-[9px] font-black uppercase text-blue-200 font-bold">Paired Mortgage Specialist</Label>
                       <select 
                         value={selectedLenderName}
                         onChange={(e) => setSelectedLenderName(e.target.value)}
-                        className="bg-white border text-[10px] h-8 rounded-lg w-full outline-none px-2 focus:ring-1 focus:ring-amber-500 mt-1 font-bold text-stone-700"
+                        className="bg-white border text-[10px] h-7 rounded-md w-full outline-none px-1.5 focus:ring-1 focus:ring-amber-500 mt-0.5 font-bold text-stone-750"
                       >
                         <option value="Pinnacle Capital Partners (Preferred)">Pinnacle Capital Partners (Preferred)</option>
                         <option value="LendWise Solutions Inc.">LendWise Solutions Inc.</option>
                         <option value="Alliance Residential Lending">Alliance Residential Lending</option>
                       </select>
-                      <p className="text-[9px] text-stone-400 font-medium leading-tight">When a client opts-in for mortgage help during the tour, lead metadata immediately routes to this specialist.</p>
+                      <p className="text-[9px] text-blue-200 font-medium leading-tight mt-0.5">When a client opts-in for mortgage help during the tour, lead metadata immediately routes to this specialist.</p>
                     </div>
                   )}
+                </div>
+
+                <div className="border-t border-blue-900 pt-3 flex items-center justify-between font-sans">
+                  <span className="text-[10px] font-semibold text-blue-200">
+                    Saves configurations to Firestore:
+                  </span>
+                  <Button 
+                    onClick={handleSaveGatingRules}
+                    disabled={loading}
+                    size="sm"
+                    className="h-7 px-3 bg-[#e17100] hover:bg-[#b05800] text-white font-black text-[9px] uppercase cursor-pointer rounded-lg border-none"
+                  >
+                    {loading ? (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    ) : null}
+                    Save Rules
+                  </Button>
                 </div>
               </CardContent>
             </Card>
 
           </div>
 
+        </div>
+      )}
+
+      {/* Language Conflict Modal Window */}
+      {langConflictOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <Card className="max-w-md w-full bg-stone-900 border border-stone-700 text-white shadow-2xl p-6 rounded-2xl space-y-4">
+            <CardHeader className="p-0 space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl">
+                  <Sparkles className="h-5 w-5 animate-pulse text-amber-400 fill-amber-300" />
+                </div>
+                <CardTitle className="text-sm font-bold text-slate-100 uppercase tracking-wide">Language Alignment Optimizer</CardTitle>
+              </div>
+              <CardDescription className="text-[11px] text-slate-300">
+                Sora detected mismatched target languages across your active tour sections.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-0 text-slate-200 text-xs leading-relaxed space-y-2">
+              <p>
+                Your Welcome Translation target language is set to <strong className="text-amber-400 uppercase font-black">{targetLang}</strong>.
+              </p>
+              {langConflictType === "both" && (
+                <p>
+                  However, your **Room Walkthrough script** ({roomTargetLang}) and **Knowledge Base Q&A** ({qaTargetLang}) target different languages.
+                </p>
+              )}
+              {langConflictType === "rooms" && (
+                <p>
+                  However, your **Room-by-Room Walkthrough target language** is currently ({roomTargetLang}).
+                </p>
+              )}
+              {langConflictType === "qas" && (
+                <p>
+                  However, your **Sora Knowledge Base target language** is currently ({qaTargetLang}).
+                </p>
+              )}
+              <p className="font-extrabold text-amber-300">
+                Would you like Sora to automatically align and translate these walkthrough scripts to {targetLang}?
+              </p>
+            </CardContent>
+
+            <CardFooter className="p-0 pt-3 flex flex-col sm:flex-row sm:items-center justify-end gap-2 text-right">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setLangConflictOpen(false);
+                  executePublish(rooms, qas, roomTargetLang, qaTargetLang);
+                }}
+                className="w-full sm:w-auto bg-transparent border-stone-600 text-stone-200 hover:bg-stone-800 text-[10px] font-bold uppercase cursor-pointer"
+              >
+                No, leave as is
+              </Button>
+              <Button
+                onClick={async () => {
+                  setLangConflictOpen(false);
+                  await translateAllToTarget();
+                }}
+                className="w-full sm:w-auto bg-[#155dfc] hover:bg-[#0c4fd2] text-white text-[10px] font-bold uppercase cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="h-3 w-3" /> Yes, translate it
+              </Button>
+            </CardFooter>
+          </Card>
         </div>
       )}
     </div>

@@ -199,7 +199,7 @@ export default function AdminLogs() {
 
       <Card className="border-slate-200 shadow-sm rounded-3xl overflow-hidden">
         {/* Desktop View */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
@@ -268,7 +268,7 @@ export default function AdminLogs() {
         </div>
 
         {/* Mobile Card List View */}
-        <div className="md:hidden divide-y divide-slate-100">
+        <div className="lg:hidden divide-y divide-slate-100">
           {filteredLogs.map((log) => (
             <div key={log.id} className="p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">

@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import Logo from "@/components/Logo";
 import { Scale, CreditCard, AlertCircle, Sparkles } from "lucide-react";
 
 export default function TermsOfService() {
@@ -9,13 +10,10 @@ export default function TermsOfService() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
       <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-50">
         <div 
-          className="flex items-center gap-2 font-bold text-xl tracking-tight cursor-pointer" 
+          className="cursor-pointer hover:opacity-90 transition-opacity" 
           onClick={() => navigate("/")}
         >
-          <div className="h-8 w-8 bg-blue-600 rounded flex items-center justify-center text-white text-lg font-black">
-            V
-          </div>
-          <span className="text-slate-900">VertexAgent.io</span>
+          <Logo variant="dark" iconClassName="h-8.5 w-8.5" />
         </div>
         <Button variant="ghost" onClick={() => navigate("/")} className="font-medium text-sm text-slate-600 hover:text-slate-900">
           Back to Home
@@ -31,7 +29,7 @@ export default function TermsOfService() {
               Terms Of <span className="text-blue-600">Service</span>
             </h1>
             <p className="text-lg text-slate-600 leading-relaxed font-medium">
-              Effective Date: May 25, 2026. Please read these terms carefully before utilizing VertexAgent.io platform features, website, or associated dashboards.
+              Effective Date: May 25, 2026. Please read these terms carefully before utilizing aiopenhouseconnect.com platform features, website, or associated dashboards.
             </p>
           </div>
 
@@ -71,7 +69,7 @@ export default function TermsOfService() {
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">1. Acceptances of Service</h2>
               <p>
-                By opening, creating, or using an account on VertexAgent.io (including all corresponding child widgets or directories hosted on Cloud Run systems), you agree to bind yourself to our platform rules. If you do not accept these criteria without modification, you are strictly prohibited from utilizing our tools.
+                By opening, creating, or using an account on aiopenhouseconnect.com (including all corresponding child widgets or directories hosted on Cloud Run systems), you agree to bind yourself to our platform rules. If you do not accept these criteria without modification, you are strictly prohibited from utilizing our tools.
               </p>
             </section>
 
@@ -98,7 +96,7 @@ export default function TermsOfService() {
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">4. Prohibited Behaviors Guidance</h2>
               <p>
-                While using VertexAgent.io, you agree not to:
+                While using aiopenhouseconnect.com, you agree not to:
               </p>
               <ul className="list-disc pl-6 space-y-2">
                 <li>Create mock or fraudulent property listings that misguide public users, or upload unauthorized voice clones without active consent documentation.</li>
@@ -111,14 +109,14 @@ export default function TermsOfService() {
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">5. Disclaimers of Warranties</h2>
               <p>
-                VERTEXAGENT.IO, ITS AI MODELS, SYNTHESIS LAB, AND SPATIAL INTEGRATIONS ARE SUPPLIED "AS IS" AND "AS AVAILABLE." WE DISCLAIM ALL EXPLICIT OR IMPLIED WARRANTIES, INCLUDING STABILITY, TIMEFRAME ACCURACIES, MERCHANT SUCCESS, OR CONVERSATION METRIC MINIMUMS. WE DO NOT GUARANTEE SYSTEM EMISSIONS WILL ESCAPE STANDARD EMAIL INBOX SPAM FOLDERS IN 100% OF CASES.
+                aiopenhouseconnect.com, ITS AI MODELS, SYNTHESIS LAB, AND SPATIAL INTEGRATIONS ARE SUPPLIED "AS IS" AND "AS AVAILABLE." WE DISCLAIM ALL EXPLICIT OR IMPLIED WARRANTIES, INCLUDING STABILITY, TIMEFRAME ACCURACIES, MERCHANT SUCCESS, OR CONVERSATION METRIC MINIMUMS. WE DO NOT GUARANTEE SYSTEM EMISSIONS WILL ESCAPE STANDARD EMAIL INBOX SPAM FOLDERS IN 100% OF CASES.
               </p>
             </section>
 
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">6. Limitation of Liability</h2>
               <p>
-                TO THE GREATEST EXTENT PERMITTED BY RELEVANT LEGISLATION, IN NO CIRCUMSTANCES SHALL VERTEXAGENT.IO OR ITS CORE INFRASTRUCTURE PLATFORMS BE RESPONSIBLE FOR INDIRECT, COMPENSATORY, SPECIAL, ACCIDENTAL, OR EXEMPLARY LOSSES (INCLUDING LOST PROFITS, CREDIBILITY FAILS, DATA DESTRUCTS, OR MACHINE DOWNTIMES) RESULTING FROM PLATFORM UTILIZATION OR FAILURES.
+                TO THE GREATEST EXTENT PERMITTED BY RELEVANT LEGISLATION, IN NO CIRCUMSTANCES SHALL aiopenhouseconnect.com OR ITS CORE INFRASTRUCTURE PLATFORMS BE RESPONSIBLE FOR INDIRECT, COMPENSATORY, SPECIAL, ACCIDENTAL, OR EXEMPLARY LOSSES (INCLUDING LOST PROFITS, CREDIBILITY FAILS, DATA DESTRUCTS, OR MACHINE DOWNTIMES) RESULTING FROM PLATFORM UTILIZATION OR FAILURES.
               </p>
             </section>
           </div>
@@ -126,7 +124,7 @@ export default function TermsOfService() {
       </main>
 
       <footer className="py-8 text-center text-slate-400 text-sm border-t border-slate-200 bg-white">
-        &copy; {new Date().getFullYear()} <a href="https://www.VertexAgent.io" target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-slate-600">VertexAgent.io</a>. All rights reserved.
+        &copy; {new Date().getFullYear()} <a href="https://www.aiopenhouseconnect.com" target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-slate-600">aiopenhouseconnect.com</a>. All rights reserved.
       </footer>
     </div>
   );

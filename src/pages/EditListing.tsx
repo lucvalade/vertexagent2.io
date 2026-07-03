@@ -4,8 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
-import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage } from "@/lib/api";
-import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink } from "lucide-react";
+import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage, getOpenHouseSessions, createOpenHouseSession, deleteOpenHouseSession, OpenHouseSession, parseDateTimeToUTC } from "@/lib/api";
+import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -30,6 +30,9 @@ const FALLBACK_CRMS: CRMItem[] = [
   { name: "Agile CRM", url: "https://www.agilecrm.com" },
   { name: "BoomTown", url: "https://boomtownroi.com" },
   { name: "Brivity", url: "https://www.brivity.com" },
+  { name: "Chime (Lofty)", url: "https://lofty.com" },
+  { name: "Cloze", url: "https://www.cloze.com" },
+  { name: "Contactually", url: "https://www.contactually.com" },
   { name: "Copper", url: "https://www.copper.com" },
   { name: "EZ Coordinator", url: "https://ezcoordinator.com" },
   { name: "IXACT Contact", url: "https://www.ixactcontact.com" },
@@ -75,10 +78,7 @@ function parseCSV(csvText: string): CRMItem[] {
         url && 
         lowerName !== "name" && 
         lowerName !== "column a" && 
-        lowerName !== "created at" &&
-        !lowerName.includes("chime") &&
-        !lowerName.includes("cloze") &&
-        !lowerName.includes("contactually")
+        lowerName !== "created at"
       ) {
         result.push({ name, url });
       }
@@ -113,6 +113,46 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const formatToParagraphs = (text: string): string => {
+  if (!text) return "";
+  
+  // Split text by existing double newlines to respect current intentional paragraph breaks
+  const inputParagraphs = text.split(/\n\s*\n/);
+  const finalParagraphs: string[] = [];
+  
+  inputParagraphs.forEach((para) => {
+    const cleanPara = para.replace(/\n+/g, " ").trim();
+    if (!cleanPara) return;
+    
+    // Split sentences inside this paragraph
+    const sentences: string[] = cleanPara.match(/[^.!?]+[.!?]+(?:\s+|$)/g) || [];
+    
+    if (sentences.length === 0) {
+      finalParagraphs.push(cleanPara);
+      return;
+    }
+    
+    const matchedLength = sentences.reduce((acc, s) => acc + s.length, 0);
+    if (matchedLength < cleanPara.length) {
+      const leftover = cleanPara.slice(matchedLength).trim();
+      if (leftover) {
+        sentences.push(leftover);
+      }
+    }
+
+    let currentGroup: string[] = [];
+    sentences.forEach((sentence, idx) => {
+      currentGroup.push(sentence.trim());
+      if (currentGroup.length === 3 || idx === sentences.length - 1) {
+        finalParagraphs.push(currentGroup.join(" "));
+        currentGroup = [];
+      }
+    });
+  });
+  
+  return finalParagraphs.join("\n\n");
+};
+
 interface Voice {
   id: string;
   name: string;
@@ -121,12 +161,12 @@ interface Voice {
 }
 
 const INITIAL_VOICES: Voice[] = [
-  { id: "2", name: "Professional Female", type: "Synthetic", isDefault: true },
-  { id: "5", name: "Executive British (Female)", type: "Synthetic", isDefault: false },
-  { id: "7", name: "Dynamic Storyteller (British Female)", type: "Synthetic", isDefault: false },
-  { id: "3", name: "Warm Energetic Male", type: "Synthetic", isDefault: false },
-  { id: "6", name: "Calm Reassuring Male", type: "Synthetic", isDefault: false },
-  { id: "8", name: "Deep Narrator", type: "Synthetic", isDefault: false },
+  { id: "2", name: "Professional Female Synthetic (Sora)", type: "Synthetic", isDefault: true },
+  { id: "5", name: "Executive British (Female) Synthetic", type: "Synthetic", isDefault: false },
+  { id: "7", name: "Dynamic Storyteller (British Female) Synthetic", type: "Synthetic", isDefault: false },
+  { id: "3", name: "Warm Energetic Male Synthetic (Puck)", type: "Synthetic", isDefault: false },
+  { id: "6", name: "Calm Reassuring Male Synthetic (Charon)", type: "Synthetic", isDefault: false },
+  { id: "8", name: "Deep Narrator Synthetic (Fenrir)", type: "Synthetic", isDefault: false },
 ];
 
 async function ensureUserVoices(userId: string): Promise<Voice[]> {
@@ -199,7 +239,16 @@ export default function EditListing() {
   const isEdit = Boolean(listingId);
   const isImportParam = searchParams.get("import") === "true";
 
-  const [currentStep, setCurrentStep] = useState(isEdit ? 2 : 1);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const stepParam = searchParams.get("step");
+    if (stepParam) {
+      const parsed = parseInt(stepParam, 10);
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) {
+        return parsed;
+      }
+    }
+    return isEdit ? 2 : 1;
+  });
   const [setupMethod, setSetupMethod] = useState<"import" | "manual" | null>(
     isEdit ? "manual" : (isImportParam ? "import" : null)
   );
@@ -213,13 +262,43 @@ export default function EditListing() {
   const [city, setCity] = useState("");
   const [province, setProvince] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [postalPlaceholder, setPostalPlaceholder] = useState("90001");
   const [price, setPrice] = useState("");
   const [beds, setBeds] = useState("");
   const [baths, setBaths] = useState("");
   const [sqft, setSqft] = useState("");
+  const [useSqftRange, setUseSqftRange] = useState(false);
+  const [sqftMin, setSqftMin] = useState("");
+  const [sqftMax, setSqftMax] = useState("");
   const [mlsNumber, setMlsNumber] = useState("");
+
+  const handleSetSqftAndRange = (value: string) => {
+    setSqft(value);
+    if (value.includes("-")) {
+      const parts = value.split("-").map(p => p.trim());
+      setUseSqftRange(true);
+      setSqftMin(parts[0] || "");
+      setSqftMax(parts[1] || "");
+    } else {
+      setUseSqftRange(false);
+      setSqftMin("");
+      setSqftMax("");
+    }
+  };
+
+  const moveTalkingPoint = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === talkingPoints.length - 1) return;
+    const newPoints = [...talkingPoints];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    const temp = newPoints[index];
+    newPoints[index] = newPoints[targetIndex];
+    newPoints[targetIndex] = temp;
+    setTalkingPoints(newPoints);
+  };
   const [originatingSystemName, setOriginatingSystemName] = useState("");
   const [country, setCountry] = useState("US");
+  const [mlsCountry, setMlsCountry] = useState("US");
   const [brokerageName, setBrokerageName] = useState("");
   const [brokerageLogo, setBrokerageLogo] = useState("");
   const [agentName, setAgentName] = useState("");
@@ -230,6 +309,113 @@ export default function EditListing() {
   // Custom Welcome Audios State
   const [welcomeEn, setWelcomeEn] = useState("");
   const [welcomeFr, setWelcomeFr] = useState("");
+
+  // Custom Welcome Overrides and Translation workflow States (Removed/Commented out for Settings iFrame migration)
+  /*
+  const [customWelcomeEn, setCustomWelcomeEn] = useState("");
+  const [customWelcomeFr, setCustomWelcomeFr] = useState("");
+  const [customWelcomeEs, setCustomWelcomeEs] = useState("");
+  const [customWelcomeStatuses, setCustomWelcomeStatuses] = useState<Record<string, string>>({
+    en: "none",
+    fr: "none",
+    es: "none"
+  });
+  const [savingWelcome, setSavingWelcome] = useState(false);
+  const [isRewritingWelcome, setIsRewritingWelcome] = useState(false);
+
+  const handleAiRewriteWelcome = async () => {
+    const textToRewrite = customWelcomeEn.trim() || description.trim();
+    if (!textToRewrite) {
+      toast.error("Please enter a description or some welcome text first.");
+      return;
+    }
+
+    setIsRewritingWelcome(true);
+    try {
+      const res = await fetch("/api/shorten-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textToRewrite }),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.shortenedText) {
+          const cleanText = result.shortenedText.replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+          const words = cleanText.split(" ");
+          let cappedText = cleanText;
+          if (words.length > 40) {
+            cappedText = words.slice(0, 40).join(" ") + "...";
+          }
+          setCustomWelcomeEn(cappedText);
+          toast.success("Welcome message rewritten and capped to 40 words!");
+        } else {
+          toast.error("Failed to rewrite. AI did not return valid text.");
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || "Failed to contact AI rewrite service.");
+      }
+    } catch (err) {
+      console.error("AI Rewrite error:", err);
+      toast.error("Error during AI rewrite.");
+    } finally {
+      setIsRewritingWelcome(false);
+    }
+  };
+
+  const [savingWelcomeOverride, setSavingWelcomeOverride] = useState(false);
+
+  const handleSaveWelcomeOverride = async () => {
+    const targetPropId = isEdit ? listingId! : activeListingId;
+    setSavingWelcomeOverride(true);
+    try {
+      const welcomeSaveRes = await fetch("/api/welcome-messages/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: targetPropId,
+          welcomeMessage: customWelcomeEn,
+          userId: user?.id
+        })
+      });
+      if (welcomeSaveRes.ok) {
+        const welcomeSaveData = await welcomeSaveRes.json();
+        if (welcomeSaveData.success) {
+          if (customWelcomeEn.trim() === "") {
+            setCustomWelcomeEn("");
+            setCustomWelcomeFr("");
+            setCustomWelcomeEs("");
+            setCustomWelcomeStatuses({ en: "none", fr: "none", es: "none" });
+            toast.success("Sora Welcome Message Override reverted to default!");
+          } else {
+            // Refresh custom translations state
+            if (welcomeSaveData.translations) {
+              setCustomWelcomeEn(welcomeSaveData.translations.en || "");
+              setCustomWelcomeFr(welcomeSaveData.translations.fr || "");
+              setCustomWelcomeEs(welcomeSaveData.translations.es || "");
+              setCustomWelcomeStatuses({
+                en: "complete",
+                fr: welcomeSaveData.translations.fr ? "complete" : "failed",
+                es: welcomeSaveData.translations.es ? "complete" : "failed"
+              });
+            }
+            toast.success("Sora Welcome Message Override and translations saved successfully!");
+          }
+        } else {
+          toast.error(welcomeSaveData.error || "Failed to save welcome message override.");
+        }
+      } else {
+        toast.error("Failed to contact backend translation service.");
+      }
+    } catch (err) {
+      console.error("Error saving welcome message override:", err);
+      toast.error("Error saving welcome message override.");
+    } finally {
+      setSavingWelcomeOverride(false);
+    }
+  };
+  */
 
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>, lang: "en" | "fr") => {
     const file = e.target.files?.[0];
@@ -304,9 +490,12 @@ export default function EditListing() {
         // Returning true since all inputs on this step are optional.
         return true;
       case 6:
-        // Optional integrations
+        // Social share is optional/pre-configured
         return true;
       case 7:
+        // Optional integrations
+        return true;
+      case 8:
         return setupMethod !== null && address.trim() !== "" && price.trim() !== "" && images.length > 0;
       default:
         return false;
@@ -362,7 +551,7 @@ export default function EditListing() {
     if (nameLower.includes("sarah")) { // Sarah's Clone
       displayMessage = "Sarah: 'Welcome to this gorgeous Malibu property! Let's explore the custom ocean-view terrace first...'";
     } else if (nameLower.includes("professional female")) {
-      displayMessage = "Professional Female: 'Hello there, thank you for visiting. I can walk you through the listing details or explain the smart integrations.'";
+      displayMessage = "Professional Female Synthetic: 'Hello there, thank you for visiting. I can walk you through the listing details or explain the smart integrations.'";
     } else if (nameLower.includes("warm") || nameLower.includes("friendly")) {
       displayMessage = "Warm Male: 'Hey, welcome. Come on in and make yourself at home. Let me know if you want details on the kitchen or master suite.'";
     } else if (nameLower.includes("luc")) { // Luc's Clone
@@ -511,11 +700,26 @@ export default function EditListing() {
   const [newPoint, setNewPoint] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [documents, setDocuments] = useState<{ name: string; url: string }[]>([]);
+  const [documentToDelete, setDocumentToDelete] = useState<{ index: number; name: string } | null>(null);
   const [newDocName, setNewDocName] = useState("");
   const [newDocUrl, setNewDocUrl] = useState("");
+  const [pendingPdfName, setPendingPdfName] = useState("");
   const [openHouseDate, setOpenHouseDate] = useState("");
+  const [sessions, setSessions] = useState<OpenHouseSession[]>([]);
+  const [openHouseDateFormat, setOpenHouseDateFormat] = useState("Standard");
   const [openHouseStartTime, setOpenHouseStartTime] = useState("");
   const [openHouseEndTime, setOpenHouseEndTime] = useState("");
+  const [enforcePhoneGate, setEnforcePhoneGate] = useState(true);
+  const [enforceOptInConsent, setEnforceOptInConsent] = useState(true);
+  const [socialShareEnabled, setSocialShareEnabled] = useState(true);
+  const [socialShareFacebook, setSocialShareFacebook] = useState(true);
+  const [socialShareInstagram, setSocialShareInstagram] = useState(true);
+  const [socialShareWhatsapp, setSocialShareWhatsapp] = useState(true);
+  const [socialShareTextMessage, setSocialShareTextMessage] = useState(true);
+  const [socialShareEmail, setSocialShareEmail] = useState(true);
+  const [socialShareCopyLink, setSocialShareCopyLink] = useState(true);
+  const [qrBrandingOption, setQrBrandingOption] = useState<"logo" | "photo" | "none">("none");
+  const agentPhoto = (user as any)?.branding?.agentPhotoUrl || "";
   const [tourDescriptors, setTourDescriptors] = useState<string[]>(new Array(16).fill(""));
 
   // CRM integration States
@@ -530,14 +734,16 @@ export default function EditListing() {
 
   const [crmList, setCrmList] = useState<CRMItem[]>(FALLBACK_CRMS);
   const [crmSearchQuery, setCrmSearchQuery] = useState("");
+  const [crmPage, setCrmPage] = useState(0);
   const [selectedCrmFromDropdown, setSelectedCrmFromDropdown] = useState<CRMItem | null>(null);
   const [isCrmDropdownOpen, setIsCrmDropdownOpen] = useState(false);
+  const [isCrmModalOpen, setIsCrmModalOpen] = useState(false);
   const crmDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchCRMSpreadsheet() {
       try {
-        const response = await fetch("https://docs.google.com/spreadsheets/d/1m7tvG7sehev6E3WhrUSooNYJ0rz23RLbbVOzHpD5eFg/export?format=csv");
+        const response = await fetch("/api/crm-sheet");
         if (response.ok) {
           const csvText = await response.text();
           const parsed = parseCSV(csvText);
@@ -582,6 +788,23 @@ export default function EditListing() {
     "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM"
   ];
 
+  const getHourFromTimeString = (timeStr: string): number => {
+    if (!timeStr) return 0;
+    const [numStr, ampm] = timeStr.split(" ");
+    let hr = parseInt(numStr);
+    if (ampm === "PM" && hr !== 12) {
+      hr += 12;
+    } else if (ampm === "AM" && hr === 12) {
+      hr = 0;
+    }
+    return hr;
+  };
+
+  const getFirstDayOfCurrentMonth = (): string => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  };
+
   const getFormattedDateHint = (dateString: string) => {
     if (!dateString) return "Sun, May 17th, 2026";
     try {
@@ -604,6 +827,57 @@ export default function EditListing() {
     }
   };
 
+  const formatOpenHouseDate = (dateString: string, format: string): string => {
+    if (!dateString) return "Select Date";
+    try {
+      const parts = dateString.split('-');
+      if (parts.length !== 3) return dateString;
+      const year = parts[0];
+      const month = parts[1];
+      const day = parts[2];
+      
+      if (format === 'MM-DD-YYYY') {
+        return `${month}-${day}-${year}`;
+      } else if (format === 'DD-MM-YYYY') {
+        return `${day}-${month}-${year}`;
+      } else if (format === 'YYYY-MM-DD') {
+        return `${year}-${month}-${day}`;
+      } else {
+        // Standard text format: July 5, 2026
+        const dateObj = new Date(`${dateString}T00:00:00`);
+        return dateObj.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const getOpenHousePastError = (): string => {
+    if (!openHouseDate) return "";
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(openHouseDate + "T00:00:00");
+    if (selected < today) {
+      return "Error: Selected open house date is in the past";
+    }
+    
+    const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    if (openHouseDate === todayLocalStr) {
+      const currentHr = new Date().getHours();
+      if (openHouseStartTime && getHourFromTimeString(openHouseStartTime) < currentHr) {
+        return `Error: Start time (${openHouseStartTime}) is in the past for today`;
+      }
+      if (openHouseEndTime && getHourFromTimeString(openHouseEndTime) < currentHr) {
+        return `Error: End time (${openHouseEndTime}) is in the past for today`;
+      }
+    }
+    return "";
+  };
+
   // Voice Warning Check
   useEffect(() => {
     if (!loading && user && !user.defaultVoiceId) {
@@ -621,22 +895,79 @@ export default function EditListing() {
   useEffect(() => {
     if (isEdit && listingId) {
       loadData(listingId);
-    } else if (user?.id) {
+    }
+    if (user?.id) {
        fetchUserBranding();
     }
   }, [listingId, isEdit, user?.id]);
 
   async function fetchUserBranding() {
+     const savedCrmName = localStorage.getItem("user_selected_crm");
+     const savedCrmUrl = localStorage.getItem("user_selected_crm_url");
+     if (savedCrmName) {
+       setSelectedCrmFromDropdown({ name: savedCrmName, url: savedCrmUrl || "https://www.google.com" });
+       setCrmSearchQuery(savedCrmName);
+     }
+
      try {
        const userDoc = await getDoc(doc(db, "users", user!.id));
        const userData = userDoc.data();
        if (userData?.branding) {
          setBrokerageLogo(userData.branding.imageUrl || userData.branding.logoUrl || "");
        }
+       if (userData?.selectedCRM) {
+         setSelectedCrmFromDropdown({ name: userData.selectedCRM, url: userData.selectedCRMUrl || "https://www.google.com" });
+         setCrmSearchQuery(userData.selectedCRM);
+         localStorage.setItem("user_selected_crm", userData.selectedCRM);
+         if (userData.selectedCRMUrl) {
+           localStorage.setItem("user_selected_crm_url", userData.selectedCRMUrl);
+         }
+       }
      } catch (err) {
        console.error("Error fetching user branding:", err);
      }
   }
+
+  const handleAttachCrmToProfile = async (crmName: string, crmUrl: string) => {
+    if (!user?.id) {
+      toast.error("Please log in to save integration preferences.");
+      return;
+    }
+    try {
+      localStorage.setItem("user_selected_crm", crmName);
+      localStorage.setItem("user_selected_crm_url", crmUrl);
+
+      const userRef = doc(db, "users", user.id);
+      const userSnap = await getDoc(userRef);
+      
+      const payload = {
+        selectedCRM: crmName,
+        selectedCRMUrl: crmUrl,
+        updatedAt: Date.now()
+      };
+
+      if (userSnap.exists()) {
+        await updateDoc(userRef, payload);
+      } else {
+        await setDoc(userRef, {
+          id: user.id,
+          email: user.email || "",
+          name: user.name || "Agent",
+          role: user.role || "AGENT",
+          createdAt: Date.now(),
+          ...payload
+        });
+      }
+      setSelectedCrmFromDropdown({ name: crmName, url: crmUrl });
+      setCrmSearchQuery(crmName);
+      toast.success(`Connected ${crmName} to your profile integration pipeline!`);
+    } catch (error) {
+      console.error("Failed to attach CRM to profile:", error);
+      setSelectedCrmFromDropdown({ name: crmName, url: crmUrl });
+      setCrmSearchQuery(crmName);
+      toast.success(`Connected ${crmName} to profile integration pipeline (local sync)!`);
+    }
+  };
 
   const handleVoiceSelect = async (vId: string, vName: string) => {
     setVoiceId(vId);
@@ -698,7 +1029,14 @@ export default function EditListing() {
         setAddress(fetchedAddress);
         setCity(fetchedCity);
         setProvince(fetchedProvince);
-        setPostalCode(fetchedPostalCode);
+        
+        if (fetchedPostalCode && fetchedPostalCode !== "NONE") {
+          setPostalCode(fetchedPostalCode);
+          setPostalPlaceholder(fetchedPostalCode);
+        } else {
+          setPostalCode("");
+          setPostalPlaceholder("NONE");
+        }
         
         // Try to parse address components ONLY if they are truly missing
         if (fetchedAddress && (!fetchedCity || !fetchedProvince || !fetchedPostalCode)) {
@@ -722,8 +1060,9 @@ export default function EditListing() {
         setPrice(data.price?.toString() || "");
         setBeds(data.beds?.toString() || "");
         setBaths(data.baths?.toString() || "");
-        setSqft(data.sqft?.toString() || "");
+        handleSetSqftAndRange(data.sqft?.toString() || "");
         setMlsNumber(data.mlsNumber || "");
+        setMlsCountry(data.mlsNumber && /^[A-Z]/i.test(data.mlsNumber) ? "CA" : (data.country || "US"));
         setOriginatingSystemName(data.originatingSystemName || "");
         setCountry(data.country || "US");
         setBrokerageName(data.brokerageName || "");
@@ -733,7 +1072,7 @@ export default function EditListing() {
           setBrokerageLogo("");
         }
         setAgentName(data.agentName || "");
-        setDescription(data.description || "");
+        setDescription(formatToParagraphs(data.description || ""));
         
         // Normalize images
         const normalizedImages: ListingImage[] = (data.images || []).map(img => {
@@ -746,7 +1085,7 @@ export default function EditListing() {
         setImages(normalizedImages);
         
         setVoiceId(data.voiceId && data.voiceId !== "none" ? data.voiceId : "2");
-        setVoiceName(data.voiceName && data.voiceId !== "none" ? data.voiceName : "Professional Female");
+        setVoiceName(data.voiceName && data.voiceId !== "none" ? data.voiceName : "Professional Female Synthetic");
         setTalkingPoints(data.talkingPoints || []);
         
         // Load tour descriptors, ensuring we have exactly 16 slots
@@ -757,6 +1096,7 @@ export default function EditListing() {
         });
         setTourDescriptors(descriptorsArray);
         setOpenHouseDate(data.openHouseDate || "");
+        setOpenHouseDateFormat(data.openHouseDateFormat || "Standard");
         if (data.openHouseTime) {
           const [start, end] = data.openHouseTime.split(" - ");
           setOpenHouseStartTime(start || "");
@@ -766,10 +1106,101 @@ export default function EditListing() {
           setOpenHouseEndTime("");
         }
 
+        // Fetch or migrate open house sessions
+        try {
+          let sessionsList = await getOpenHouseSessions(id);
+          if (sessionsList.length === 0 && data.openHouseDate) {
+            const parsed = parseDateTimeToUTC(data.openHouseDate, data.openHouseTime || "");
+            const sessionId = `session_${id}_migrated_${Date.now()}`;
+            const newSession = await createOpenHouseSession({
+              session_id: sessionId,
+              listing_id: id,
+              start_datetime: parsed.start,
+              end_datetime: parsed.end,
+              created_by: data.ownerId || user?.id || "unknown",
+              created_at: Date.now(),
+              updated_at: Date.now()
+            });
+            sessionsList = [newSession];
+            console.log("On-the-fly migrated single open house date to multi-session:", newSession);
+          }
+          setSessions(sessionsList);
+        } catch (err) {
+          console.error("Failed to load or migrate open house sessions:", err);
+        }
+
         setWebhookUrl(data.webhookUrl || "");
         setDocuments(data.documents || []);
         setWelcomeEn(data.welcome_en || "");
         setWelcomeFr(data.welcome_fr || "");
+        setEnforcePhoneGate(data.enforcePhoneGate !== undefined ? !!data.enforcePhoneGate : true);
+        setEnforceOptInConsent(data.enforceOptInConsent !== undefined ? !!data.enforceOptInConsent : true);
+        setSocialShareEnabled((data as any).socialShareEnabled !== undefined ? !!(data as any).socialShareEnabled : true);
+        if ((data as any).socialShareOptions) {
+          setSocialShareFacebook((data as any).socialShareOptions.facebook !== undefined ? !!(data as any).socialShareOptions.facebook : true);
+          setSocialShareInstagram((data as any).socialShareOptions.instagram !== undefined ? !!(data as any).socialShareOptions.instagram : true);
+          setSocialShareWhatsapp((data as any).socialShareOptions.whatsapp !== undefined ? !!(data as any).socialShareOptions.whatsapp : true);
+          setSocialShareTextMessage((data as any).socialShareOptions.textMessage !== undefined ? !!(data as any).socialShareOptions.textMessage : true);
+          setSocialShareEmail((data as any).socialShareOptions.email !== undefined ? !!(data as any).socialShareOptions.email : true);
+          setSocialShareCopyLink((data as any).socialShareOptions.copyLink !== undefined ? !!(data as any).socialShareOptions.copyLink : true);
+        } else {
+          setSocialShareFacebook(true);
+          setSocialShareInstagram(true);
+          setSocialShareWhatsapp(true);
+          setSocialShareTextMessage(true);
+          setSocialShareEmail(true);
+          setSocialShareCopyLink(true);
+        }
+        setQrBrandingOption((data as any).qrBrandingOption || "none");
+
+        // Fetch custom welcome overrides if any (Removed/Commented out for Settings iFrame migration)
+        /*
+        try {
+          const welcomeRes = await fetch(`/api/welcome-messages/property/${id}`);
+          if (welcomeRes.ok) {
+            const welcomeData = await welcomeRes.json();
+            if (welcomeData.success && welcomeData.welcomeMessages) {
+              const messages = welcomeData.welcomeMessages;
+              let customEn = messages.en?.text_value || "";
+              if (!customEn && data.description) {
+                const cleanDesc = data.description.replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+                const words = cleanDesc.split(" ");
+                if (words.length > 40) {
+                  customEn = words.slice(0, 40).join(" ") + "...";
+                } else {
+                  customEn = cleanDesc;
+                }
+              }
+              setCustomWelcomeEn(customEn);
+              setCustomWelcomeFr(messages.fr?.text_value || "");
+              setCustomWelcomeEs(messages.es?.text_value || "");
+              setCustomWelcomeStatuses({
+                en: messages.en?.translation_status || "none",
+                fr: messages.fr?.translation_status || "none",
+                es: messages.es?.translation_status || "none"
+              });
+            } else if (data.description) {
+              const cleanDesc = data.description.replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+              const words = cleanDesc.split(" ");
+              const customEn = words.length > 40 ? (words.slice(0, 40).join(" ") + "...") : cleanDesc;
+              setCustomWelcomeEn(customEn);
+            }
+          } else if (data.description) {
+            const cleanDesc = data.description.replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+            const words = cleanDesc.split(" ");
+            const customEn = words.length > 40 ? (words.slice(0, 40).join(" ") + "...") : cleanDesc;
+            setCustomWelcomeEn(customEn);
+          }
+        } catch (err) {
+          console.warn("Failed to load custom welcome message overrides:", err);
+          if (data.description) {
+            const cleanDesc = data.description.replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+            const words = cleanDesc.split(" ");
+            const customEn = words.length > 40 ? (words.slice(0, 40).join(" ") + "...") : cleanDesc;
+            setCustomWelcomeEn(customEn);
+          }
+        }
+        */
       }
     } catch (err) {
       toast.error("Failed to load listing");
@@ -794,9 +1225,9 @@ export default function EditListing() {
             setVoiceId(defaultVoice.id);
             setVoiceName(defaultVoice.name);
           } else {
-            // Default to "Professional Female" (id: "2")
+            // Default to "Professional Female Synthetic" (id: "2")
             setVoiceId("2");
-            setVoiceName("Professional Female");
+            setVoiceName("Professional Female Synthetic");
           }
         } catch (err) {
           console.error("Error fetching default voice:", err);
@@ -805,6 +1236,29 @@ export default function EditListing() {
       fetchDefaults();
     }
   }, [isEdit, user?.id]);
+
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [displayedText, setDisplayedText] = useState("");
+
+  useEffect(() => {
+    if (!isIngesting) {
+      setDisplayedText("");
+      return;
+    }
+    const fullText = "AI Open House Connect";
+    let currentIndex = 0;
+    setDisplayedText("");
+    const interval = setInterval(() => {
+      if (currentIndex < fullText.length) {
+        setDisplayedText(fullText.substring(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        currentIndex = 0;
+        setDisplayedText("");
+      }
+    }, 150);
+    return () => clearInterval(interval);
+  }, [isIngesting]);
 
   async function handleIngest() {
     if (!urlIngest) {
@@ -821,7 +1275,7 @@ export default function EditListing() {
     }
 
     toast.info("Ingesting URL... This may take a minute.");
-    setLoading(true);
+    setIsIngesting(true);
     try {
       const response = await fetch("/api/ingest", {
         method: "POST",
@@ -844,13 +1298,16 @@ export default function EditListing() {
 
         if (ingestedCity) setCity(ingestedCity);
         if (ingestedProvince) setProvince(ingestedProvince);
-        if (ingestedPostalCode) setPostalCode(ingestedPostalCode);
         
         if (data.originatingSystemName) setOriginatingSystemName(data.originatingSystemName);
-        if (data.country) setCountry(data.country);
+        if (data.country) {
+          setCountry(data.country);
+          setMlsCountry(data.mlsNumber && /^[A-Z]/i.test(data.mlsNumber) ? "CA" : data.country);
+        }
         if (data.agentName) setAgentName(data.agentName);
 
         // Try to parse address components as fallback ONLY if they are still missing
+        let parsedZip = "";
         if (ingestedAddress && (!ingestedCity || !ingestedProvince || !ingestedPostalCode)) {
           const parts = ingestedAddress.split(',').map(p => p.trim());
           if (parts.length >= 3) {
@@ -859,25 +1316,75 @@ export default function EditListing() {
             const stateZipMatch = lastPart.match(/^([A-Z]{2})\s+(.*)$/i);
             if (stateZipMatch) {
               if (!ingestedProvince && !province) setProvince(stateZipMatch[1]);
-              if (!ingestedPostalCode && !postalCode) setPostalCode(stateZipMatch[2]);
+              if (!ingestedPostalCode && !postalCode) parsedZip = stateZipMatch[2];
             } else if (parts.length === 4) {
                if (!ingestedProvince && !province) setProvince(parts[2]);
-               if (!ingestedPostalCode && !postalCode) setPostalCode(parts[3]);
+               if (!ingestedPostalCode && !postalCode) parsedZip = parts[3];
             }
           }
+        }
+
+        const finalPostalCode = ingestedPostalCode || parsedZip;
+        if (finalPostalCode) {
+          setPostalCode(finalPostalCode);
+          setPostalPlaceholder(finalPostalCode);
+        } else {
+          setPostalCode("");
+          setPostalPlaceholder("NONE");
         }
         
         if (data.price) setPrice(data.price.toString());
         if (data.beds) setBeds(data.beds.toString());
         if (data.baths) setBaths(data.baths.toString());
-        if (data.sqft) setSqft(data.sqft.toString());
+        if (data.sqft) handleSetSqftAndRange(data.sqft.toString());
         if (data.mlsNumber) setMlsNumber(data.mlsNumber);
         if (data.brokerageName) setBrokerageName(data.brokerageName);
         if (data.agentName) setAgentName(data.agentName);
-        if (data.description) setDescription(data.description);
+        if (data.description) {
+          const formattedDesc = formatToParagraphs(data.description);
+          setDescription(formattedDesc);
+          
+          const paragraphs = formattedDesc.split("\n\n").map(p => p.trim()).filter(p => p !== "");
+          const firstPara = paragraphs[0] || formattedDesc.split("\n").map(p => p.trim()).filter(p => p !== "")[0] || formattedDesc || "";
+          
+          /*
+          if (firstPara) {
+            setCustomWelcomeEn(firstPara);
+            
+            // Trigger automatic translation & save of this welcome message override
+            const targetPropId = isEdit ? listingId! : activeListingId;
+            try {
+              const welcomeSaveRes = await fetch("/api/welcome-messages/save", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  propertyId: targetPropId,
+                  welcomeMessage: firstPara,
+                  userId: user?.id
+                })
+              });
+              if (welcomeSaveRes.ok) {
+                const welcomeSaveData = await welcomeSaveRes.json();
+                if (welcomeSaveData.success && welcomeSaveData.translations) {
+                  setCustomWelcomeEn(welcomeSaveData.translations.en || firstPara);
+                  setCustomWelcomeFr(welcomeSaveData.translations.fr || "");
+                  setCustomWelcomeEs(welcomeSaveData.translations.es || "");
+                  setCustomWelcomeStatuses({
+                    en: "complete",
+                    fr: welcomeSaveData.translations.fr ? "complete" : "failed",
+                    es: welcomeSaveData.translations.es ? "complete" : "failed"
+                  });
+                }
+              }
+            } catch (err) {
+              console.error("Error auto-saving welcome message during ingest:", err);
+            }
+          }
+          */
+        }
         
         if (data.images && data.images.length > 0) {
-          const normalized = data.images.map((img, idx) => {
+          const normalized = data.images.slice(0, 30).map((img, idx) => {
             if (typeof img === 'string') {
               return { url: img, name: `Photo ${idx + 1} (Name Me)` };
             }
@@ -893,6 +1400,43 @@ export default function EditListing() {
         // Use keyFeatures if talkingPoints are missing
         const points = data.talkingPoints || data.keyFeatures || [];
         if (points.length > 0) setTalkingPoints(points);
+
+        // Extract and normalize Open House Date and Times from ingested data
+        if (data.openHouseDate) {
+          setOpenHouseDate(data.openHouseDate);
+          toast.success(`Found Open House Date: ${data.openHouseDate}`);
+        }
+        if (data.openHouseStartTime) {
+          const normalizeExtractedTime = (timeStr: string): string => {
+            if (!timeStr) return "";
+            let clean = timeStr.trim().toUpperCase();
+            if (/^\d{1,2}(:\d{2})?$/.test(clean)) {
+              const hr = parseInt(clean.split(':')[0]);
+              if (hr >= 12) {
+                return (hr === 12 ? 12 : hr - 12) + " PM";
+              } else {
+                return (hr === 0 ? 12 : hr) + " AM";
+              }
+            }
+            const match = clean.match(/(\d{1,2}):?(\d{2})?\s*(AM|PM)/);
+            if (match) {
+              const hr = parseInt(match[1]);
+              const ampm = match[3];
+              return `${hr} ${ampm}`;
+            }
+            return timeStr;
+          };
+          const normStart = normalizeExtractedTime(data.openHouseStartTime);
+          if (times.includes(normStart)) {
+            setOpenHouseStartTime(normStart);
+          }
+          if (data.openHouseEndTime) {
+            const normEnd = normalizeExtractedTime(data.openHouseEndTime);
+            if (times.includes(normEnd)) {
+              setOpenHouseEndTime(normEnd);
+            }
+          }
+        }
 
         if (data.importStatus === "partial") {
           toast.warning("Partial import complete. Please review missing fields.");
@@ -913,7 +1457,7 @@ export default function EditListing() {
       // We don't want to show raw stack traces, just the clear error message from server
       toast.error(err.message || "Failed to ingest listing");
     } finally {
-      setLoading(false);
+      setIsIngesting(false);
     }
   }
 
@@ -990,6 +1534,59 @@ export default function EditListing() {
     setImageToDeleteIndex(null);
   };
 
+  const autoFillDescriptorsFromImages = (imgsList = images) => {
+    const updated = [...tourDescriptors];
+    for (let i = 0; i < 16; i++) {
+      if (i < imgsList.length) {
+        let name = imgsList[i].name || "";
+        name = name.replace(/\.[^/.]+$/, "");
+        name = name.split(/[_\-\s]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        updated[i] = name.slice(0, 30);
+      } else {
+        updated[i] = "";
+      }
+    }
+    setTourDescriptors(updated);
+    toast.success("Descriptors auto-filled from photo labels!");
+  };
+
+  const moveImageInListing = async (index: number, direction: 'left' | 'right' | 'up' | 'down') => {
+    const updated = [...images];
+    let targetIndex = index;
+    if (direction === 'left') {
+      targetIndex = index - 1;
+    } else if (direction === 'right') {
+      targetIndex = index + 1;
+    } else if (direction === 'up') {
+      targetIndex = index - 2; // grid is 2 cols
+    } else if (direction === 'down') {
+      targetIndex = index + 2;
+    }
+
+    if (targetIndex >= 0 && targetIndex < updated.length) {
+      const temp = updated[index];
+      updated[index] = updated[targetIndex];
+      updated[targetIndex] = temp;
+      setImages(updated);
+
+      if (isEdit && listingId) {
+        const tid = toast.loading("Saving new image layout order...");
+        try {
+          await updateListing(listingId, { images: updated });
+          toast.dismiss(tid);
+          toast.success(`Image moved ${direction} successfully and auto-saved!`);
+        } catch (err) {
+          toast.dismiss(tid);
+          toast.error("Failed to auto-save image order.");
+        }
+      } else {
+        toast.success(`Image moved ${direction} in drafts`);
+      }
+    } else {
+      toast.warning(`Cannot move image ${direction} from this position.`);
+    }
+  };
+
   const handleDownloadImage = (img: ListingImage, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
@@ -1015,54 +1612,101 @@ export default function EditListing() {
     }
   };
 
-  async function handleSave(e?: React.FormEvent) {
+  async function handleSave(e?: React.FormEvent, nextStepOverride?: number): Promise<boolean> {
     if (e) e.preventDefault();
     if (!address) {
       toast.error("Address is required");
-      return;
+      return false;
     }
 
     // Validations
     const numericPrice = price ? parseInt(price) : 0;
     if (price && (isNaN(numericPrice) || numericPrice <= 0)) {
       toast.error("Price must be a positive number");
-      return;
+      return false;
     }
 
-    const numericSqft = sqft ? parseInt(sqft) : 0;
-    if (sqft && (isNaN(numericSqft) || numericSqft >= 50000)) {
-      toast.error("Square feet must be a realistic number (less than 50,000)");
-      return;
+    if (useSqftRange) {
+      if (!sqftMin || !sqftMax) {
+        toast.error("Please enter both minimum and maximum square feet");
+        return false;
+      }
+      const minNum = parseInt(sqftMin);
+      const maxNum = parseInt(sqftMax);
+      if (isNaN(minNum) || isNaN(maxNum) || minNum >= 50000 || maxNum >= 50000) {
+        toast.error("Square feet must be realistic numbers (less than 50,000)");
+        return false;
+      }
+      if (minNum > maxNum) {
+        toast.error("Minimum square feet cannot be greater than maximum square feet");
+        return false;
+      }
+    } else {
+      const numericSqft = sqft ? parseInt(sqft) : 0;
+      if (sqft && (isNaN(numericSqft) || numericSqft >= 50000)) {
+        toast.error("Square feet must be a realistic number (less than 50,000)");
+        return false;
+      }
     }
 
-    if (mlsNumber && !/^[A-Z0-9-]{3,32}$/i.test(mlsNumber)) {
-      toast.error("Invalid MLS Number format. Should be 3-32 alphanumeric characters.");
-      return;
+    if (mlsNumber) {
+      if (mlsCountry === "US") {
+        if (!/^\d{8}$/.test(mlsNumber)) {
+          toast.error("Invalid USA MLS Number format. Must be exactly 8 digits (purely numeric, e.g. 12345678).");
+          return false;
+        }
+      } else {
+        if (!/^[A-Z]\d{8}$/i.test(mlsNumber)) {
+          toast.error("Invalid Canadian MLS Number format. Must be a single letter followed by 8 digits (e.g. X12345678).");
+          return false;
+        }
+      }
     }
 
     let formattedPostalCode = postalCode.trim();
-    if (country === 'CA') {
-      formattedPostalCode = formattedPostalCode.toUpperCase();
-      // Auto-format: Add space if missing (A1A1A1 -> A1A 1A1)
-      if (formattedPostalCode.length === 6 && !formattedPostalCode.includes(' ')) {
-        formattedPostalCode = formattedPostalCode.slice(0, 3) + ' ' + formattedPostalCode.slice(3);
+    if (formattedPostalCode === "") {
+      if (postalPlaceholder === "NONE") {
+        formattedPostalCode = "NONE";
+      } else {
+        toast.error("Zip/Postal Code is missing. Please provide a valid entry.");
+        return false;
       }
-      
-      const caRegex = /^[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ ]?\d[ABCEGHJ-NPRSTV-Z]\d$/i;
-      if (formattedPostalCode && !caRegex.test(formattedPostalCode)) {
-        toast.error("Invalid Canadian Postal Code (Format: A1A 1A1). Note: D, F, I, O, Q, U are not used.");
-        return;
-      }
-    } else {
-      const usRegex = /^\d{5}(-\d{4})?$/;
-      if (formattedPostalCode && !usRegex.test(formattedPostalCode)) {
-        toast.error("Invalid US Zip Code (Format: 12345 or 12345-6789)");
-        return;
+    }
+
+    if (formattedPostalCode !== "NONE") {
+      if (country === 'CA') {
+        formattedPostalCode = formattedPostalCode.toUpperCase();
+        // Auto-format: Add space if missing (A1A1A1 -> A1A 1A1)
+        if (formattedPostalCode.length === 6 && !formattedPostalCode.includes(' ')) {
+          formattedPostalCode = formattedPostalCode.slice(0, 3) + ' ' + formattedPostalCode.slice(3);
+        }
+        
+        const caRegex = /^[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ ]?\d[ABCEGHJ-NPRSTV-Z]\d$/i;
+        if (formattedPostalCode && !caRegex.test(formattedPostalCode)) {
+          toast.error("Invalid Canadian Postal Code (Format: A1A 1A1). Note: D, F, I, O, Q, U are not used.");
+          return false;
+        }
+      } else {
+        const usRegex = /^\d{5}(-\d{4})?$/;
+        if (formattedPostalCode && !usRegex.test(formattedPostalCode)) {
+          toast.error("Invalid US Zip Code (Format: 12345 or 12345-6789)");
+          return false;
+        }
       }
     }
     
     setSaving(true);
     try {
+      const formattedDescription = formatToParagraphs(description);
+      setDescription(formattedDescription);
+
+      let finalSqft: any = null;
+      if (useSqftRange) {
+        finalSqft = `${sqftMin} - ${sqftMax}`;
+      } else {
+        finalSqft = sqft ? parseInt(sqft) : null;
+      }
+
       const payload: Partial<Listing> = {
         address: address || "",
         city: city || "",
@@ -1071,14 +1715,15 @@ export default function EditListing() {
         price: price ? parseInt(price) : null,
         beds: beds ? parseInt(beds) : null,
         baths: baths ? parseInt(baths) : null,
-        sqft: sqft ? parseInt(sqft) : null,
+        sqft: finalSqft,
         mlsNumber: mlsNumber.toUpperCase() || "",
+        mlsCountry: mlsCountry || "US",
         originatingSystemName: originatingSystemName || "",
         country: country || "US",
         brokerageName: brokerageName || "",
         brokerageLogo: brokerageLogo || "",
         agentName: agentName || "",
-        description: description || "",
+        description: formattedDescription || "",
         images: images || [],
         talkingPoints: talkingPoints || [],
         tourDescriptors: tourDescriptors.filter(d => d.trim() !== ""),
@@ -1086,10 +1731,23 @@ export default function EditListing() {
         documents: documents || [],
         voiceId: voiceId || "",
         voiceName: voiceName || "",
-        welcome_en: welcomeEn || "",
-        welcome_fr: welcomeFr || "",
+        welcome_en: welcomeEn || "Hi, I'm Sora, your AI property assistant. This tour shows how I connect listings, answer client questions, book showings, and run your open house gate and lead sign-in. Tap each step to follow along.",
+        welcome_fr: welcomeFr || "Bonjour, je suis Sora, votre assistante immobilière IA. Cette visite guidée vous montre comment je mets en relation les annonces, réponds aux questions des clients, planifie les visites et gère l'accueil des visiteurs lors des journées portes ouvertes et l'inscription des prospects. Touchez chaque étape pour suivre le tutoriel.",
         openHouseDate: openHouseDate || "",
+        openHouseDateFormat: openHouseDateFormat || "Standard",
         openHouseTime: (openHouseStartTime && openHouseEndTime) ? `${openHouseStartTime} - ${openHouseEndTime}` : "",
+        enforcePhoneGate: !!enforcePhoneGate,
+        enforceOptInConsent: !!enforceOptInConsent,
+        qrBrandingOption: qrBrandingOption || "none",
+        socialShareEnabled: !!socialShareEnabled,
+        socialShareOptions: {
+          facebook: !!socialShareFacebook,
+          instagram: !!socialShareInstagram,
+          whatsapp: !!socialShareWhatsapp,
+          textMessage: !!socialShareTextMessage,
+          email: !!socialShareEmail,
+          copyLink: !!socialShareCopyLink,
+        },
         updatedAt: Date.now()
       };
 
@@ -1102,14 +1760,106 @@ export default function EditListing() {
           id: newId,
           ownerId: user!.id,
           createdAt: Date.now(),
+          status: "Active",
           ...payload
         } as Listing;
         
         await createListing(fullPayload);
         
         toast.success("Listing created");
-        navigate(`/app/listings/edit/${newId}`);
+        const targetStep = nextStepOverride || currentStep;
+        navigate(`/app/listings/edit/${newId}?step=${targetStep}`);
       }
+
+      // Trigger saving the custom welcome overrides (Removed/Commented out for Settings iFrame migration)
+      /*
+      const targetPropId = isEdit ? listingId! : activeListingId;
+      try {
+        const welcomeSaveRes = await fetch("/api/welcome-messages/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            propertyId: targetPropId,
+            welcomeMessage: customWelcomeEn,
+            userId: user?.id
+          })
+        });
+        if (welcomeSaveRes.ok) {
+          const welcomeSaveData = await welcomeSaveRes.json();
+          if (welcomeSaveData.success) {
+            if (customWelcomeEn.trim() === "") {
+              setCustomWelcomeEn("");
+              setCustomWelcomeFr("");
+              setCustomWelcomeEs("");
+              setCustomWelcomeStatuses({ en: "none", fr: "none", es: "none" });
+            } else {
+              // Refresh custom translations state
+              if (welcomeSaveData.translations) {
+                setCustomWelcomeEn(welcomeSaveData.translations.en || "");
+                setCustomWelcomeFr(welcomeSaveData.translations.fr || "");
+                setCustomWelcomeEs(welcomeSaveData.translations.es || "");
+                setCustomWelcomeStatuses({
+                  en: "complete",
+                  fr: welcomeSaveData.translations.fr ? "complete" : "failed",
+                  es: welcomeSaveData.translations.es ? "complete" : "failed"
+                });
+              }
+            }
+          }
+        }
+      } catch (welcomeErr) {
+        console.error("Welcome save error:", welcomeErr);
+      }
+      */
+
+      // Synchronize to shared LocalStorage `"open_house_events"`
+      try {
+        let localEvents: any[] = [];
+        const saved = localStorage.getItem("open_house_events");
+        if (saved) {
+          localEvents = JSON.parse(saved);
+        }
+        
+        const targetListingId = isEdit ? listingId! : activeListingId;
+        const existingIndex = localEvents.findIndex((evt: any) => evt.listingId === targetListingId);
+        
+        if (openHouseDate) {
+          const matchedEvent = existingIndex > -1 ? localEvents[existingIndex] : null;
+          const eventPayload = {
+            id: matchedEvent?.id || `event_${targetListingId}_${Date.now()}`,
+            eventName: matchedEvent?.eventName || `${address} Open House`,
+            listingId: targetListingId,
+            listingAddress: address,
+            eventDate: openHouseDate,
+            startTime: openHouseStartTime || "09:00 AM",
+            endTime: openHouseEndTime || "12:00 PM",
+            hostAgent: agentName || user?.name || "Agent",
+            eventMode: matchedEvent?.eventMode || "Hybrid",
+            gateToggle: !!enforcePhoneGate || !!enforceOptInConsent,
+            qrBrandingOption: qrBrandingOption || "none",
+            aiTourLinked: matchedEvent?.aiTourLinked !== undefined ? matchedEvent.aiTourLinked : true,
+            lenderShown: matchedEvent?.lenderShown !== undefined ? matchedEvent.lenderShown : true,
+            mortgageQuestion: matchedEvent?.mortgageQuestion !== undefined ? matchedEvent.mortgageQuestion : true,
+            agentNotes: matchedEvent?.agentNotes || "Synchronized from Listing settings.",
+            createdAt: matchedEvent?.createdAt || Date.now()
+          };
+          
+          if (existingIndex > -1) {
+            localEvents[existingIndex] = eventPayload;
+          } else {
+            localEvents.unshift(eventPayload);
+          }
+        } else {
+          // If openHouseDate was cleared, remove the event
+          if (existingIndex > -1) {
+            localEvents.splice(existingIndex, 1);
+          }
+        }
+        localStorage.setItem("open_house_events", JSON.stringify(localEvents));
+      } catch (e) {
+        console.error("Failed to sync open_house_events in local storage", e);
+      }
+      return true;
     } catch (err: any) {
       console.error(err);
       let msg = "Failed to save listing";
@@ -1120,14 +1870,192 @@ export default function EditListing() {
         if (err.message) msg = `Save Error: ${err.message}`;
       }
       toast.error(msg);
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
+  const updateListingPrimaryFromSessions = async (sessionList: OpenHouseSession[]) => {
+    const nowStr = new Date().toISOString();
+    const scheduled = sessionList.filter(s => s.end_datetime > nowStr);
+    
+    scheduled.sort((a, b) => a.start_datetime.localeCompare(b.start_datetime));
+    
+    let targetSession = scheduled[0];
+    if (!targetSession && sessionList.length > 0) {
+      const sortedAll = [...sessionList].sort((a, b) => b.start_datetime.localeCompare(a.start_datetime));
+      targetSession = sortedAll[0];
+    }
+    
+    const targetListingId = isEdit ? listingId! : activeListingId;
+    
+    if (targetSession) {
+      const startDate = new Date(targetSession.start_datetime);
+      const endDate = new Date(targetSession.end_datetime);
+      
+      const year = startDate.getFullYear();
+      const month = String(startDate.getMonth() + 1).padStart(2, "0");
+      const day = String(startDate.getDate()).padStart(2, "0");
+      const dateLocalStr = `${year}-${month}-${day}`;
+      
+      const formatTimeLocal = (d: Date) => {
+        let h = d.getHours();
+        const m = String(d.getMinutes()).padStart(2, "0");
+        const ampm = h >= 12 ? "PM" : "AM";
+        h = h % 12;
+        h = h ? h : 12;
+        return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+      };
+      
+      const timeRangeStr = `${formatTimeLocal(startDate)} - ${formatTimeLocal(endDate)}`;
+      
+      try {
+        const listingDoc = await getDoc(doc(db, "listings", targetListingId));
+        if (listingDoc.exists()) {
+          await updateListing(targetListingId, {
+            openHouseDate: dateLocalStr,
+            openHouseTime: timeRangeStr
+          });
+        } else {
+          await setDoc(doc(db, "listings", targetListingId), {
+            id: targetListingId,
+            ownerId: user?.id || "unknown",
+            openHouseDate: dateLocalStr,
+            openHouseTime: timeRangeStr,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.error("Failed to update listing on session update:", err);
+      }
+      setOpenHouseDate(dateLocalStr);
+    } else {
+      try {
+        const listingDoc = await getDoc(doc(db, "listings", targetListingId));
+        if (listingDoc.exists()) {
+          await updateListing(targetListingId, {
+            openHouseDate: "",
+            openHouseTime: ""
+          });
+        } else {
+          await setDoc(doc(db, "listings", targetListingId), {
+            id: targetListingId,
+            openHouseDate: "",
+            openHouseTime: ""
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.error("Failed to clear listing open house dates:", err);
+      }
+      setOpenHouseDate("");
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      await deleteOpenHouseSession(sessionId);
+      const updated = sessions.filter(s => s.session_id !== sessionId);
+      setSessions(updated);
+      toast.success("Open house session removed");
+      await updateListingPrimaryFromSessions(updated);
+    } catch (err) {
+      console.error("Failed to delete session", err);
+      toast.error("Failed to delete session");
+    }
+  };
+
+  const handleAddSession = async () => {
+    if (!openHouseDate) {
+      toast.error("Please select a date first");
+      return;
+    }
+    if (!openHouseStartTime || !openHouseEndTime) {
+      toast.error("Please select start and end hours");
+      return;
+    }
+    
+    // Validate if date is unreasonably far in the past or future (safeguard for typos)
+    const parsedDate = new Date(openHouseDate + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const minExpectedDate = new Date("2020-01-01T00:00:00");
+    const maxExpectedDate = new Date();
+    maxExpectedDate.setFullYear(today.getFullYear() + 10);
+    maxExpectedDate.setHours(23, 59, 59, 999);
+    
+    if (isNaN(parsedDate.getTime()) || parsedDate < minExpectedDate || parsedDate > maxExpectedDate) {
+      toast.error(`Please enter a valid date. [${openHouseDate}] appears to be outside the expected range.`);
+      return;
+    }
+    
+    const parsed = parseDateTimeToUTC(openHouseDate, `${openHouseStartTime} - ${openHouseEndTime}`);
+    if (parsed.start >= parsed.end) {
+      toast.error("Start time must be before end time");
+      return;
+    }
+    
+    const targetListingId = isEdit ? listingId! : activeListingId;
+    const sessionId = `session_${targetListingId}_${Date.now()}`;
+    const newSession: Omit<OpenHouseSession, "status"> = {
+      session_id: sessionId,
+      listing_id: targetListingId,
+      start_datetime: parsed.start,
+      end_datetime: parsed.end,
+      created_by: user?.id || "agent",
+      created_at: Date.now(),
+      updated_at: Date.now()
+    };
+    
+    try {
+      const saved = await createOpenHouseSession(newSession);
+      const updatedSessions = [...sessions, saved];
+      setSessions(updatedSessions);
+      toast.success("Open house session added successfully!");
+      
+      // Clear inputs
+      setOpenHouseDate("");
+      setOpenHouseStartTime("");
+      setOpenHouseEndTime("");
+      
+      await updateListingPrimaryFromSessions(updatedSessions);
+    } catch (err: any) {
+      console.error("Failed to add session (Internal Error Log):", err);
+      let details = "Please verify your input or check permissions.";
+      try {
+        if (err?.message) {
+          const parsedErr = JSON.parse(err.message);
+          if (parsedErr && parsedErr.error) {
+            details = parsedErr.error;
+          }
+        }
+      } catch (e) {
+        if (err?.message) {
+          details = err.message;
+        }
+      }
+      toast.error(`Failed to add session: ${details}`);
+    }
+  };
+
   async function handleDelete() {
     try {
       await deleteListingOp(listingId!);
+      
+      // Clean up local open house events
+      try {
+        const saved = localStorage.getItem("open_house_events");
+        if (saved) {
+          const events = JSON.parse(saved);
+          const filtered = events.filter((evt: any) => evt.listingId !== listingId);
+          localStorage.setItem("open_house_events", JSON.stringify(filtered));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+
       toast.success("Listing deleted");
       navigate("/app/listings");
     } catch (err) {
@@ -1141,6 +2069,31 @@ export default function EditListing() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 px-4 sm:px-6">
+      {isIngesting && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center z-50">
+          <div className="bg-white/95 border border-slate-200 p-8 rounded-2xl shadow-2xl flex flex-col items-center justify-center max-w-md w-full text-center space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 h-16 w-16 rounded-full bg-blue-100 animate-ping opacity-75"></div>
+              <div className="relative h-16 w-16 rounded-full bg-blue-600 flex items-center justify-center shadow-lg">
+                <Sparkles className="h-8 w-8 text-white animate-pulse" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-slate-800">Sora AI is Ingesting</h3>
+              <p className="text-sm text-slate-500">Structuring parameters, normalizing fields, and generating welcome audio...</p>
+            </div>
+            <div className="bg-slate-50/50 px-6 py-4 rounded-xl border border-slate-100 w-full flex items-center justify-center min-h-[4rem]">
+              <span className="font-mono text-xl font-extrabold text-[#155dfc] tracking-wider after:content-['|'] after:animate-pulse after:ml-0.5 after:text-blue-500">
+                {displayedText}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+              <span>Connected to Firecrawl Ingestion Pipeline</span>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-4">
         <Link 
           to="/app/listings" 
@@ -1151,6 +2104,18 @@ export default function EditListing() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">{isEdit ? "Edit Listing Dashboard" : "New Listing Setup"}</h1>
+            {isEdit && listingId && (
+              <div className="text-xs text-slate-900 font-mono mt-1 flex items-center gap-1">
+                Listing ID: {listingId}
+                <button 
+                  onClick={() => navigator.clipboard.writeText(listingId)}
+                  className="hover:text-slate-600 transition-colors"
+                  title="Copy ID"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              </div>
+            )}
             <p className="text-sm text-slate-500 mt-1">Configure your open house sign-ins, AI voice tours, and listing detail pages.</p>
             <div className="flex items-center gap-4 mt-2 text-xs">
               <span className="flex items-center gap-1.5 font-bold text-slate-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
@@ -1190,19 +2155,20 @@ export default function EditListing() {
       {/* Stepper Progress Bar */}
       <div className="bg-white border rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex justify-between items-center text-xs font-bold text-slate-400 mb-4 px-1">
-          <span>STEP {currentStep} OF 7</span>
+          <span>STEP {currentStep} OF 8</span>
           <span className="text-blue-600 font-mono">
             {currentStep === 1 && "Choose Setup Mode"}
             {currentStep === 2 && "Review Extracted Listing Data"}
             {currentStep === 3 && "Label Room & View Assets"}
-            {currentStep === 4 && "Configure Cora Voice & Behavior"}
+            {currentStep === 4 && "Configure AI Voice & Behavior"}
             {currentStep === 5 && "Configure Guest Sign-In & Flyers"}
-            {currentStep === 6 && "Branding, Integrity & CRMs"}
-            {currentStep === 7 && "Interactive Preview & Publish Live"}
+            {currentStep === 6 && "Social Share Setup"}
+            {currentStep === 7 && "Branding, Integrity & CRMs"}
+            {currentStep === 8 && "Interactive Preview & Publish Live"}
           </span>
         </div>
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 h-2.5 rounded-full overflow-hidden bg-slate-100">
-          {[1, 2, 3, 4, 5, 6, 7].map((step) => (
+        <div className="grid grid-cols-8 gap-1.5 sm:gap-2 h-2.5 rounded-full overflow-hidden bg-slate-100">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
             <button
               key={'step-' + step}
               type="button"
@@ -1222,15 +2188,16 @@ export default function EditListing() {
             />
           ))}
         </div>
-        <div className="hidden sm:grid grid-cols-7 gap-2 text-[10px] uppercase font-black tracking-widest mt-3 text-center">
+        <div className="hidden sm:grid grid-cols-8 gap-2 text-[10px] uppercase font-black tracking-widest mt-3 text-center">
           {[
             { id: 1, label: "Setup Method" },
             { id: 2, label: "Basic Info" },
             { id: 3, label: "Assets & Labels" },
             { id: 4, label: "AI Voices" },
-            { id: 5, label: "Sign-In" },
-            { id: 6, label: "CRMs & APIs" },
-            { id: 7, label: "Live Preview" }
+            { id: 5, label: "Sign-In + Open House" },
+            { id: 6, label: "Social Share" },
+            { id: 7, label: "CRMs & APIs" },
+            { id: 8, label: "Live Preview" }
           ].map((s) => {
             const isActive = currentStep === s.id;
             const isDone = isStepCompleted(s.id);
@@ -1338,7 +2305,7 @@ export default function EditListing() {
                 }} 
                 className="bg-blue-600 hover:bg-blue-700 text-white px-8"
               >
-                Configure Manually Instead <ArrowRight className="ml-2 h-4 w-4" />
+                Save & Continue
               </Button>
             </div>
           </div>
@@ -1352,8 +2319,8 @@ export default function EditListing() {
               <CardDescription>Confirm correct specs, price, and descriptive copy below.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="space-y-2 sm:col-span-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="space-y-2 col-span-2 sm:col-span-4">
                   <Label>Property address *</Label>
                   <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St, Los Angeles, CA" required />
                 </div>
@@ -1367,9 +2334,9 @@ export default function EditListing() {
                 </div>
                 <div className="space-y-2">
                   <Label>Postal/Zip Code</Label>
-                  <Input value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="90001" />
+                  <Input value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder={postalPlaceholder} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 col-span-1">
                   <Label>Country</Label>
                   <select 
                     className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
@@ -1382,7 +2349,7 @@ export default function EditListing() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Brokerage Name</Label>
                   <Input value={brokerageName} onChange={e => setBrokerageName(e.target.value)} placeholder="Century 21, Sotheby's, etc." />
@@ -1393,40 +2360,170 @@ export default function EditListing() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="850000" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                {/* Left side: Price, Beds & Baths */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Price ($)</Label>
+                    <Input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="850000" />
+                  </div>
+                  
+                  {/* Beds and Baths sharing a row - condensed to 50% width combined */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Beds</Label>
+                      <Input type="number" value={beds} onChange={e => setBeds(e.target.value)} placeholder="3" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Baths</Label>
+                      <Input type="number" value={baths} onChange={e => setBaths(e.target.value)} placeholder="2.5" />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Beds</Label>
-                  <Input type="number" value={beds} onChange={e => setBeds(e.target.value)} placeholder="3" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Baths</Label>
-                  <Input type="number" value={baths} onChange={e => setBaths(e.target.value)} placeholder="2.5" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Sq Ft</Label>
-                  <Input type="number" value={sqft} onChange={e => setSqft(e.target.value)} placeholder="2400" />
+
+                {/* Right side: Sq Ft configuration */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-1">
+                    <Label className="font-semibold text-slate-800">Square Footage</Label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="checkbox" 
+                        id="useSqftRange"
+                        checked={useSqftRange}
+                        onChange={e => setUseSqftRange(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-[#155dfc] focus:ring-[#155dfc] cursor-pointer"
+                      />
+                      <label htmlFor="useSqftRange" className="text-xs font-medium text-slate-600 select-none cursor-pointer">
+                        Use Range (e.g. 1500 - 2000)
+                      </label>
+                    </div>
+                  </div>
+
+                  {!useSqftRange ? (
+                    <div className="space-y-2">
+                      <Label>Sq Ft</Label>
+                      <Input 
+                        type="text" 
+                        value={sqft} 
+                        onChange={e => {
+                          const val = e.target.value.replace(/\D/g, "");
+                          if (val.length <= 4) {
+                            setSqft(val);
+                          }
+                        }} 
+                        placeholder="2400" 
+                      />
+                      <p className="text-[10px] text-slate-400">Enter up to 4 numbers</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label>Square Feet Range</Label>
+                      <div className="grid grid-cols-2 gap-4 items-center">
+                        <div className="space-y-1">
+                          <Input 
+                            type="text" 
+                            value={sqftMin} 
+                            onChange={e => {
+                              const val = e.target.value.replace(/\D/g, "");
+                              if (val.length <= 4) {
+                                setSqftMin(val);
+                              }
+                            }} 
+                            placeholder="1700" 
+                          />
+                          <p className="text-[10px] text-slate-400">Min (up to 4 numbers)</p>
+                        </div>
+                        <div className="space-y-1">
+                          <Input 
+                            type="text" 
+                            value={sqftMax} 
+                            onChange={e => {
+                              const val = e.target.value.replace(/\D/g, "");
+                              if (val.length <= 4) {
+                                setSqftMax(val);
+                              }
+                            }} 
+                            placeholder="2000" 
+                          />
+                          <p className="text-[10px] text-slate-400">Max (up to 4 numbers)</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>MLS® Number</Label>
-                  <Input value={mlsNumber} onChange={e => setMlsNumber(e.target.value.toUpperCase())} placeholder="MLS-12345" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2 text-left">
+                  <Label>MLS® Format Country</Label>
+                  <select 
+                    value={mlsCountry} 
+                    onChange={e => {
+                      setMlsCountry(e.target.value);
+                      setMlsNumber("");
+                    }}
+                    className="flex h-10 w-full rounded-md border border-slate-200 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700"
+                  >
+                    <option value="US">USA Format (Purely Numeric)</option>
+                    <option value="CA">Canada Format (Letter + Digits)</option>
+                  </select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 text-left">
+                  <Label>MLS® Number</Label>
+                  <Input 
+                    value={mlsNumber} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (mlsCountry === "US") {
+                        const filtered = val.replace(/\D/g, "").slice(0, 8);
+                        setMlsNumber(filtered);
+                      } else {
+                        const upperVal = val.toUpperCase();
+                        if (upperVal.length === 0) {
+                          setMlsNumber("");
+                        } else {
+                          const firstChar = upperVal[0];
+                          const restChars = upperVal.slice(1).replace(/\D/g, "").slice(0, 8);
+                          if (/[A-Z]/i.test(firstChar)) {
+                            setMlsNumber(firstChar + restChars);
+                          } else {
+                            setMlsNumber(restChars);
+                          }
+                        }
+                      }
+                    }} 
+                    placeholder={mlsCountry === "US" ? "e.g. 12345678" : "e.g. X12345678"} 
+                    maxLength={mlsCountry === "US" ? 8 : 9}
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    {mlsCountry === "US" 
+                      ? "USA: Purely numeric (8 digits)" 
+                      : "Canada: Single letter followed by 8 digits"}
+                  </p>
+                </div>
+                <div className="space-y-2 text-left">
                   <Label>MLS Board / Originating System</Label>
                   <Input value={originatingSystemName} onChange={e => setOriginatingSystemName(e.target.value)} placeholder="e.g. CRISNet" />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} placeholder="Luxury property info..." />
+                <Label className="flex justify-between items-center">
+                  <span>Description</span>
+                  <span className="text-[10px] font-mono font-medium text-slate-400">Formatted as max 3 sentences per paragraph</span>
+                </Label>
+                <Textarea 
+                  value={description} 
+                  onChange={e => setDescription(e.target.value)} 
+                  onBlur={() => setDescription(formatToParagraphs(description))} 
+                  rows={6} 
+                  placeholder="Luxury property info..." 
+                  className="font-sans leading-relaxed"
+                />
               </div>
+
+              {/* SORA WELCOME MESSAGE OVERRIDES REMOVED FOR SETTINGS iFRAME MIGRATION */}
+
 
               <div className="space-y-2 pt-2">
                 <Label>Key Highlights & Talking Points</Label>
@@ -1446,22 +2543,78 @@ export default function EditListing() {
                     if (newPoint) { setTalkingPoints([...talkingPoints, newPoint]); setNewPoint(""); }
                   }}>Add</Button>
                 </div>
-                <ul className="list-disc pl-4 space-y-1">
+                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
                   {talkingPoints.map((pt, i) => (
-                    <li key={'point-' + pt + i} className="flex justify-between items-center text-sm text-slate-700 bg-slate-50 p-2 border rounded-md">
-                      <span>{pt}</span>
-                      <button type="button" onClick={() => setTalkingPoints(talkingPoints.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500">
-                        <X className="h-4 w-4" />
-                      </button>
-                    </li>
+                    <div 
+                      key={'point-' + pt + i} 
+                      className="group flex justify-between items-center text-sm text-slate-700 bg-slate-50 hover:bg-slate-100/80 p-3 border border-slate-200 rounded-lg transition-colors gap-3"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-200 text-[10px] font-bold text-slate-600 shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="font-medium truncate text-slate-800" title={pt}>{pt}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveTalkingPoint(i, 'up')}
+                          className="h-7 w-7 rounded-md hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                          disabled={i === 0}
+                          title="Move Up"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveTalkingPoint(i, 'down')}
+                          className="h-7 w-7 rounded-md hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                          disabled={i === talkingPoints.length - 1}
+                          title="Move Down"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <div className="h-4 w-[1px] bg-slate-200 mx-0.5" />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setTalkingPoints(talkingPoints.filter((_, idx) => idx !== i))}
+                          className="h-7 w-7 rounded-md hover:bg-red-50 hover:text-red-600 text-slate-400 transition-colors"
+                          title="Remove Highlight"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                  {talkingPoints.length === 0 && (
+                    <div className="text-center py-6 border border-dashed rounded-lg text-slate-400 text-xs">
+                      No highlights added yet. Add key selling features above to build your tour talking points.
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-between pt-4">
                 <Button type="button" variant="outline" onClick={() => setCurrentStep(1)}>Back</Button>
-                <Button type="button" onClick={async () => { await handleSave(); setCurrentStep(3); }} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Save & Continue to Media & Labels
+                <Button 
+                  type="button" 
+                  onClick={async () => { 
+                    const success = await handleSave(undefined, 3); 
+                    if (success) {
+                      setCurrentStep(3); 
+                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=3`);
+                    }
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Save & Continue
                 </Button>
               </div>
             </CardContent>
@@ -1486,6 +2639,9 @@ export default function EditListing() {
                     Add Photo
                   </Button>
                 </div>
+                <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 p-3 rounded-xl font-medium mt-2 animate-in fade-in duration-150 relative">
+                  ℹ️ <strong>NOTICE:</strong> The first image in the top-left row is the designated header image for the print-ready marketing flyer.
+                </div>
               </div>
 
               {images.length > 0 ? (
@@ -1503,6 +2659,51 @@ export default function EditListing() {
                           target.src = `https://picsum.photos/seed/${seed}/600/400`;
                         }}
                       />
+                      
+                      {/* Interactive re-order controller overlays on top-left */}
+                      <div className="absolute top-2 left-2 flex gap-1 bg-black/60 backdrop-blur-xs p-1 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => moveImageInListing(i, 'left')}
+                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
+                          disabled={i === 0}
+                          title="Move Left"
+                        >
+                          <ArrowLeft className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => moveImageInListing(i, 'right')}
+                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
+                          disabled={i === images.length - 1}
+                          title="Move Right"
+                        >
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => moveImageInListing(i, 'up')}
+                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
+                          disabled={i < 2}
+                          title="Move Up"
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={() => moveImageInListing(i, 'down')}
+                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
+                          disabled={i >= images.length - 2}
+                          title="Move Down"
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+
                       <div className="absolute top-2 right-2 flex gap-1.5 opacity-95 group-hover:opacity-105 transition-all">
                         <Button 
                           type="button" 
@@ -1549,11 +2750,26 @@ export default function EditListing() {
                     This section holds physical asset and property features mapped from digital uploads to guide interactive virtual tours.
                   </p>
                 </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-700">Tour Feature Descriptors (16 total slots)</h4>
-                  <p className="text-[11px] text-slate-450 mt-1">
-                    In the AI Tour, About Us, provide exact tags for Sora to handle when guests express curiosity about specific elements. Ensure names align with image labels and will be displayed as such in the AI Tour, Ask Me About.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1">
+                      <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+                      Tour Feature Descriptors (16 total slots)
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Ensure names align with image labels and will be displayed in the AI Tour "Ask Me About" section.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-[11px] font-bold border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0 bg-white"
+                    onClick={() => autoFillDescriptorsFromImages()}
+                  >
+                    <Sparkles className="h-3 w-3 text-blue-500 animate-pulse" />
+                    Auto-Fill from Photo Labels
+                  </Button>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {tourDescriptors.map((desc, idx) => (
@@ -1576,8 +2792,18 @@ export default function EditListing() {
 
               <div className="flex justify-between pt-6 border-t">
                 <Button type="button" variant="outline" onClick={() => setCurrentStep(2)}>Back</Button>
-                <Button type="button" onClick={async () => { await handleSave(); setCurrentStep(4); }} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Save & Continue to AI Voices & Sora
+                <Button 
+                  type="button" 
+                  onClick={async () => { 
+                    const success = await handleSave(undefined, 4); 
+                    if (success) {
+                      setCurrentStep(4); 
+                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=4`);
+                    }
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Save & Continue
                 </Button>
               </div>
             </CardContent>
@@ -1588,7 +2814,7 @@ export default function EditListing() {
         {currentStep === 4 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-slate-800">AI Voice Assistant Character</CardTitle>
+              <CardTitle className="text-slate-800">AI Voice Assistant Character For The AI Tour</CardTitle>
               <CardDescription>Select the exact narration tone and setup interactive points representing your brokerage.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1647,105 +2873,20 @@ export default function EditListing() {
                 ))}
               </div>
 
-              {/* WELCOME AUDIO MP3 INGESTION & PLAYGROUND */}
-              <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 space-y-4 mt-6">
-                <div>
-                  <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                    <Volume2 className="h-4 w-4 text-blue-600" />
-                    Sora Welcome Audio (.MP3 Upload)
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Upload pre-recorded welcome messages (.mp3) for English and French. These will play when visitors tap "Start Welcome Tour" in the virtual listing page, bypassing any auto-play blockages.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* English Welcome */}
-                  <div className="bg-white border rounded-xl p-3.5 space-y-3 shadow-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-slate-700">English Welcome MP3</span>
-                      {welcomeEn ? (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Uploaded</span>
-                      ) : (
-                        <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">Default Option</span>
-                      )}
-                    </div>
-                    
-                    <div className="flex flex-col gap-2">
-                      <label className="flex items-center justify-center border border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 rounded-lg p-4 cursor-pointer text-center text-slate-500 hover:text-blue-600 transition-all">
-                        <Upload className="h-4 w-4 mr-2" />
-                        <span className="text-xs font-semibold">Choose English .mp3</span>
-                        <input 
-                          type="file" 
-                          accept="audio/mp3, audio/*" 
-                          className="hidden" 
-                          onChange={(e) => handleAudioUpload(e, "en")} 
-                        />
-                      </label>
-                      
-                      {welcomeEn && (
-                        <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-150 text-xs gap-3">
-                          <audio src={welcomeEn} controls className="h-8 max-w-[130px] sm:max-w-full" />
-                          <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-red-500 hover:text-red-700 shrink-0"
-                            onClick={() => { setWelcomeEn(""); toast.success("Removed English welcome audio."); }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* French Welcome */}
-                  <div className="bg-white border rounded-xl p-3.5 space-y-3 shadow-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-slate-700">French Welcome MP3</span>
-                      {welcomeFr ? (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Uploaded</span>
-                      ) : (
-                        <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">Default Option</span>
-                      )}
-                    </div>
-                    
-                    <div className="flex flex-col gap-2">
-                      <label className="flex items-center justify-center border border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 rounded-lg p-4 cursor-pointer text-center text-slate-500 hover:text-blue-600 transition-all">
-                        <Upload className="h-4 w-4 mr-2" />
-                        <span className="text-xs font-semibold">Choose French .mp3</span>
-                        <input 
-                          type="file" 
-                          accept="audio/mp3, audio/*" 
-                          className="hidden" 
-                          onChange={(e) => handleAudioUpload(e, "fr")} 
-                        />
-                      </label>
-                      
-                      {welcomeFr && (
-                        <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-150 text-xs gap-3">
-                          <audio src={welcomeFr} controls className="h-8 max-w-[130px] sm:max-w-full" />
-                          <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-red-500 hover:text-red-700 shrink-0"
-                            onClick={() => { setWelcomeFr(""); toast.success("Removed French welcome audio."); }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <div className="flex justify-between pt-6 border-t">
                 <Button type="button" variant="outline" onClick={() => setCurrentStep(3)}>Back</Button>
-                <Button type="button" onClick={async () => { await handleSave(); setCurrentStep(5); }} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Save & Continue to Sign-In Setup
+                <Button 
+                  type="button" 
+                  onClick={async () => { 
+                    const success = await handleSave(undefined, 5); 
+                    if (success) {
+                      setCurrentStep(5); 
+                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=5`);
+                    }
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Save & Continue
                 </Button>
               </div>
             </CardContent>
@@ -1756,54 +2897,304 @@ export default function EditListing() {
         {currentStep === 5 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-slate-800">Open House Gate & Lead Sign-In Settings</CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full">
+                <CardTitle className="text-slate-800">Open House Gate & Lead Sign-In Settings</CardTitle>
+                {getOpenHousePastError() && (
+                  <span className="text-blue-600 font-extrabold text-xs sm:text-sm animate-pulse tracking-wide bg-blue-50/70 border border-blue-100 rounded-lg px-2.5 py-1">
+                    {getOpenHousePastError()}
+                  </span>
+                )}
+              </div>
               <CardDescription>Setup automatic tablet kiosk registration at entry and text/email follow-ups.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Open House Date</Label>
-                  <Input type="date" value={openHouseDate} onChange={e => setOpenHouseDate(e.target.value)} />
-                  <p className="text-[10px] text-slate-400 mt-1">Displays as {getFormattedDateHint(openHouseDate)}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Open House Hours (Range)</Label>
-                  <div className="flex items-center gap-2">
-                    <select 
-                      className="flex-1 h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
-                      value={openHouseStartTime}
-                      onChange={e => setOpenHouseStartTime(e.target.value)}
+              <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 space-y-4">
+                <p className="font-extrabold uppercase tracking-wider text-[11px] text-blue-700 block">Open House Sessions Manager</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column: Session Creation Form */}
+                  <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-left">
+                    <h4 className="text-sm font-extrabold text-slate-800">Add Open House Session</h4>
+                    <div className="space-y-2">
+                      <Label>Session Date</Label>
+                      <Input
+                        type="date"
+                        className="h-10 text-sm font-medium border border-slate-200 focus-visible:ring-blue-500 bg-white"
+                        value={openHouseDate}
+                        min={getFirstDayOfCurrentMonth()}
+                        onChange={e => {
+                          const nextDate = e.target.value;
+                          if (nextDate) {
+                            const firstDayStr = getFirstDayOfCurrentMonth();
+                            const selected = new Date(nextDate + "T00:00:00");
+                            const firstDay = new Date(firstDayStr + "T00:00:00");
+                            if (selected < firstDay) {
+                              toast.error("The open house date cannot go to previous months.");
+                              setOpenHouseDate("");
+                              return;
+                            }
+                          }
+                          setOpenHouseDate(nextDate);
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Session Hours</Label>
+                      <div className="flex items-center gap-2">
+                        <select 
+                          className="flex-1 h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
+                          value={openHouseStartTime}
+                          onChange={e => setOpenHouseStartTime(e.target.value)}
+                        >
+                          <option value="">Start</option>
+                          {times.map(t => <option key={'start-' + t} value={t}>{t}</option>)}
+                        </select>
+                        <span>-</span>
+                        <select 
+                          className="flex-1 h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
+                          value={openHouseEndTime}
+                          onChange={e => setOpenHouseEndTime(e.target.value)}
+                        >
+                          <option value="">End</option>
+                          {times.map(t => <option key={'end-' + t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <Button 
+                      type="button" 
+                      onClick={handleAddSession} 
+                      className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center justify-center gap-2"
                     >
-                      <option value="">Start</option>
-                      {times.map(t => <option key={'start-' + t} value={t}>{t}</option>)}
-                    </select>
-                    <span>-</span>
-                    <select 
-                      className="flex-1 h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
-                      value={openHouseEndTime}
-                      onChange={e => setOpenHouseEndTime(e.target.value)}
-                    >
-                      <option value="">End</option>
-                      {times.map(t => <option key={'end-' + t} value={t}>{t}</option>)}
-                    </select>
+                      <Plus className="h-4 w-4" /> Add Session
+                    </Button>
+                  </div>
+
+                  {/* Right Column: Sessions List */}
+                  <div className="space-y-4 text-left">
+                    <h4 className="text-sm font-extrabold text-slate-800">Scheduled & Completed Sessions ({sessions.length})</h4>
+                    
+                    {sessions.length === 0 ? (
+                      <div className="border border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center bg-white text-slate-400">
+                        <Calendar className="h-8 w-8 mb-2 stroke-1" />
+                        <span className="text-xs font-semibold">No sessions scheduled for this listing.</span>
+                        <span className="text-[10px] text-slate-400 mt-1">Use the form to define one or more sessions.</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                        {sessions.map((sess) => {
+                          const startD = new Date(sess.start_datetime);
+                          const endD = new Date(sess.end_datetime);
+                          
+                          // Format start date beautifully
+                          const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                          const dateString = `${months[startD.getMonth()]} ${startD.getDate()}, ${startD.getFullYear()}`;
+                          
+                          // Format times
+                          const formatTimeStr = (d: Date) => {
+                            let h = d.getHours();
+                            const m = String(d.getMinutes()).padStart(2, "0");
+                            const ampm = h >= 12 ? "PM" : "AM";
+                            h = h % 12;
+                            h = h ? h : 12;
+                            return `${h}:${m} ${ampm}`;
+                          };
+                          const timeString = `${formatTimeStr(startD)} - ${formatTimeStr(endD)}`;
+                          const isScheduled = sess.status === "scheduled";
+                          
+                          const targetListingId = isEdit ? listingId! : activeListingId;
+                          return (
+                            <div key={sess.session_id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-blue-300 transition-all shadow-sm gap-2">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+                                  {dateString}
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                    isScheduled 
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                                      : "bg-stone-100 text-stone-600 border border-stone-200"
+                                  }`}>
+                                    {sess.status}
+                                  </span>
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                                  <Clock className="h-3 w-3 text-slate-400" /> {timeString}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                                <a 
+                                  href={`/open-houses/${targetListingId}`} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="h-8 px-2.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 text-[10px] font-extrabold text-slate-600 hover:text-blue-600 flex items-center gap-1 transition-all"
+                                  title="Launch Attendee Sign-In Kiosk"
+                                >
+                                  <Tv className="h-3 w-3 text-blue-500" /> Kiosk
+                                </a>
+
+                                <a 
+                                  href={`/tour/${targetListingId}`} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="h-8 px-2.5 rounded-lg border border-slate-200 hover:border-violet-400 hover:bg-violet-50 text-[10px] font-extrabold text-slate-600 hover:text-violet-600 flex items-center gap-1 transition-all"
+                                  title="Launch Sora Guided Tour"
+                                >
+                                  <Sparkles className="h-3 w-3 text-violet-500" /> Sora Tour
+                                </a>
+
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteSession(sess.session_id)}
+                                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-8 w-8 rounded-lg"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
+              {/* Brokerage Logo or Agent Photo Embedding Manager */}
+              <div className="space-y-3 pt-4 border-t text-left">
+                <p className="font-extrabold uppercase tracking-wider text-[10px] text-blue-700 block">Brokerage Logo or Agent Photo</p>
+                <div className="space-y-2.5">
+                  {/* Radio Button 1: Brokerage Logo */}
+                  <div className="flex items-center justify-between p-3 rounded-xl border bg-slate-50 hover:bg-slate-100/50 transition-colors">
+                    <label htmlFor="branding-logo-listing" className="flex items-center gap-2.5 cursor-pointer w-full select-none">
+                      <input 
+                        type="radio" 
+                        id="branding-logo-listing" 
+                        name="qr-branding-listing" 
+                        value="logo"
+                        checked={qrBrandingOption === "logo"}
+                        onChange={() => {
+                          if (!brokerageLogo) {
+                            toast.error("A Brokerage Logo is required under Settings > Branding & UI to select this option.");
+                            return;
+                          }
+                          setQrBrandingOption("logo");
+                          toast.success("Brokerage Logo selected for dynamic presentations!");
+                        }}
+                        className="h-4 w-4 text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-800">Brokerage Logo</span>
+                        <span className="text-[10px] text-slate-500 leading-tight">Integrate company agency brand specs</span>
+                      </div>
+                    </label>
+                    {brokerageLogo ? (
+                      <img src={brokerageLogo} alt="Brokerage Logo" className="h-[35px] w-auto max-w-[75px] object-contain rounded border border-slate-200 bg-white p-0.5" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic bg-stone-100 px-2 py-0.5 rounded font-mono">Not Configured</span>
+                    )}
+                  </div>
+
+                  {/* Radio Button 2: Agent Photo */}
+                  <div className="flex items-center justify-between p-3 rounded-xl border bg-slate-50 hover:bg-slate-100/50 transition-colors">
+                    <label htmlFor="branding-photo-listing" className="flex items-center gap-2.5 cursor-pointer w-full select-none">
+                      <input 
+                        type="radio" 
+                        id="branding-photo-listing" 
+                        name="qr-branding-listing" 
+                        value="photo"
+                        checked={qrBrandingOption === "photo"}
+                        onChange={() => {
+                          if (!agentPhoto) {
+                            toast.error("An Agent Photo is required under Settings > Branding & UI to select this option.");
+                            return;
+                          }
+                          setQrBrandingOption("photo");
+                          toast.success("Agent Photo selected for dynamic presentations!");
+                        }}
+                        className="h-4 w-4 text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-800">Agent Photo</span>
+                        <span className="text-[10px] text-slate-500 leading-tight">Promote host identity visually on scan gates</span>
+                      </div>
+                    </label>
+                    {agentPhoto ? (
+                      <img src={agentPhoto} alt="Agent Portrait" className="h-[35px] w-[35px] object-cover rounded-full border border-slate-200 bg-white" />
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic bg-stone-100 px-2 py-0.5 rounded font-mono">Not Configured</span>
+                    )}
+                  </div>
+
+                  {/* Radio Button 3: None */}
+                  <div className="flex items-center justify-between p-3 rounded-xl border bg-slate-50 hover:bg-slate-100/50 transition-colors">
+                    <label htmlFor="branding-none-listing" className="flex items-center gap-2.5 cursor-pointer w-full select-none">
+                      <input 
+                        type="radio" 
+                        id="branding-none-listing" 
+                        name="qr-branding-listing" 
+                        value="none"
+                        checked={qrBrandingOption === "none"}
+                        onChange={() => {
+                          setQrBrandingOption("none");
+                          toast.success("No image overlay chosen. Standard clean barcode presentation restored.");
+                        }}
+                        className="h-4 w-4 text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-800">None</span>
+                        <span className="text-[10px] text-slate-500 leading-tight">Output raw, clean high-density barcode format</span>
+                      </div>
+                    </label>
+                    <span className="text-[10px] text-zinc-500 font-bold bg-slate-100 px-2.5 py-1 rounded tracking-wide text-center shrink-0">Standard QR</span>
+                  </div>
+                </div>
+
+                {!brokerageLogo && !agentPhoto ? (
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-slate-700 space-y-1.5 leading-relaxed font-sans mt-2">
+                    <p className="font-extrabold uppercase text-[9px] tracking-wide text-amber-800">⚠️ Branding Asset Setup Required</p>
+                    <p className="text-[11px] text-amber-900 leading-normal">
+                      Neither branding asset has been uploaded. To use logo or photo features in your open houses, please configure item resources under {"Settings > Branding & UI"}.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[9.5px]/snug text-slate-500 italic mt-1 font-sans">
+                    * Configurations instantly sync with active QR presentations, flyers, and tablet check-in landing screens.
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-4 pt-4 border-t">
                 <h4 className="font-bold text-sm text-slate-800">Touchless Sign-In & Kiosk Security Gates</h4>
+                
+                <p className="text-[11px] text-amber-700 font-medium bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                  ⚠️ <strong>Security & Compliance Mandate:</strong> At least one of the protection parameters below must remain enabled. This matches operational standard guidelines ensuring secure kiosk sign-in authenticity and verified follow-up delivery.
+                </p>
+
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div className="p-3 bg-slate-50 border rounded-xl flex items-start gap-2.5">
-                    <input type="checkbox" defaultChecked id="gate-phone" className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />
+                    <input 
+                      type="checkbox" 
+                      checked={enforcePhoneGate} 
+                      onChange={e => setEnforcePhoneGate(e.target.checked)} 
+                      id="gate-phone" 
+                      className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                    />
                     <div>
-                      <label htmlFor="gate-phone" className="text-xs font-bold text-slate-800 block">Enforce Phone Gate Verification</label>
+                      <label htmlFor="gate-phone" className="text-xs font-bold text-slate-800 block cursor-pointer">Enforce Phone Gate Verification</label>
                       <p className="text-[10px] text-slate-500 mt-0.5">Captures high intent checked prospects via text code authentication</p>
                     </div>
                   </div>
                   <div className="p-3 bg-slate-50 border rounded-xl flex items-start gap-2.5">
-                    <input type="checkbox" defaultChecked id="gate-consent" className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500" />
+                    <input 
+                      type="checkbox" 
+                      checked={enforceOptInConsent} 
+                      onChange={e => setEnforceOptInConsent(e.target.checked)} 
+                      id="gate-consent" 
+                      className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                    />
                     <div>
-                      <label htmlFor="gate-consent" className="text-xs font-bold text-slate-800 block">Enforce Opt-In Followup Consent</label>
+                      <label htmlFor="gate-consent" className="text-xs font-bold text-slate-800 block cursor-pointer">Enforce Opt-In Followup Consent</label>
                       <p className="text-[10px] text-slate-500 mt-0.5">Guarantees TCPA compliance for followups</p>
                     </div>
                   </div>
@@ -1812,16 +3203,211 @@ export default function EditListing() {
 
               <div className="flex justify-between pt-6 border-t">
                 <Button type="button" variant="outline" onClick={() => setCurrentStep(4)}>Back</Button>
-                <Button type="button" onClick={async () => { await handleSave(); setCurrentStep(6); }} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Save & Continue to Integrations & Webhooks
+                <Button type="button" onClick={async () => { 
+                  // Extra validation step on submit to block progression
+                  if (openHouseDate) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const selected = new Date(openHouseDate + "T00:00:00");
+                    if (selected < today) {
+                      toast.error("The open house date cannot be in the past.");
+                      return;
+                    }
+                    const todayLocalStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                    if (openHouseDate === todayLocalStr) {
+                      const currentHr = new Date().getHours();
+                      if (openHouseStartTime && getHourFromTimeString(openHouseStartTime) < currentHr) {
+                        toast.error("The start time cannot be in the past for today's date.");
+                        return;
+                      }
+                      if (openHouseEndTime && getHourFromTimeString(openHouseEndTime) < currentHr) {
+                        toast.error("The end time cannot be in the past for today's date.");
+                        return;
+                      }
+                    }
+                  }
+                  
+                  // Gating validation
+                  if (!enforcePhoneGate && !enforceOptInConsent) {
+                    toast.error("Security Mandate Error: You must select at least one security gate (Phone Verification or Opt-In Followup Consent) to proceed.");
+                    return;
+                  }
+
+                  const success = await handleSave(undefined, 6); 
+                  if (success) {
+                    setCurrentStep(6); 
+                    navigate(`/app/listings/edit/${listingId || activeListingId}?step=6`);
+                  }
+                }} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Save & Continue
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* STEP 6: BRANDING AND INTEGRATIONS */}
+        {/* STEP 6: SOCIAL SHARE */}
         {currentStep === 6 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-slate-800 flex items-center gap-2 font-bold">
+                <Share2 className="h-5 w-5 text-blue-600" />
+                Social Share Configuration
+              </CardTitle>
+              <CardDescription>
+                Choose which social share destinations appear for visitors interacting with this listing and its AI Tour.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl flex items-start gap-3 text-left">
+                <input
+                  type="checkbox"
+                  id="enable-social-sharing"
+                  checked={socialShareEnabled}
+                  onChange={(e) => setSocialShareEnabled(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <div className="space-y-1">
+                  <label htmlFor="enable-social-sharing" className="text-sm font-bold text-slate-800 cursor-pointer block select-none">
+                    Turn On Social Sharing Suite
+                  </label>
+                  <p className="text-xs text-slate-500 leading-normal font-medium">
+                    When active, a polished sharing bubble appears on client-side AI Tours and listing microsites, prompting visitors to share the property with friends and family.
+                  </p>
+                </div>
+              </div>
+
+              {socialShareEnabled && (
+                <div className="space-y-4 pt-2 animate-fade-in text-left">
+                  <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Active Social Platforms</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Facebook */}
+                    <div className="p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="share-platform-facebook"
+                        checked={socialShareFacebook}
+                        onChange={(e) => setSocialShareFacebook(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="share-platform-facebook" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                          Facebook Feed & Groups
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Permits direct posting of listing links</p>
+                      </div>
+                    </div>
+
+                    {/* Instagram */}
+                    <div className="p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="share-platform-instagram"
+                        checked={socialShareInstagram}
+                        onChange={(e) => setSocialShareInstagram(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="share-platform-instagram" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                          Instagram Profile Guidance
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Promotes bio-linking or Direct Messages</p>
+                      </div>
+                    </div>
+
+                    {/* WhatsApp */}
+                    <div className="p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="share-platform-whatsapp"
+                        checked={socialShareWhatsapp}
+                        onChange={(e) => setSocialShareWhatsapp(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="share-platform-whatsapp" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                          WhatsApp Chat
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Direct chat message share with photo pre-render</p>
+                      </div>
+                    </div>
+
+                    {/* Text Message */}
+                    <div className="p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="share-platform-text"
+                        checked={socialShareTextMessage}
+                        onChange={(e) => setSocialShareTextMessage(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="share-platform-text" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                          SMS Text Message
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Launches native texting on mobile devices</p>
+                      </div>
+                    </div>
+
+                    {/* Email */}
+                    <div className="p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="share-platform-email"
+                        checked={socialShareEmail}
+                        onChange={(e) => setSocialShareEmail(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="share-platform-email" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                          Email Clients
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Pre-fills subject and body with listing URL</p>
+                      </div>
+                    </div>
+
+                    {/* Copy Link */}
+                    <div className="p-4 rounded-xl border bg-slate-50/50 hover:bg-slate-50 transition-all flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        id="share-platform-copy"
+                        checked={socialShareCopyLink}
+                        onChange={(e) => setSocialShareCopyLink(e.target.checked)}
+                        className="mt-1 h-4 w-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="share-platform-copy" className="text-xs font-bold text-slate-800 block cursor-pointer select-none">
+                          Copy Direct Link
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-0.5">Copies clean listing URL to clipboard instantly</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between pt-6 border-t font-bold">
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(5)}>Back</Button>
+                <Button 
+                  type="button" 
+                  onClick={async () => {
+                    const success = await handleSave(undefined, 7);
+                    if (success) {
+                      setCurrentStep(7);
+                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=7`);
+                    }
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+                >
+                  Save & Continue
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* STEP 7: BRANDING AND INTEGRATIONS */}
+        {currentStep === 7 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-slate-800">Connected Hub & Lead Exporters</CardTitle>
@@ -1842,22 +3428,27 @@ export default function EditListing() {
 
                 {documents.length > 0 ? (
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {documents.map((docItem, idx) => (
-                      <div key={`doc-${idx}`} className="flex items-center justify-between p-2.5 bg-slate-50 border rounded-xl text-xs">
-                        <div className="flex flex-col min-w-0 pr-2">
-                          <span className="font-extrabold text-slate-800 truncate">{docItem.name}</span>
-                          <span className="text-[10px] text-slate-400 font-mono truncate">{docItem.url}</span>
+                    {documents.map((docItem, idx) => {
+                      const isBase64 = docItem.url.startsWith("data:application/pdf") || docItem.url.length > 500;
+                      return (
+                        <div key={`doc-${idx}`} className="flex items-center justify-between p-2.5 bg-slate-50 border rounded-xl text-xs">
+                          <div className="flex flex-col min-w-0 pr-2">
+                            <span className="font-extrabold text-slate-800 truncate">{docItem.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono truncate">
+                              {isBase64 ? "📄 Uploaded PDF Document (Base64)" : docItem.url}
+                            </span>
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center rounded-lg cursor-pointer"
+                            onClick={() => setDocumentToDelete({ index: idx, name: docItem.name })}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center rounded-lg cursor-pointer"
-                          onClick={() => setDocuments(prev => prev.filter((_, i) => i !== idx))}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-4 border border-dashed rounded-xl bg-slate-50/50">
@@ -1865,71 +3456,193 @@ export default function EditListing() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border">
-                  <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-600 block">Document Name</Label>
-                    <Input 
-                      placeholder="e.g. Digital Property Booklet" 
-                      value={newDocName} 
-                      onChange={e => setNewDocName(e.target.value)} 
-                      className="bg-white text-xs h-8"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-600 block">URL (PDF / Drive link)</Label>
-                    <div className="flex gap-2">
-                      <Input 
-                        placeholder="https://example.com/brochure.pdf" 
-                        value={newDocUrl} 
-                        onChange={e => setNewDocUrl(e.target.value)} 
-                        className="bg-white text-xs h-8 flex-1"
-                      />
-                      <Button 
-                        type="button" 
-                        className="h-8 text-xs bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg flex items-center justify-center cursor-pointer"
-                        onClick={() => {
-                          if (!newDocName || !newDocUrl) {
-                            toast.error("Please provide both document name and URL link");
-                            return;
-                          }
-                          setDocuments(prev => [...prev, { name: newDocName, url: newDocUrl }]);
-                          setNewDocName("");
-                          setNewDocUrl("");
-                          toast.success("Document attached to listing draft!");
-                        }}
-                      >
-                        Add
-                      </Button>
+                {/* Delete Document Confirmation Modal Overlay */}
+                {documentToDelete !== null && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+                    <div className="relative w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 text-center space-y-4 animate-scale-up">
+                      <div className="flex justify-center">
+                        <div className="p-3 bg-red-50 text-red-650 rounded-full">
+                          <Trash2 className="h-6 w-6 text-red-600" />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 text-center">
+                        <h4 className="text-sm font-black text-slate-800 uppercase tracking-wide">Confirm Deletion</h4>
+                        <p className="text-xs text-slate-600 font-medium">
+                          Would you like to delete <span className="font-bold text-slate-900">({documentToDelete.name})</span>?
+                        </p>
+                      </div>
+                      <div className="flex gap-3 justify-center pt-2">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            const index = documentToDelete.index;
+                            setDocuments(prev => prev.filter((_, i) => i !== index));
+                            setDocumentToDelete(null);
+                            toast.success("Document removed successfully.");
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs h-9 px-5 rounded-xl cursor-pointer min-w-[80px]"
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setDocumentToDelete(null)}
+                          className="border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs h-9 px-5 rounded-xl cursor-pointer min-w-[80px]"
+                        >
+                          No
+                        </Button>
+                      </div>
                     </div>
+                  </div>
+                )}
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Document Name input */}
+                    <div className="space-y-1.5 text-left">
+                      <Label htmlFor="pdf-doc-name" className="text-xs font-bold text-slate-700 block">
+                        Document Name
+                      </Label>
+                      <Input 
+                        id="pdf-doc-name"
+                        placeholder="e.g. HOA Disclosures, Property brochure" 
+                        value={newDocName} 
+                        onChange={e => setNewDocName(e.target.value)} 
+                        className="bg-white text-xs h-9"
+                      />
+                    </div>
+
+                    {/* Upload PDF action */}
+                    <div className="space-y-1.5 text-left">
+                      <Label className="text-xs font-bold text-slate-700 block">
+                        Upload your PDF
+                      </Label>
+                      
+                      <div className="flex flex-col gap-2">
+                        {newDocUrl ? (
+                          <div className="flex items-center justify-between bg-emerald-50/80 border border-emerald-250 p-2 rounded-xl text-xs gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-emerald-600 font-bold shrink-0">✓ PDF Loaded:</span>
+                              <span className="font-semibold text-slate-800 truncate font-mono text-[11px]">{pendingPdfName || "document.pdf"}</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-7 text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg shrink-0 cursor-pointer"
+                              onClick={() => {
+                                setNewDocUrl("");
+                                setPendingPdfName("");
+                                toast.success("Cleared uploaded PDF.");
+                              }}
+                            >
+                              Clear
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center border border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 rounded-xl p-3.5 cursor-pointer text-center text-slate-500 hover:text-blue-600 transition-all select-none bg-white">
+                            <Upload className="h-4 w-4 mr-2 text-slate-400 group-hover:text-blue-600" />
+                            <span className="text-xs font-semibold">Select PDF file</span>
+                            <span className="text-[10px] text-slate-400 ml-1.5">(Strictly .pdf only)</span>
+                            <input 
+                              type="file" 
+                              accept="application/pdf" 
+                              className="hidden" 
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+
+                                // Strict file type and extension validation
+                                const isPdfExtension = file.name.slice(-4).toLowerCase() === ".pdf";
+                                const isPdfType = file.type === "application/pdf";
+
+                                if (!isPdfExtension || !isPdfType) {
+                                  toast.error("Extension Mandate: Only files with a .pdf extension are permitted for document attachments.");
+                                  e.target.value = ""; // reset input
+                                  return;
+                                }
+
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  setNewDocUrl(reader.result as string);
+                                  setPendingPdfName(file.name);
+                                  toast.success(`Loaded PDF: ${file.name}`);
+                                };
+                                reader.onerror = () => {
+                                  toast.error("Failed to read the selected PDF file.");
+                                };
+                                reader.readAsDataURL(file);
+                              }} 
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add Document Action Button */}
+                  <div className="flex justify-end pt-2 border-t border-slate-200/60">
+                    <Button 
+                      type="button" 
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9 px-4 rounded-xl flex items-center justify-center cursor-pointer gap-1.5"
+                      onClick={() => {
+                        if (!newDocName.trim()) {
+                          toast.error("Please enter a Document Name first.");
+                          return;
+                        }
+                        if (!newDocUrl) {
+                          toast.error("Please select and upload a valid PDF file first.");
+                          return;
+                        }
+                        setDocuments(prev => [...prev, { name: newDocName.trim(), url: newDocUrl }]);
+                        setNewDocName("");
+                        setNewDocUrl("");
+                        setPendingPdfName("");
+                        toast.success("Document attached successfully!");
+                      }}
+                    >
+                      Attach Document File
+                    </Button>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-4 pt-4 border-t bg-slate-50/50 -mx-6 -mb-6 p-6">
                 <h4 className="font-bold text-sm text-slate-800">Supported CRM Platforms (Real-Time Sync Ready)</h4>
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 text-center">
                   {["HubSpot", "Follow Up Boss", "Salesforce", "Wise Agent", "LionDesk", "kvCORE"].map(crm => {
                     const url = crmLinks[crm] || "https://www.google.com";
+                    const isConnected = selectedCrmFromDropdown?.name.toLowerCase() === crm.toLowerCase();
                     return (
-                      <a 
+                      <button 
                         key={'crm-' + crm} 
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-white border hover:border-blue-500 hover:text-blue-600 hover:shadow-md transition-all text-xs font-semibold py-2.5 rounded-lg text-slate-700 shadow-sm flex items-center justify-center gap-1 focus:ring-2 focus:ring-blue-100"
-                        title={`Open ${crm} URL from spreadsheet/catalog`}
+                        type="button"
+                        onClick={async () => {
+                          await handleAttachCrmToProfile(crm, url);
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        }}
+                        className={`transition-all text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-sm border focus:ring-2 focus:ring-blue-100 cursor-pointer ${
+                          isConnected 
+                            ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 font-extrabold" 
+                            : "bg-white border-slate-200 text-slate-700 hover:border-blue-500 hover:text-blue-600 hover:shadow"
+                        }`}
+                        title={`Connect ${crm} to profile and open`}
                       >
                         <span>{crm}</span>
-                        <ExternalLink className="h-3 w-3 text-slate-400" />
-                      </a>
+                        {isConnected ? (
+                          <CheckCircle2 className="h-3 w-3 text-white" />
+                        ) : (
+                          <ExternalLink className="h-3 w-3 text-slate-400" />
+                        )}
+                      </button>
                     );
                   })}
                 </div>
 
-                {/* Searchable Dropdown List below */}
-                <div ref={crmDropdownRef} className="space-y-2 pt-4 border-t border-slate-200 relative">
+                {/* Searchable Dropdown Trigger below */}
+                <div className="space-y-2 pt-4 border-t border-slate-200 relative">
                   <Label className="text-xs font-bold text-slate-700 block">Search Additional CRM Catalog</Label>
-                  <p className="text-[10px] text-slate-400 -mt-1">Display CRM names (Column A) and link directly to registration or integration setup URLs (Column B) mapped from spreadsheet source.</p>
+                  <p className="text-[10px] text-slate-400 -mt-1">Displays CRM names and links directly to registration or integration setup URLs mapped from spreadsheet source.</p>
                   
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -1937,54 +3650,177 @@ export default function EditListing() {
                     </div>
                     <Input 
                       type="text" 
-                      placeholder="Type to search 25+ CRM platforms..." 
+                      placeholder="Click to search 45+ CRM platforms in interactive popup..." 
                       value={crmSearchQuery}
-                      onChange={e => {
-                        setCrmSearchQuery(e.target.value);
-                        setIsCrmDropdownOpen(true);
-                      }}
-                      onFocus={() => setIsCrmDropdownOpen(true)}
-                      className="pl-9 pr-8 bg-white border border-slate-200 h-9 text-xs"
+                      readOnly
+                      onClick={() => setIsCrmModalOpen(true)}
+                      onFocus={() => setIsCrmModalOpen(true)}
+                      className="pl-9 pr-8 bg-white border border-slate-200 h-9 text-xs cursor-pointer focus:ring-2 focus:ring-blue-100"
                     />
                     {crmSearchQuery && (
                       <button 
                         type="button" 
-                        onClick={() => { setCrmSearchQuery(""); setSelectedCrmFromDropdown(null); }}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                        onClick={(e) => { 
+                          e.stopPropagation();
+                          setCrmSearchQuery(""); 
+                          setCrmPage(0); 
+                          setSelectedCrmFromDropdown(null); 
+                        }}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 z-10"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
 
-                  {/* Dropdown Options */}
-                  {isCrmDropdownOpen && (
-                    <div className="absolute z-50 mt-1 max-h-48 w-full bg-white border border-slate-200 rounded-lg shadow-xl overflow-y-auto divide-y divide-slate-100">
-                      {crmList.filter(item => 
-                        item.name.toLowerCase().includes(crmSearchQuery.toLowerCase())
-                      ).length === 0 ? (
-                        <div className="p-3 text-xs text-slate-400 text-center">No matching CRMs found</div>
-                      ) : (
-                        crmList.filter(item => 
-                          item.name.toLowerCase().includes(crmSearchQuery.toLowerCase())
-                        ).map(item => (
-                          <div 
-                            key={'dropdown-' + item.name}
-                            onClick={() => {
-                              setSelectedCrmFromDropdown(item);
-                              setCrmSearchQuery(item.name);
-                              setIsCrmDropdownOpen(false);
-                              window.open(item.url, '_blank', 'noopener,noreferrer');
-                            }}
-                            className="p-2.5 text-xs text-slate-700 hover:bg-slate-50 cursor-pointer flex justify-between items-center transition-colors"
-                          >
-                            <span className="font-semibold">{item.name}</span>
-                            <span className="text-[10px] text-blue-500 flex items-center gap-0.5 font-medium">
-                              Select <ArrowRight className="h-3 w-3" />
-                            </span>
+                  {/* Searchable Modal Overlay Popup */}
+                  {isCrmModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+                      <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-scale-up overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
+                          <div className="space-y-0.5 text-left">
+                            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                              <Search className="h-4 w-4 text-blue-600" /> Search CRM Platform Catalog
+                            </h3>
+                            <p className="text-[10px] text-slate-500 font-medium">Select a CRM integration from our verified 45+ real estate providers catalog</p>
                           </div>
-                        ))
-                      )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCrmModalOpen(false);
+                              setCrmPage(0);
+                            }}
+                            className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+                            title="Close search window"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+
+                        {/* Modal Search Input container */}
+                        <div className="p-4 bg-white border-b border-slate-100 text-left">
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <Search className="h-4 w-4 text-slate-400" />
+                            </div>
+                            <Input 
+                              type="text" 
+                              placeholder="Type platform name (e.g. HubSpot, wise, chime...)" 
+                              value={crmSearchQuery}
+                              onChange={e => {
+                                setCrmSearchQuery(e.target.value);
+                                setCrmPage(0);
+                              }}
+                              autoFocus
+                              className="pl-9 pr-8 bg-slate-50/50 border-slate-200 h-10 text-xs focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500"
+                            />
+                            {crmSearchQuery && (
+                              <button 
+                                type="button" 
+                                onClick={() => { setCrmSearchQuery(""); setCrmPage(0); }}
+                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Modal Content - Paginated Results */}
+                        <div className="flex-1 overflow-y-auto p-2 bg-slate-50/20 text-left divide-y divide-slate-100">
+                          {(() => {
+                            const filteredCrms = crmList.filter(item => 
+                              item.name.toLowerCase().includes(crmSearchQuery.toLowerCase())
+                            );
+                            const pageSize = 20;
+                            const totalResults = filteredCrms.length;
+                            const totalPages = Math.ceil(totalResults / pageSize);
+                            const startIndex = crmPage * pageSize;
+                            const paginatedCrms = filteredCrms.slice(startIndex, startIndex + pageSize);
+                            const hasNextPage = crmPage < totalPages - 1;
+                            const hasPrevPage = crmPage > 0;
+
+                            if (filteredCrms.length === 0) {
+                              return (
+                                <div className="p-8 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+                                  <Search className="h-6 w-6 text-slate-300 stroke-[1.5]" />
+                                  <p className="text-xs font-semibold text-slate-700">No matching CRM providers found</p>
+                                  <p className="text-[10px] text-slate-500">Try typing a different name or clear filters</p>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <>
+                                <div className="space-y-1 p-2">
+                                  {paginatedCrms.map(item => (
+                                    <div 
+                                      key={'modal-crm-' + item.name}
+                                      onClick={async () => {
+                                        await handleAttachCrmToProfile(item.name, item.url);
+                                        setIsCrmModalOpen(false);
+                                        window.open(item.url, '_blank', 'noopener,noreferrer');
+                                      }}
+                                      className="p-3 text-xs bg-white rounded-xl border border-slate-105 hover:border-blue-200 hover:shadow-xs text-slate-700 hover:bg-blue-50/30 cursor-pointer flex justify-between items-center transition-all group"
+                                    >
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="font-bold text-slate-800 text-[13px]">{item.name}</span>
+                                        <span className="text-[10px] text-slate-400 leading-tight block truncate max-w-[280px] sm:max-w-md">{item.url}</span>
+                                      </div>
+                                      <span className="text-[10px] text-blue-600 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2.5 py-1 rounded-full flex items-center gap-1 font-bold transition-all">
+                                        Select & Link <ArrowRight className="h-3 w-3" />
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Pagination Indicators and Next/Previous Action Links */}
+                                {(hasPrevPage || hasNextPage) && (
+                                  <div className="p-3 bg-slate-55 text-xs flex items-center justify-between border-t border-slate-100 sticky bottom-0 z-10 rounded-b-xl select-none">
+                                    <span className="text-[10px] text-slate-500 font-medium font-mono">
+                                      Showing {startIndex + 1}–{Math.min(startIndex + pageSize, totalResults)} of {totalResults} matching
+                                    </span>
+                                    <div className="flex gap-4">
+                                      {hasPrevPage && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setCrmPage(prev => Math.max(0, prev - 1));
+                                          }}
+                                          className="text-blue-600 hover:text-blue-800 font-bold text-xs select-none cursor-pointer hover:underline"
+                                        >
+                                          Previous
+                                        </button>
+                                      )}
+                                      {hasNextPage && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setCrmPage(prev => prev + 1);
+                                          }}
+                                          className="text-blue-600 hover:text-blue-800 font-bold text-xs select-none cursor-pointer hover:underline"
+                                        >
+                                          Next
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                        
+                        {/* Footer warning */}
+                        <div className="p-3 bg-slate-50 text-[10px] text-slate-400 text-center border-t border-slate-100 font-medium">
+                          Connecting redirects to registration to secure webhook credential sync.
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -2011,17 +3847,27 @@ export default function EditListing() {
               </div>
 
               <div className="flex justify-between pt-6 border-t">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(5)}>Back</Button>
-                <Button type="button" onClick={() => setCurrentStep(7)} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  Continue to Preview & Finish
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(6)}>Back</Button>
+                <Button 
+                  type="button" 
+                  onClick={async () => { 
+                    const success = await handleSave(undefined, 8); 
+                    if (success) {
+                      setCurrentStep(8); 
+                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=8`);
+                    }
+                  }} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Save & Continue
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
-
-        {/* STEP 7: PREVIEW AND PUBLISH */}
-        {currentStep === 7 && (
+ 
+        {/* STEP 8: PREVIEW AND PUBLISH */}
+        {currentStep === 8 && (
           <Card className="border-emerald-200">
             <CardHeader className="bg-emerald-50/10">
               <CardTitle className="text-slate-800 text-base flex items-center gap-2">
@@ -2045,9 +3891,9 @@ export default function EditListing() {
                   <p className="font-mono text-[10px] uppercase font-black tracking-wider text-blue-600">Live Audio Tour URL Active</p>
                 </div>
               </div>
-
+ 
               <div className="flex justify-between pt-6 border-t">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(6)}>Back</Button>
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(7)}>Back</Button>
                 <Button 
                   type="submit" 
                   disabled={saving}
@@ -2059,12 +3905,12 @@ export default function EditListing() {
             </CardContent>
           </Card>
         )}
-
+ 
         {/* Stepper Navigation controls at bottom when not step 1 */}
         {currentStep > 1 && (
           <div className="pt-4 flex justify-between items-center text-xs text-slate-400 bg-slate-50 -mx-4 -mb-6 p-4 rounded-b-2xl border-t">
-            <span>Progress: {Math.round(([1, 2, 3, 4, 5, 6, 7].filter(s => isStepCompleted(s)).length / 7) * 100)}% Complete</span>
-            <span className="font-mono">Vertex Ingestion v2.1</span>
+            <span>Progress: {Math.round(([1, 2, 3, 4, 5, 6, 7, 8].filter(s => isStepCompleted(s)).length / 8) * 100)}% Complete</span>
+            <span className="font-mono">AI Open House Ingestion v2.1</span>
           </div>
         )}
       </form>

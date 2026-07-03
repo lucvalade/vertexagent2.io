@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { LogIn, ArrowRight, Loader2, Mail, Lock } from "lucide-react";
-import { useAuth, loginWithGoogle, loginWithEmail } from "@/hooks/useAuth";
+import { LogIn, ArrowRight, Loader2, Mail, Lock, Facebook, Apple, Eye, EyeOff } from "lucide-react";
+import { useAuth, loginWithGoogle, loginWithFacebook, loginWithApple, loginWithEmail } from "@/hooks/useAuth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,6 +18,7 @@ export default function Login() {
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -25,7 +26,49 @@ export default function Login() {
       await loginWithGoogle();
     } catch (err: any) {
       console.error("Login failed:", err);
-      toast.error(err.message || "Login failed. Please try again.");
+      const errMsg = err.message || "";
+      if (
+        errMsg.toLowerCase().includes("proxy") || 
+        errMsg.toLowerCase().includes("non-object") || 
+        errMsg.toLowerCase().includes("target or handler")
+      ) {
+        toast.error("Google login blocked by preview iframe restrictions", {
+          description: "Google Auth is restricted inside sandboxed iframes. Press 'Open in New Tab' at the top-right of AI Studio to log in with Google, or click below to use the fast Email login.",
+          duration: 10000,
+        });
+      } else {
+        toast.error(errMsg || "Login failed. Please try again.");
+      }
+      setLoading(false);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    setLoading(true);
+    try {
+      await loginWithFacebook();
+    } catch (err: any) {
+      console.error("Facebook Login failed:", err);
+      if (err.code === "auth/operation-not-allowed" || err.code === "auth/configuration-not-found") {
+        toast.info("Facebook authentication is ready to configure. Please integrate your Facebook App ID in your Firebase console under Authentication > Sign-in method.");
+      } else {
+        toast.error(err.message || "Facebook login failed. Please try again.");
+      }
+      setLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setLoading(true);
+    try {
+      await loginWithApple();
+    } catch (err: any) {
+      console.error("Apple Login failed:", err);
+      if (err.code === "auth/operation-not-allowed" || err.code === "auth/configuration-not-found") {
+        toast.info("Apple Sign-In is ready to configure. Please configure Apple Sign-In credentials in your Firebase console under Authentication > Sign-in method.");
+      } else {
+        toast.error(err.message || "Apple login failed. Please try again.");
+      }
       setLoading(false);
     }
   };
@@ -35,6 +78,27 @@ export default function Login() {
     if (!email || !password) {
       toast.error("Please fill in all fields");
       return;
+    }
+
+    if (!email.includes("@")) {
+      toast.error("The email address must contain the '@' symbol.");
+      return;
+    }
+
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters long.");
+      return;
+    }
+
+    if (password.length >= 12 && password.length <= 16) {
+      const hasUppercase = /[A-Z]/.test(password);
+      const hasLowercase = /[a-z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      const hasSymbol = /[^A-Za-z0-9]/.test(password);
+      if (!hasUppercase || !hasLowercase || !hasNumber || !hasSymbol) {
+        toast.error("If your password is between 12 and 16 characters long, it must contain a mix of uppercase letters, lowercase letters, numbers, and symbols.");
+        return;
+      }
     }
 
     setEmailLoading(true);
@@ -99,12 +163,12 @@ export default function Login() {
         </CardHeader>
         <CardContent className="px-8 pb-8 flex flex-col gap-4">
           {!showEmailForm ? (
-            <>
+            <div className="flex flex-col gap-3">
               <Button 
                 onClick={handleGoogleLogin} 
                 disabled={loading}
                 size="lg"
-                className="w-full bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-100 hover:border-blue-200 h-14 font-bold text-lg transition-all rounded-2xl flex gap-3 shadow-sm"
+                className="w-full bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-100 hover:border-blue-200 h-14 font-bold text-base transition-all rounded-2xl flex gap-3 shadow-sm"
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -114,13 +178,41 @@ export default function Login() {
                 Login with Google
               </Button>
 
+              <Button 
+                onClick={handleFacebookLogin} 
+                disabled={loading}
+                size="lg"
+                className="w-full bg-[#1877f2] hover:bg-[#166fe5] text-white h-14 font-bold text-base transition-all rounded-2xl flex gap-3 shadow-sm border-0"
+              >
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Facebook className="h-5 w-5 fill-white" />
+                )}
+                Login with Facebook
+              </Button>
+
+              <Button 
+                onClick={handleAppleLogin} 
+                disabled={loading}
+                size="lg"
+                className="w-full bg-slate-900 hover:bg-black text-white h-14 font-bold text-base transition-all rounded-2xl flex gap-3 shadow-sm border-0"
+              >
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Apple className="h-5 w-5 fill-white" />
+                )}
+                Login with Apple
+              </Button>
+
               <button 
                 onClick={() => setShowEmailForm(true)}
-                className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors mx-auto underline-offset-4 hover:underline"
+                className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors mx-auto underline-offset-4 hover:underline mt-2"
               >
                 Or login with email instead
               </button>
-            </>
+            </div>
           ) : (
             <form onSubmit={handleEmailLogin} className="space-y-4">
               <div className="space-y-1.5">
@@ -147,14 +239,21 @@ export default function Login() {
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input 
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="••••••••" 
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     maxLength={100}
-                    className="pl-10 h-12 bg-slate-50 border-slate-100 focus:bg-white transition-all rounded-xl font-medium"
+                    className="pl-10 pr-10 h-12 bg-slate-50 border-slate-100 focus:bg-white transition-all rounded-xl font-medium"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 outline-none p-1 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
 

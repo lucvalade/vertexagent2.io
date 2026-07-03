@@ -218,8 +218,8 @@ export default function AdminUsers() {
     const toastId = toast.loading(`Routing test ${previewType} email to ${selectedTrialUser.email}...`);
     try {
       const name = `${selectedTrialUser.firstName} ${selectedTrialUser.lastName}`;
-      const signupDateStr = selectedTrialUser.signupDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-      const expiryDateStr = selectedTrialUser.expiryDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+      const signupDateStr = selectedTrialUser.signupDate.toLocaleDateString('en-US', { year: "numeric", month: "short", day: "numeric" });
+      const expiryDateStr = selectedTrialUser.expiryDate.toLocaleDateString('en-US', { year: "numeric", month: "short", day: "numeric" });
       const loginUrl = window.location.origin + "/login";
 
       let subject = "";
@@ -390,7 +390,7 @@ export default function AdminUsers() {
         {/* Tab 1: Brokerage Directory */}
         {activeTab === "directory" ? (
           <>
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
@@ -481,7 +481,7 @@ export default function AdminUsers() {
             </div>
 
             {/* Mobile View */}
-            <div className="md:hidden divide-y divide-slate-100">
+            <div className="lg:hidden divide-y divide-slate-100">
               {paginatedData.map((agent: any) => (
                 <div key={agent.id} className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
@@ -533,7 +533,7 @@ export default function AdminUsers() {
           /* Tab 2: 14 Free Tier (As requested) */
           <>
             {/* Desktop View */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-50 border-b border-slate-100">
                   <tr>
@@ -560,8 +560,8 @@ export default function AdminUsers() {
                     </tr>
                   ) : (
                     paginatedData.map((user: any, i) => {
-                      const signupStr = user.signupDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-                      const expiryStr = user.expiryDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                      const signupStr = user.signupDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                      const expiryStr = user.expiryDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
                       
                       const daysLeft = Math.ceil((user.expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
                       const isExpired = daysLeft <= 0;
@@ -650,7 +650,7 @@ export default function AdminUsers() {
             </div>
 
             {/* Mobile View */}
-            <div className="md:hidden divide-y divide-slate-100">
+            <div className="lg:hidden divide-y divide-slate-100">
               {loadingRealUsers ? (
                 <div className="p-12 text-center text-xs font-black uppercase text-slate-400 tracking-widest">
                   Scanning DB for Trialists...
@@ -682,11 +682,11 @@ export default function AdminUsers() {
                       <div className="grid grid-cols-2 gap-4 text-[10px] bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
                         <div>
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Signed up</p>
-                          <p className="font-bold text-slate-700">{user.signupDate.toLocaleDateString()}</p>
+                          <p className="font-bold text-slate-700">{user.signupDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                         </div>
                         <div>
                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Expires on</p>
-                          <p className="font-bold text-slate-700">{user.expiryDate.toLocaleDateString()}</p>
+                          <p className="font-bold text-slate-700">{user.expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                         </div>
                       </div>
 
@@ -801,8 +801,8 @@ export default function AdminUsers() {
 
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5 mb-5 space-y-1.5 font-semibold text-blue-900">
                       <p className="text-[10px] font-black uppercase text-blue-700 tracking-wider">Trial Details</p>
-                      <p className="flex justify-between"><span>Signup Date:</span> <span className="font-extrabold">{selectedTrialUser ? selectedTrialUser.signupDate.toLocaleDateString() : 'Today'}</span></p>
-                      <p className="flex justify-between text-red-600"><span>Expiration Date:</span> <span className="font-extrabold">{selectedTrialUser ? selectedTrialUser.expiryDate.toLocaleDateString() : 'In 14 Days'}</span></p>
+                      <p className="flex justify-between"><span>Signup Date:</span> <span className="font-extrabold">{selectedTrialUser ? selectedTrialUser.signupDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Today'}</span></p>
+                      <p className="flex justify-between text-red-600"><span>Expiration Date:</span> <span className="font-extrabold">{selectedTrialUser ? selectedTrialUser.expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'In 14 Days'}</span></p>
                     </div>
 
                     <h3 className="font-extrabold text-[#0f172a] mb-2 text-[11px] uppercase tracking-tight">🔥 Your Quickstart Checklist:</h3>
@@ -823,7 +823,7 @@ export default function AdminUsers() {
                     <p className="text-center text-[10px] font-bold text-slate-500 mb-6 font-medium">VertexAgent Subscription Expiry Heads-Up</p>
 
                     <p className="mb-3 font-medium">Hello <strong>{selectedTrialUser ? selectedTrialUser.firstName : 'Jane'}</strong>,</p>
-                    <p className="mb-4 leading-medium">Your 14-day free trial on VertexAgent.io is halfway through! You have **7 days remaining** before your AI voice open house agents and buyer lead flows pause on <strong>{selectedTrialUser ? selectedTrialUser.expiryDate.toLocaleDateString() : 'Next Week'}</strong>.</p>
+                    <p className="mb-4 leading-medium">Your 14-day free trial on VertexAgent.io is halfway through! You have **7 days remaining** before your AI voice open house agents and buyer lead flows pause on <strong>{selectedTrialUser ? selectedTrialUser.expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Next Week'}</strong>.</p>
 
                     <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 mb-5 space-y-1 text-amber-900 font-semibold">
                       <p className="text-[10px] font-black uppercase text-amber-700 tracking-wider">Plan Expiry Details</p>
@@ -879,7 +879,10 @@ export default function AdminUsers() {
                 className="w-full h-32 p-3 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 shadow-inner"
                 placeholder="Type your message here..."
                 value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setMessageText(val.charAt(0).toUpperCase() + val.slice(1));
+                }}
               />
             </div>
             <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 italic text-[10px] text-blue-700 font-bold">

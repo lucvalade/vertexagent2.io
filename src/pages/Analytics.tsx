@@ -314,7 +314,7 @@ export default function Analytics() {
                 { source: "QR Scan (Sign)", value: 45, color: "bg-blue-500" },
                 { source: "Direct URL", value: 25, color: "bg-indigo-500" },
                 { source: "Zillow / MLS", value: 20, color: "bg-emerald-500" },
-                { source: "Social Media", value: 10, color: "bg-orange-500" },
+                { source: "Social Media", value: 10, color: "bg-sky-500" },
               ].map((item, i) => (
                 <div key={i} className="flex items-center group">
                   <div className="w-full flex-1">

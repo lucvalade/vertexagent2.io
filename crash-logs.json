@@ -1,0 +1,7 @@
+[
+  {
+    "timestamp": "2026-06-20T12:15:00-07:00",
+    "issue": "Build failed due to incompatible motion/react components in Leads.tsx and ProspectInsightReport.tsx",
+    "resolution": "Removed motion/react usage from components and reverted to standard HTML elements."
+  }
+]

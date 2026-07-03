@@ -4,9 +4,26 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
 
-export const app = initializeApp(firebaseConfig);
+// Resolve ES Module default import wrapper discrepancy for JSON configurations in certain bundlers
+const getFirebaseConfig = () => {
+  if (!firebaseConfig) {
+    console.error("[Firebase] Config JSON import is empty.");
+    return {};
+  }
+  
+  // Check if properties exist on top level or inside the default property
+  const fallback = (firebaseConfig as any).default || firebaseConfig;
+  const config = (firebaseConfig as any).apiKey ? firebaseConfig : fallback;
+  
+  console.log("[Firebase Init] Initializing with config keys:", Object.keys(config));
+  return config;
+};
+
+const resolvedConfig = getFirebaseConfig();
+
+export const app = initializeApp(resolvedConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app, resolvedConfig.firestoreDatabaseId);
 
 let safeStorage: any = null;
 try {

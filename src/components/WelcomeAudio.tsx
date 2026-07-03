@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Volume2, VolumeX, Play, RotateCcw, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 interface WelcomeAudioProps {
   language: string;
@@ -9,6 +11,7 @@ interface WelcomeAudioProps {
     en: string;
     fr: string;
   };
+  listingId?: string;
 }
 
 const LANGUAGES_MAP: Record<string, string> = {
@@ -26,7 +29,16 @@ const LANGUAGES_MAP: Record<string, string> = {
   "Russian": "ru",
   "Vietnamese": "vi",
   "Arabic": "ar",
-  "Hindi": "hi"
+  "Hindi": "hi",
+  "Bengali": "bn",
+  "Indonesian": "id",
+  "Polish": "pl",
+  "Romanian": "ro",
+  "Swedish": "sv",
+  "Tamil": "ta",
+  "Thai": "th",
+  "Turkish": "tr",
+  "Urdu": "ur"
 };
 
 const WELCOME_LABELS: Record<string, {
@@ -57,7 +69,7 @@ const WELCOME_LABELS: Record<string, {
     playing: "Lecture de l'audio de bienvenue...",
     stop: "Arrêter",
     start: "Démarrer",
-    welcomeSpeech: "Bienvenue dans cette magnifique propriété. N'hésitez pas à l'explorer et à me poser des questions sur les pièces, les caractéristiques ou l'agencement au fil de votre visite."
+    welcomeSpeech: "Bonjour ! Je suis Sora, votre guide pour cette visite. Je suis ravie de vous accompagner. Avez-vous des questions sur cette propriété ?"
   },
   Spanish: {
     tapToStart: "Iniciar visita de bienvenida",
@@ -188,13 +200,104 @@ const WELCOME_LABELS: Record<string, {
     stop: "रोकें",
     start: "प्रारंभ करें",
     welcomeSpeech: "इस सुंदर संपत्ति में आपका स्वागत है। घूमने और कमरों, सुविधाओं या रूप-रेखा के बारे में कोई भी प्रश्न पूछने के लिए स्वतंत्र महसूस करें।"
+  },
+  Bengali: {
+    tapToStart: "স্বাগতম ট্যুর শুরু করুন",
+    replay: "আবার শুনুন",
+    mute: "মিউট করুন",
+    unmute: "আনমিউট করুন",
+    playing: "স্বাগতম অডিও বাজানো হচ্ছে...",
+    stop: "থামুন",
+    start: "শুরু",
+    welcomeSpeech: "এই সুন্দর সম্পত্তিতে আপনাকে স্বাগতম। ঘুরে দেখতে এবং কোন প্রশ্ন থাকলে জিজ্ঞাসা করতে দ্বিধা করবেন না।"
+  },
+  Indonesian: {
+    tapToStart: "Mulai Tur Selamat Datang",
+    replay: "Putar Ulang Sambutan",
+    mute: "Bisukan",
+    unmute: "Bunyikan",
+    playing: "Memutar Audio Sambutan...",
+    stop: "Berhenti",
+    start: "Mulai",
+    welcomeSpeech: "Selamat datang di properti indah ini. Silakan menjelajah dan jangan ragu untuk menanyakan apa pun tentang ruangan, fitur, atau tata letak saat Anda berkeliling."
+  },
+  Polish: {
+    tapToStart: "Rozpocznij zwiedzanie",
+    replay: "Odtwórz ponownie",
+    mute: "Wycisz",
+    unmute: "Wyłącz wyciszenie",
+    playing: "Odtwarzanie powitania...",
+    stop: "Zatrzymaj",
+    start: "Rozpocznij",
+    welcomeSpeech: "Witamy w tej pięknej nieruchomości. Zapraszamy do zwiedzania i zadawania pytań dotyczących pokoi, funkcji lub układu."
+  },
+  Romanian: {
+    tapToStart: "Începe turul de bun venit",
+    replay: "Redă din nou",
+    mute: "Fără sunet",
+    unmute: "Activează sunetul",
+    playing: "Se redă mesajul de bun venit...",
+    stop: "Oprește",
+    start: "Pornește",
+    welcomeSpeech: "Bine ați venit la această proprietate frumoasă. Simțiți-vă liberi să explorați și să puneți întrebări despre camere, dotări sau compartimentare."
+  },
+  Swedish: {
+    tapToStart: "Starta välkomstturen",
+    replay: "Spela upp igen",
+    mute: "Ljud av",
+    unmute: "Ljud på",
+    playing: "Spelar välkomstljud...",
+    stop: "Stoppa",
+    start: "Starta",
+    welcomeSpeech: "Välkommen till denna vackra fastighet. Känn dig fri att utforska och ställa frågor om rummen, funktionerna eller planlösningen."
+  },
+  Tamil: {
+    tapToStart: "வரவேற்பு சுற்றுப்பயணத்தைத் தொடங்கு",
+    replay: "மீண்டும் இயக்கு",
+    mute: "ஒலியை அடக்கு",
+    unmute: "ஒலியை இயக்கு",
+    playing: "வரவேற்பு ஆடியோ இயங்குகிறது...",
+    stop: "நிறுத்து",
+    start: "தொடங்கு",
+    welcomeSpeech: "இந்த அழகான வீட்டிற்கு உங்களை வரவேற்கிறோம். தாராளமாக சுற்றிப் பார்த்து, அறைகள் அல்லது வசதிகள் பற்றி ஏதேனும் கேள்விகள் இருந்தால் கேளுங்கள்."
+  },
+  Thai: {
+    tapToStart: "เริ่มทัวร์ต้อนรับ",
+    replay: "เล่นเสียงต้อนรับอีกครั้ง",
+    mute: "ปิดเสียง",
+    unmute: "เปิดเสียง",
+    playing: "กำลังเล่นเสียงต้อนรับ...",
+    stop: "หยุด",
+    start: "เริ่ม",
+    welcomeSpeech: "ยินดีต้อนรับสู่บ้านที่สวยงามหลังนี้ ขอเชิญเดินชมรอบๆ และสอบถามข้อมูลเกี่ยวกับห้อง ฟีเจอร์ หรือแผนผังของบ้านได้ตลอดเวลา"
+  },
+  Turkish: {
+    tapToStart: "Hoş Geldiniz Turunu Başlat",
+    replay: "Tekrar Oynat",
+    mute: "Sessiz",
+    unmute: "Sesi Aç",
+    playing: "Hoş geldiniz sesi çalınıyor...",
+    stop: "Durdur",
+    start: "Başlat",
+    welcomeSpeech: "Bu güzel mülke hoş geldiniz. Lütfen dilediğiniz gibi gezin ve odalar, özellikler veya yerleşim hakkında sorularınızı sorun."
+  },
+  Urdu: {
+    tapToStart: "خوش آمدید ٹور شروع کریں",
+    replay: "دوبارہ چلائیں",
+    mute: "میوٹ کریں",
+    unmute: "ان میوٹ کریں",
+    playing: "خوش آمدید آواز چل رہی ہے...",
+    stop: "روکیں",
+    start: "شروع کریں",
+    welcomeSpeech: "اس خوبصورت جائیداد میں آپ کا خیر مقدم ہے۔ گھومنے اور کمروں, خصوصیات یا نقشہ کے بارے میں کوئی بھی سوال پوچھنے کے لیے بلا جھجھک بات کریں۔"
   }
 };
 
 export default function WelcomeAudio({
   language,
   onSpeakingChange,
-  sources = { en: "/audio/welcome_en.mp3", fr: "/audio/welcome_fr.mp3" }
+  sources = { en: "/audio/welcome_en.mp3", fr: "/audio/welcome_fr.mp3" },
+  listingId
 }: WelcomeAudioProps) {
   const normalizedLang = Object.keys(WELCOME_LABELS).find(
     k => k.toLowerCase() === (language || "English").toLowerCase()
@@ -207,6 +310,54 @@ export default function WelcomeAudio({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [hasPlayedOnce, setHasPlayedOnce] = useState(false);
+  const [resolvedTextEn, setResolvedTextEn] = useState("");
+  const [resolvedTextFr, setResolvedTextFr] = useState("");
+  const [voiceName, setVoiceName] = useState<string>("Professional Female Synthetic");
+  const [generatingAudio, setGeneratingAudio] = useState(false);
+
+  const activeLangCode = playbackOverride === "en" 
+    ? "en" 
+    : playbackOverride === "fr" 
+    ? "fr" 
+    : targetLangCode;
+
+  useEffect(() => {
+    if (!listingId) return;
+    const fetchListingAndResolved = async () => {
+      try {
+        // Fetch listing to get configured voice match
+        const listingRef = doc(db, "listings", listingId);
+        const listingSnap = await getDoc(listingRef);
+        if (listingSnap.exists()) {
+          const listingData = listingSnap.data();
+          if (listingData.voiceName) {
+            setVoiceName(listingData.voiceName);
+          }
+        }
+
+        // Pre-fetch English welcome message
+        const resEn = await fetch(`/api/welcome-messages/resolve/${listingId}?locale=en`);
+        if (resEn.ok) {
+          const dataEn = await resEn.json();
+          if (dataEn.success && dataEn.text_value) {
+            setResolvedTextEn(dataEn.text_value);
+          }
+        }
+
+        // Pre-fetch French welcome message
+        const resFr = await fetch(`/api/welcome-messages/resolve/${listingId}?locale=fr`);
+        if (resFr.ok) {
+          const dataFr = await resFr.json();
+          if (dataFr.success && dataFr.text_value) {
+            setResolvedTextFr(dataFr.text_value);
+          }
+        }
+      } catch (err) {
+        console.warn("Error fetching listing or resolved welcome messages:", err);
+      }
+    };
+    fetchListingAndResolved();
+  }, [listingId]);
 
   // Reset override whenever outer language prop changes
   useEffect(() => {
@@ -225,14 +376,51 @@ export default function WelcomeAudio({
     ? WELCOME_LABELS.French 
     : labels;
 
+  const resolveAudioUrl = (url: string | null | undefined): string => {
+    if (!url) return "";
+    
+    // Map custom listing audios to local static assets instantly
+    if (url.includes("/listings/") && url.includes("/audio/")) {
+      const idx = url.indexOf("listings/");
+      if (idx !== -1) {
+        return `/audio/${url.substring(idx)}`;
+      }
+    }
+
+    // Robustly map storage defaults to local audio defaults to bypass network, CORS, and GCS issues
+    if (url.includes("/defaults/welcome_")) {
+      const filename = url.substring(url.lastIndexOf("/") + 1);
+      return `/audio/defaults/${filename}`;
+    }
+
+    if (url.includes("/welcome_") && !url.includes("/listings/")) {
+      const filename = url.substring(url.lastIndexOf("/") + 1);
+      return `/audio/${filename}`;
+    }
+
+    if (url.startsWith("https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/")) {
+      return url.replace("https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/", "/audio/");
+    }
+
+    return url;
+  };
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const utteranceRef = useRef<any>(null);
 
-  // Initialize pre-recorded HTML Audio for EN and FR or overridden playback
+  // Initialize custom uploaded base64 HTML Audio for EN and FR or overridden playback if available
   useEffect(() => {
     if (!isPreRecorded) return;
+    
+    const isSupportedAudio = audioSrc && (
+      audioSrc.startsWith("data:audio/") || 
+      audioSrc.startsWith("http") || 
+      audioSrc.startsWith("/audio")
+    );
+    if (!isSupportedAudio) return;
 
-    const audio = new Audio(audioSrc);
+    const resolvedUrl = resolveAudioUrl(audioSrc);
+    const audio = new Audio(resolvedUrl);
     audio.preload = "auto";
     audio.muted = isMuted;
     audioRef.current = audio;
@@ -251,8 +439,7 @@ export default function WelcomeAudio({
     };
 
     const handleError = () => {
-      console.warn(`Welcome audio failed to load: ${audioSrc}. Falling back to clean speech synthesis.`);
-      // If MP3 fails, seamlessly turn to SpeechSynthesis
+      console.warn(`Welcome audio failed to load: ${audioSrc}. Falling back to dynamic synthesis.`);
       audioRef.current = null;
     };
 
@@ -277,8 +464,6 @@ export default function WelcomeAudio({
       audioRef.current.muted = isMuted;
     }
     if (utteranceRef.current && typeof window !== "undefined" && window.speechSynthesis) {
-      // Chrome/Safari doesn't allow changing volume mid-track on SpeechSynthesis easily,
-      // but we can pause and resume or cancel/replay with new volume if muted.
       if (isMuted) {
         window.speechSynthesis.cancel();
         setIsPlaying(false);
@@ -296,29 +481,105 @@ export default function WelcomeAudio({
     };
   }, []);
 
-  const handleStartPlay = async () => {
-    // If there is an override or native is EN/FR
-    if (isPreRecorded && audioRef.current) {
-      try {
-        await audioRef.current.play();
-      } catch (err) {
-        console.warn("Audio playback interrupted, falling back to speech synthesis:", err);
-        playSpeechSynthesis();
+  const synthesizeAndPlay = async (textToSpeak: string, languageLabel: string) => {
+    setGeneratingAudio(true);
+    const toastId = toast.loading(`Connecting to Sora's voice server with matched character voice...`);
+    try {
+      const response = await fetch("/api/tts-simple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textToSpeak,
+          lang: languageLabel,
+          voiceName: voiceName
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to synthesize welcome audio");
       }
-    } else {
-      setPlaybackOverride("none");
-      playSpeechSynthesis();
+
+      const data = await response.json();
+      if (data.success && data.base64Audio) {
+        const audioUrl = `data:${data.mimeType || "audio/wav"};base64,${data.base64Audio}`;
+        
+        // Play the synthesized high-fidelity audio
+        const audio = new Audio(audioUrl);
+        audio.muted = isMuted;
+        audioRef.current = audio;
+
+        audio.addEventListener("play", () => {
+          setIsPlaying(true);
+          if (onSpeakingChange) onSpeakingChange(true);
+        });
+
+        audio.addEventListener("pause", () => {
+          setIsPlaying(false);
+          if (onSpeakingChange) onSpeakingChange(false);
+        });
+
+        audio.addEventListener("ended", () => {
+          setIsPlaying(false);
+          setHasPlayedOnce(true);
+          if (onSpeakingChange) onSpeakingChange(false);
+        });
+
+        audio.addEventListener("error", () => {
+          console.warn("Synthesized audio playback error, falling back to speech synthesis.");
+          playSpeechSynthesisFallback(textToSpeak);
+        });
+
+        await audio.play();
+        toast.success(`Playing welcome tour with Sora's matched voice character: ${voiceName}!`, { id: toastId });
+      } else {
+        throw new Error("No audio payload");
+      }
+    } catch (err) {
+      console.warn("Synthesis failed, falling back to native browser TTS:", err);
+      toast.dismiss(toastId);
+      playSpeechSynthesisFallback(textToSpeak);
+    } finally {
+      setGeneratingAudio(false);
     }
   };
 
-  const playSpeechSynthesis = () => {
+  const handleStartPlay = async () => {
+    const isFr = playbackOverride === "fr" || (playbackOverride === "none" && targetLangCode === "fr");
+    const textToSpeak = isFr 
+      ? (resolvedTextFr || WELCOME_LABELS.French.welcomeSpeech)
+      : (resolvedTextEn || WELCOME_LABELS.English.welcomeSpeech);
+
+    const currentLang = playbackOverride === "en" ? "English" : playbackOverride === "fr" ? "French" : normalizedLang;
+
+    // Check if there is a custom uploaded base64 welcome audio
+    const currentAudioSrc = isFr ? sources.fr : sources.en;
+
+    const hasCustomUploadedAudio = currentAudioSrc && (
+      currentAudioSrc.startsWith("data:audio/") || 
+      currentAudioSrc.startsWith("http") || 
+      currentAudioSrc.startsWith("/audio")
+    );
+
+    if (hasCustomUploadedAudio && audioRef.current) {
+      try {
+        await audioRef.current.play();
+      } catch (err) {
+        console.warn("Audio playback interrupted, falling back to synthesis:", err);
+        await synthesizeAndPlay(textToSpeak, currentLang);
+      }
+    } else {
+      await synthesizeAndPlay(textToSpeak, currentLang);
+    }
+  };
+
+  const playSpeechSynthesisFallback = (textToSpeak: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       toast.error("Text-to-speech not supported on this browser.");
       return;
     }
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(activeLabels.welcomeSpeech);
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.lang = targetLangCode;
     utterance.volume = isMuted ? 0 : 1;
 
@@ -351,7 +612,7 @@ export default function WelcomeAudio({
   };
 
   const handleStopPlay = () => {
-    if (isPreRecorded && audioRef.current) {
+    if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
@@ -417,67 +678,49 @@ export default function WelcomeAudio({
 
       {/* High-Fidelity Audio Presentations Links */}
       <div className="w-full pt-2.5 mt-1 border-t border-slate-800/40 flex flex-col items-center gap-2">
-        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+        <span className="text-[10px] text-white font-bold uppercase tracking-wider">
           High-Fidelity Welcome Audio:
         </span>
         <div className="flex gap-2 w-full justify-center">
           <button
             type="button"
             onClick={async () => {
-              if (playbackOverride === "en" && isPlaying) {
-                handleStopPlay();
+              handleStopPlay();
+              if (playbackOverride === "en") {
                 setPlaybackOverride("none");
               } else {
-                handleStopPlay();
                 setPlaybackOverride("en");
-                setTimeout(async () => {
-                  if (audioRef.current) {
-                    try {
-                      await audioRef.current.play();
-                    } catch (e) {
-                      console.error("Override play failed:", e);
-                    }
-                  }
-                }, 60);
               }
             }}
             className={`flex-1 max-w-[140px] text-center text-[10px] py-1.5 px-2 rounded-lg font-bold border transition-all ${
-              playbackOverride === "en" && isPlaying
-                ? "bg-blue-600 border-blue-500 text-white shadow-md animate-pulse"
+              playbackOverride === "en"
+                ? "bg-blue-600 border-blue-500 text-white shadow-md"
                 : "bg-slate-800/50 border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-800"
             }`}
           >
-            🇬🇧 English Welcome
+            🇨🇦 English Welcome
           </button>
           
-          <button
-            type="button"
-            onClick={async () => {
-              if (playbackOverride === "fr" && isPlaying) {
+          {sources.fr && (
+            <button
+              type="button"
+              onClick={async () => {
                 handleStopPlay();
-                setPlaybackOverride("none");
-              } else {
-                handleStopPlay();
-                setPlaybackOverride("fr");
-                setTimeout(async () => {
-                  if (audioRef.current) {
-                    try {
-                      await audioRef.current.play();
-                    } catch (e) {
-                      console.error("Override play failed:", e);
-                    }
-                  }
-                }, 60);
-              }
-            }}
-            className={`flex-1 max-w-[140px] text-center text-[10px] py-1.5 px-2 rounded-lg font-bold border transition-all ${
-              playbackOverride === "fr" && isPlaying
-                ? "bg-blue-600 border-blue-500 text-white shadow-md animate-pulse"
-                : "bg-slate-800/50 border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-800"
-            }`}
-          >
-            🇫🇷 French Welcome
-          </button>
+                if (playbackOverride === "fr") {
+                  setPlaybackOverride("none");
+                } else {
+                  setPlaybackOverride("fr");
+                }
+              }}
+              className={`flex-1 max-w-[140px] text-center text-[10px] py-1.5 px-2 rounded-lg font-bold border transition-all ${
+                playbackOverride === "fr"
+                  ? "bg-blue-600 border-blue-500 text-white shadow-md"
+                  : "bg-slate-800/50 border-slate-700/50 text-slate-300 hover:text-white hover:bg-slate-800"
+              }`}
+            >
+              🇫🇷 Bienvenue en Français
+            </button>
+          )}
 
           {playbackOverride !== "none" && (
             <button

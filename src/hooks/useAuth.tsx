@@ -1,5 +1,5 @@
 import { auth, db, handleFirestoreError, OperationType } from "@/lib/firebase";
-import { User as FirebaseUser, signInWithPopup, GoogleAuthProvider, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { User as FirebaseUser, signInWithPopup, GoogleAuthProvider, FacebookAuthProvider, OAuthProvider, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { useEffect, useState, createContext, useContext } from "react";
 import { sendEmail } from "@/lib/api";
@@ -14,6 +14,13 @@ interface AppUser {
   maintenanceMode?: boolean;
   createdAt: number;
   updatedAt: number;
+  hasReadOnboarding?: boolean;
+  onboardingReadAt?: number;
+  hasDownloadedOnboardingPdf?: boolean;
+  onboardingDownloadedAt?: number;
+  accountType?: "agent" | "team_admin" | "brokerage_admin" | "lender" | "compliance_admin" | "platform_admin";
+  subscriptionStatus?: "active" | "past_due" | "canceled";
+  subscriptionPlan?: "free" | "pro" | string;
 }
 
 interface AuthState {
@@ -68,6 +75,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.error("Error checking invitation:", err);
             }
 
+            const savedPlan = typeof window !== "undefined" ? localStorage.getItem("selected_signup_plan") || "free" : "free";
+            let targetType: "agent" | "team_admin" | "brokerage_admin" | "lender" | "compliance_admin" | "platform_admin" = "agent";
+            let targetPlan = "free";
+
+            if (savedPlan === "pro") {
+              targetType = "agent";
+              targetPlan = "pro";
+            } else if (savedPlan === "team") {
+              targetType = "team_admin";
+              targetPlan = "pro";
+            } else if (savedPlan === "brokerage") {
+              targetType = "brokerage_admin";
+              targetPlan = "elite";
+            } else if (savedPlan === "lender") {
+              targetType = "lender";
+              targetPlan = "pro";
+            }
+
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("selected_signup_plan");
+            }
+
             const appUser: AppUser = {
               id: fUser.uid,
               email: fUser.email || "",
@@ -75,7 +104,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: fUser.email?.toLowerCase() === "luc.valade@gmail.com" ? "ADMIN" : "AGENT",
               brokerage: invitedBrokerage,
               createdAt: Date.now(),
-              updatedAt: Date.now()
+              updatedAt: Date.now(),
+              accountType: targetType,
+              subscriptionStatus: "active",
+              subscriptionPlan: targetPlan
             };
             await setDoc(userDocRef, appUser);
 
@@ -87,13 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
               await sendEmail({
                 to: appUser.email,
-                subject: "🚀 Welcome to VertexAgent! Your 14-Day Free Trial starts now",
+                subject: "🚀 Welcome to AI Open House Connect! Your 14-Day Free Trial starts now",
                 html: `
                   <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #1e293b; background-color: #f8fafc;">
                     <div style="background-color: #ffffff; padding: 40px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
                       <div style="text-align: center; margin-bottom: 30px;">
                         <span style="font-size: 48px;">🚀</span>
-                        <h1 style="color: #0f172a; font-size: 28px; font-weight: 800; margin: 15px 0 5px; tracking-tight: -0.025em; text-transform: uppercase; font-style: italic;">Welcome to VertexAgent</h1>
+                        <h1 style="color: #0f172a; font-size: 28px; font-weight: 800; margin: 15px 0 5px; tracking-tight: -0.025em; text-transform: uppercase; font-style: italic;">Welcome to AI Open House Connect</h1>
                         <p style="color: #64748b; font-size: 14px; font-weight: 500; margin: 0;">Try Free for 14 Days (No Credit Card Required)</p>
                       </div>
 
@@ -102,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       </p>
 
                       <p style="font-size: 15px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
-                        We are thrilled to welcome you to VertexAgent.io. Your account has been provisioned on our <strong>14-Day Free Trial</strong> tier. This gives you complete access to generate high-fidelity AI-powered talking open houses and remote digital tours!
+                        We are thrilled to welcome you to aiopenhouseconnect.com. Your account has been provisioned on our <strong>14-Day Free Trial</strong> tier. This gives you complete access to generate high-fidelity AI-powered talking open houses and remote digital tours!
                       </p>
 
                       <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 16px; padding: 20px; margin-bottom: 30px;">
@@ -139,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
                     <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 20px;">
-                      © ${new Date().getFullYear()} <a href="https://www.VertexAgent.io" style="color: #94a3b8; text-decoration: underline;" target="_blank" rel="noopener noreferrer">VertexAgent.io</a>. All rights reserved.<br />
+                      © ${new Date().getFullYear()} <a href="https://www.aiopenhouseconnect.com" style="color: #94a3b8; text-decoration: underline;" target="_blank" rel="noopener noreferrer">aiopenhouseconnect.com</a>. All rights reserved.<br />
                       If you did not sign up for this account, you can safely ignore this.
                     </p>
                   </div>
@@ -182,6 +214,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
+  await signInWithPopup(auth, provider);
+}
+
+export async function loginWithFacebook() {
+  const provider = new FacebookAuthProvider();
+  await signInWithPopup(auth, provider);
+}
+
+export async function loginWithApple() {
+  const provider = new OAuthProvider("apple.com");
   await signInWithPopup(auth, provider);
 }
 

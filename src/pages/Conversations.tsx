@@ -8,7 +8,7 @@ import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 const DUMMY_CONVOS = [
   { id: "1", property: "888 Bel Air Rd, Los Angeles", lang: "English", duration: "4m 12s", qs: 8, date: 1746906300000 },
   { id: "2", property: "15 Central Park West, NY", lang: "Spanish", duration: "1m 45s", qs: 2, date: Date.now() - 1000 * 60 * 60 * 2 },
-  { id: "3", property: "123 VertexAgent Lane", lang: "French", duration: "6m 30s", qs: 15, date: Date.now() - 1000 * 60 * 60 * 5 },
+  { id: "3", property: "123 Open House Lane", lang: "French", duration: "6m 30s", qs: 15, date: Date.now() - 1000 * 60 * 60 * 5 },
   { id: "4", property: "888 Bel Air Rd, Los Angeles", lang: "English", duration: "2m 10s", qs: 4, date: Date.now() - 1000 * 60 * 60 * 24 },
   { id: "5", property: "15 Central Park West, NY", lang: "German", duration: "8m 55s", qs: 22, date: Date.now() - 1000 * 60 * 60 * 48 },
 ];

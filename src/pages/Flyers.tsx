@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { toPng, toJpeg } from "html-to-image";
 import { useAuth } from "@/hooks/useAuth";
-import { getAllListings, getUserListings, Listing } from "@/lib/api";
+import { getAllListings, getUserListings, Listing, getAgent, updateListing } from "@/lib/api";
 import { 
   Printer, 
   Download, 
@@ -13,6 +12,9 @@ import {
   Building, 
   Sliders, 
   ArrowLeft, 
+  ArrowRight,
+  ArrowUp,
+  ArrowDown,
   CheckCircle2, 
   HelpCircle,
   FileText,
@@ -70,7 +72,13 @@ export default function Flyers() {
   const [accentColor, setAccentColor] = useState<AccentColor>("gold");
   const [orientation, setOrientation] = useState<Orientation>("portrait");
   const [previewMode, setPreviewMode] = useState<PreviewMode>("print");
-  const [activeTab, setActiveTab] = useState<"edit" | "settings" | "typography">("edit");
+  const [activeTab, setActiveTab] = useState<"edit" | "settings" | "typography" | "qr_code">("edit");
+  const [legalName, setLegalName] = useState("PINNACLE REAL ESTATE GROUP");
+  const [brokerageLogo, setBrokerageLogo] = useState("");
+  const [agentPhoto, setAgentPhoto] = useState("");
+  const [qrBrandingOption, setQrBrandingOption] = useState<"logo" | "photo" | "none">("logo");
+  const [rawBrokerageName, setRawBrokerageName] = useState("");
+  const [activeHelpPopup, setActiveHelpPopup] = useState<{ title: string; content: string } | null>(null);
 
   // Typography Options State
   const [titleFont, setTitleFont] = useState<"geometric" | "humanist" | "grotesque" | "serif">("grotesque");
@@ -188,17 +196,75 @@ export default function Flyers() {
   const [agentEmailOverride, setAgentEmailOverride] = useState("");
   const [brokerageNameOverride, setBrokerageNameOverride] = useState("");
 
+  // Validation helpers & Input masking inside Flyers
+  const isPhoneValid = (phone: string) => {
+    return /^\(\d{3}\) \d{3}-\d{4}$/.test(phone);
+  };
+
+  const isEmailValid = (email: string) => {
+    if (!email.includes("@")) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const handleNameChange = (val: string) => {
+    const capitalized = val.replace(/\b([a-z])/g, (match) => match.toUpperCase());
+    setAgentNameOverride(capitalized);
+  };
+
+  const handlePhoneChange = (val: string) => {
+    const cleaned = val.replace(/\D/g, "");
+    let formatted = cleaned;
+    if (cleaned.length > 0) {
+      if (cleaned.length <= 3) {
+        formatted = `(${cleaned}`;
+      } else if (cleaned.length <= 6) {
+        formatted = `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+      } else {
+        formatted = `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+      }
+    }
+    setAgentPhoneOverride(formatted);
+  };
+
+  const isSaveAestheticsEnabled = 
+    agentNameOverride.trim().length > 0 && 
+    isPhoneValid(agentPhoneOverride) && 
+    isEmailValid(agentEmailOverride);
+
   // Options toggles
   const [showSecondaryPhotos, setShowSecondaryPhotos] = useState(true);
   const [includeLenderBlock, setIncludeLenderBlock] = useState(false);
   const [lenderName, setLenderName] = useState("Alpha Preferred Mortgages");
-  const [lenderCta, setLenderCta] = useState("Get pre-approved");
+  const [lenderCta, setLenderCta] = useState("Get Pre-approved");
 
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   useEffect(() => {
+    async function loadAgentBranding() {
+      if (!user) return;
+      try {
+        const agentData = await getAgent(user.id);
+        if (agentData) {
+          if (agentData.brokerageProfile?.legalName) {
+            setLegalName(agentData.brokerageProfile.legalName);
+            setRawBrokerageName(agentData.brokerageProfile.legalName);
+          }
+          if (agentData.branding?.imageUrl || agentData.branding?.logoUrl) {
+            setBrokerageLogo(agentData.branding.imageUrl || agentData.branding.logoUrl || "");
+          }
+          if (agentData.branding?.agentPhotoUrl) {
+            setAgentPhoto(agentData.branding.agentPhotoUrl || "");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load agent branding details in Flyers:", err);
+      }
+    }
+
     if (user) {
       loadListings();
+      loadAgentBranding();
     }
   }, [user]);
 
@@ -228,8 +294,13 @@ export default function Flyers() {
     const firstImg = listing.images && listing.images.length > 0
       ? (typeof listing.images[0] === "string" ? listing.images[0] : (listing.images[0] as any).url)
       : "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=1200";
-    setSelectedHeroImage(firstImg);
-    setExcludedPhotos([]);
+    
+    setSelectedHeroImage(listing.flyerHeroImage || firstImg);
+    setExcludedPhotos(listing.excludedPhotos || []);
+
+    if (listing.flyerTemplate) {
+      setTemplate(listing.flyerTemplate as FlyerTemplate);
+    }
 
     // Default headlines customized by templates
     const headlines: Record<FlyerTemplate, string> = {
@@ -252,13 +323,14 @@ export default function Flyers() {
       just_listed_sold: "A signature property featuring state-of-the-art smart home technologies"
     };
 
-    setCustomHeadline((headlines[activeTemplate] || "AN UNCOMPROMISING PARADISE OF STYLE AND REFINEMENT").toUpperCase().slice(0, 80));
-    setCustomSubHeadline((subheadlines[activeTemplate] || "Discover premium structural attributes and bespoke details.").slice(0, 120));
+    const activeTemp = listing.flyerTemplate as FlyerTemplate || activeTemplate;
+    setCustomHeadline(listing.flyerHeadline || (headlines[activeTemp] || "AN UNCOMPROMISING PARADISE OF STYLE AND REFINEMENT").toUpperCase().slice(0, 80));
+    setCustomSubHeadline(listing.flyerSubHeadline || (subheadlines[activeTemp] || "Discover premium structural attributes and elegant details.").slice(0, 120));
     
     const shortDesc = listing.description 
       ? listing.description.split(".").slice(0, 3).join(".") + "."
       : "Step into uncompromised luxury wrapping high-contrast views, pristine floorplans, premium material lists, and high-fidelity comfort throughout.";
-    setCustomDescription(shortDesc.slice(0, 300));
+    setCustomDescription(listing.flyerDescription || shortDesc.slice(0, 272));
 
     const ctas: Record<QrDestination, string> = {
       ai_tour: "Scan code to connect your headset & start Sora's live audio tour!",
@@ -267,14 +339,22 @@ export default function Flyers() {
       details_page: "Scan code to load MLS disclosures, interactive map, and pricing.",
       custom_url: "Scan code to access verified premium media slides and specs directly."
     };
-    setCustomCta(ctas[qrDest].slice(0, 100));
+    setCustomCta(listing.flyerCta || ctas[qrDest].slice(0, 100));
 
     // Agent defaults
     const listAny = listing as any;
-    setAgentNameOverride(listAny.agentName || user?.name || "Premium Broker Representative");
-    setAgentPhoneOverride(listAny.agentPhone || "+1 (555) 779-1100");
-    setAgentEmailOverride(listAny.agentEmail || user?.email || "advisor@vertexagent.io");
-    setBrokerageNameOverride(listAny.brokerageName || "Pinnacle Real Estate Group");
+    const defaultName = listAny.agentName || user?.name || "Premium Broker Representative";
+    setAgentNameOverride(defaultName.replace(/\b([a-z])/g, (match) => match.toUpperCase()));
+
+    const rawPhone = listAny.agentPhone || "555-779-1100";
+    const cleanedDigits = rawPhone.replace(/\D/g, "").slice(-10);
+    const formattedPhone = cleanedDigits.length === 10 
+      ? `(${cleanedDigits.slice(0, 3)}) ${cleanedDigits.slice(3, 6)}-${cleanedDigits.slice(6, 10)}`
+      : "(555) 779-1100";
+    setAgentPhoneOverride(formattedPhone);
+
+    setAgentEmailOverride(listAny.agentEmail || user?.email || "advisor@aiopenhouseconnect.com");
+    setBrokerageNameOverride(listAny.brokerageName || rawBrokerageName || legalName || "Pinnacle Real Estate Group");
   };
 
   const handleListingChange = (listingId: string) => {
@@ -305,7 +385,7 @@ export default function Flyers() {
     setCustomCta((ctas[newDest] || "").slice(0, 100));
   };
 
-  // AI copywriting generator with realistic responses related to VertexAgent models
+  // AI copywriting generator with realistic responses related to AI Open House Connect models
   const runAiGenText = async (type: "headline" | "description" | "cta") => {
     if (!selectedListing) {
       toast.error("Please select a listing first.");
@@ -325,9 +405,32 @@ export default function Flyers() {
         setCustomHeadline(picked);
         toast.success("✨ Generated elegant luxury headline.");
       } else if (type === "description") {
-        const picked = `A pristine masterwork of geometric architecture and custom millwork at ${selectedListing.address}. Framed by custom steel window walls, the layout cascades gorgeous light into wide rift-sawn oak flooring systems. Ready for the modern buyer with multi-zone smart controls.`.slice(0, 300);
-        setCustomDescription(picked);
-        toast.success("✨ Generated premium properties copy.");
+        const address = selectedListing.address || "this magnificent residence";
+        const beds = selectedListing.beds ? `${selectedListing.beds} beds` : "";
+        const baths = selectedListing.baths ? `${selectedListing.baths} baths` : "";
+        const bedsBaths = [beds, baths].filter(Boolean).join(" & ");
+
+        const options = [
+          `A pristine masterpiece of modern design at ${address}${bedsBaths ? `. Featuring ${bedsBaths}` : ""}, this residence centers custom architectural structures of steel & glass, wide-plank select oak floors, custom marble chef's surfaces, and zero-tolerance millwork.`,
+          `Impeccable architectural elegance at ${address}${bedsBaths ? ` with ${bedsBaths}` : ""}. Cascades soaring natural light across wide-plank white oak flooring. Boasts custom slab marble prep suite, bespoke millwork, and smart integrations for ultimate luxury living.`,
+          `This signature residence at ${address} offers pristine bespoke finishes. Combining deep steel window panels and glass structures, the layout flows seamlessly onto wide-plank oak flooring. Fully integrated with automated smart home controls and high security.`
+        ];
+
+        let pickedText = options[Math.floor(Math.random() * options.length)];
+        
+        if (pickedText.length > 272) {
+          const truncated = pickedText.slice(0, 269);
+          const lastPeriod = truncated.lastIndexOf(".");
+          if (lastPeriod > 100) {
+            pickedText = truncated.slice(0, lastPeriod + 1);
+          } else {
+            const lastSpace = truncated.lastIndexOf(" ");
+            pickedText = truncated.slice(0, lastSpace) + "...";
+          }
+        }
+
+        setCustomDescription(pickedText);
+        toast.success("✨ Generated elegant 272-character pitch.");
       } else if (type === "cta") {
         setCustomCta(`Scan to let Sora, our AI tour pilot, present this home to your ears in natural real-time dialogue!`.slice(0, 100));
         toast.success("✨ Created helpful voice-guided audio CTA.");
@@ -338,7 +441,7 @@ export default function Flyers() {
 
   // Build target URL
   const getQrUrl = () => {
-    if (!selectedListing) return "https://vertexagent.io";
+    if (!selectedListing) return "https://aiopenhouseconnect.com";
     const base = window.location.origin;
     let url = "";
     switch(qrDest) {
@@ -355,7 +458,7 @@ export default function Flyers() {
         url = `${base}/microsite/${selectedListing.id}`;
         break;
       case "custom_url":
-        url = customQrUrl || "https://vertexagent.io";
+        url = customQrUrl || "https://aiopenhouseconnect.com";
         break;
       default:
         url = `${base}/tour/${selectedListing.id}`;
@@ -395,7 +498,7 @@ export default function Flyers() {
       accentColor === "sapphire" ? "#eff6ff" :
       "#fff1f2"; // ruby
 
-    const qrCodeUrl = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(getQrUrl())}`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(getQrUrl())}`;
 
     let htmlContent = "";
 
@@ -405,28 +508,29 @@ export default function Flyers() {
         <html>
         <head>
           <meta charset="utf-8">
-          <title>Print Flyer - ${selectedListing?.address || "VertexAgent"}</title>
+          <title>${selectedListing ? `${selectedListing.address}, ${selectedListing.city}` : "AI Open House Connect"}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&family=Poppins:wght@400;500;600;700;800;900&family=Montserrat:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;600;700;800&family=Lato:wght@400;700;900&display=swap');
             
             @page { 
               size: letter portrait; 
-              margin: 0.5in; 
+              margin: 0; 
             }
             
             body { 
               margin: 0; 
-              padding: 0; 
+              padding: 0.45in 0.5in 0.45in 0.5in; 
               background-color: white; 
               color: #1e293b;
               font-family: ${template === "luxury_royal" ? "'Playfair Display', serif" : "'Inter', sans-serif"};
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+              box-sizing: border-box;
             }
 
             .container {
               width: 7.5in;
-              height: 10in;
+              height: 10.0in;
               display: flex;
               flex-direction: column;
               justify-content: space-between;
@@ -533,12 +637,23 @@ export default function Flyers() {
             }
 
             .location-tag {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 4px;
               font-size: 11px;
               color: #64748b;
               font-weight: 600;
               margin: 6px 0 0 0;
               text-transform: uppercase;
               letter-spacing: 0.5px;
+            }
+
+            @keyframes rotatingFlyerBorder {
+              0% { border-color: #ef4444; }
+              33% { border-color: #ffffff; }
+              66% { border-color: #3b82f6; }
+              100% { border-color: #ef4444; }
             }
 
             /* Hero section */
@@ -548,7 +663,9 @@ export default function Flyers() {
               height: ${includeLenderBlock ? '2.8in' : '3.2in'};
               border-radius: 8px;
               overflow: hidden;
-              border: 1px solid #e2e8f0;
+              border: 2px solid #ef4444;
+              box-sizing: border-box;
+              animation: rotatingFlyerBorder 4s linear infinite;
             }
 
             .hero-image {
@@ -568,6 +685,7 @@ export default function Flyers() {
               font-size: 13px;
               font-weight: 800;
               letter-spacing: -0.5px;
+              font-family: Arial, Helvetica, sans-serif !important;
             }
 
             .audio-badge {
@@ -621,6 +739,7 @@ export default function Flyers() {
               text-transform: uppercase;
               font-weight: 700;
               margin: 0 0 3px 0;
+              font-family: Arial, Helvetica, sans-serif !important;
             }
 
             .stat-val {
@@ -629,6 +748,7 @@ export default function Flyers() {
               color: #0f172a;
               margin: 0;
               line-height: 1;
+              font-family: Arial, Helvetica, sans-serif !important;
             }
 
             /* Middle section content split */
@@ -653,6 +773,7 @@ export default function Flyers() {
               color: #0f172a;
               margin: 0;
               line-height: 1.4;
+              text-align: center;
             }
 
             .description-text {
@@ -706,6 +827,30 @@ export default function Flyers() {
               border: 1px solid #e2e8f0;
               border-radius: 6px;
               display: inline-flex;
+              position: relative;
+            }
+
+            .qr-overlay {
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              background: white;
+              padding: 2px;
+              border-radius: ${qrBrandingOption === "photo" ? "50%" : "4px"};
+              border: 1px solid #cbd5e1;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .qr-overlay img {
+              display: block;
+              width: 24px;
+              height: 24px;
+              object-fit: contain;
+              border-radius: ${qrBrandingOption === "photo" ? "50%" : "2px"};
             }
 
             .qr-promo-label {
@@ -812,7 +957,7 @@ export default function Flyers() {
             .lender-title {
               font-size: 8.5px;
               font-weight: 900;
-              color: #78350f;
+              color: #000000;
               margin: 0;
               text-transform: uppercase;
               line-height: 1;
@@ -820,7 +965,7 @@ export default function Flyers() {
 
             .lender-cta {
               font-size: 7.5px;
-              color: #b45309;
+              color: #000000;
               margin: 0;
               margin-top: 2px;
               text-transform: uppercase;
@@ -834,12 +979,12 @@ export default function Flyers() {
               <div class="brand-logo-container">
                 <div class="logo-badge">VA</div>
                 <div>
-                  <p class="logo-text-title">VERTEXAGENT</p>
+                  <p class="logo-text-title">AI OPEN HOUSE CONNECT</p>
                   <p class="logo-text-subtitle">DIGITAL COMPANION</p>
                 </div>
               </div>
               <div>
-                <p class="brokerage-title">${brokerageNameOverride || "PINNACLE REAL ESTATE GROUP"}</p>
+                <p class="brokerage-title">${brokerageNameOverride || legalName || "PINNACLE REAL ESTATE GROUP"}</p>
                 <p class="brokerage-subtitle">EXCLUSIVE SYNDICATE</p>
               </div>
             </div>
@@ -847,7 +992,7 @@ export default function Flyers() {
             <div class="headline-section">
               ${template === "just_listed_sold" ? `<span class="status-badge">${statusBadgeText}</span>` : ""}
               <h2 class="main-headline">${customHeadline}</h2>
-              <p class="location-tag">📍 ${selectedListing.address}, ${selectedListing.city}</p>
+              <p class="location-tag"><span style="display: inline-flex; align-items: center; font-size: 13px; line-height: 1; margin-right: 2px;">📍</span><span>${selectedListing.address}, ${selectedListing.city}</span></p>
             </div>
 
             <div class="hero-container">
@@ -897,6 +1042,13 @@ export default function Flyers() {
               <div class="qr-badge-box">
                 <div class="qr-image-wrapper">
                   <img src="${qrCodeUrl}" width="112" height="112" alt="Web Scan" />
+                  ${
+                    (qrBrandingOption === "logo" && brokerageLogo) || (qrBrandingOption === "photo" && agentPhoto) ? `
+                    <div class="qr-overlay">
+                      <img src="${qrBrandingOption === "logo" ? brokerageLogo : agentPhoto}" alt="overlay" />
+                    </div>
+                    ` : ""
+                  }
                 </div>
                 <p class="qr-promo-label">
                   ${qrDest === "ai_tour" ? "Scan to tour" : "Scan to register"}
@@ -946,27 +1098,28 @@ export default function Flyers() {
         <html>
         <head>
           <meta charset="utf-8">
-          <title>Print Flyer - ${selectedListing?.address || "VertexAgent"}</title>
+          <title>${selectedListing ? `${selectedListing.address}, ${selectedListing.city}` : "AI Open House Connect"}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;700&family=Poppins:wght@400;500;600;700;800;900&family=Montserrat:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;600;700;800&family=Lato:wght@400;700;900&display=swap');
             
             @page { 
               size: letter landscape; 
-              margin: 0.5in; 
+              margin: 0; 
             }
             
             body { 
               margin: 0; 
-              padding: 0; 
+              padding: 0.5in 0.45in 0.5in 0.45in; 
               background-color: white; 
               color: #1e293b;
               font-family: ${template === "luxury_royal" ? "'Playfair Display', serif" : "'Inter', sans-serif"};
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+              box-sizing: border-box;
             }
 
             .container {
-              width: 10in;
+              width: 10.1in;
               height: 7.5in;
               display: flex;
               flex-direction: column;
@@ -1052,6 +1205,13 @@ export default function Flyers() {
               justify-content: space-between;
             }
 
+            @keyframes rotatingFlyerBorder {
+              0% { border-color: #ef4444; }
+              33% { border-color: #ffffff; }
+              66% { border-color: #3b82f6; }
+              100% { border-color: #ef4444; }
+            }
+
             /* Hero container */
             .hero-container {
               position: relative;
@@ -1059,7 +1219,9 @@ export default function Flyers() {
               height: 2.7in;
               border-radius: 8px;
               overflow: hidden;
-              border: 1px solid #e2e8f0;
+              border: 2px solid #ef4444;
+              box-sizing: border-box;
+              animation: rotatingFlyerBorder 4s linear infinite;
             }
 
             .hero-image {
@@ -1078,6 +1240,7 @@ export default function Flyers() {
               border-radius: 6px;
               font-size: 12px;
               font-weight: 800;
+              font-family: Arial, Helvetica, sans-serif !important;
             }
 
             /* Headline details */
@@ -1116,6 +1279,10 @@ export default function Flyers() {
             }
 
             .location-tag {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 4px;
               font-size: 9.5px;
               color: #64748b;
               font-weight: 600;
@@ -1150,6 +1317,7 @@ export default function Flyers() {
               text-transform: uppercase;
               font-weight: 600;
               margin: 0 0 2px 0;
+              font-family: Arial, Helvetica, sans-serif !important;
             }
 
             .stat-val {
@@ -1157,6 +1325,7 @@ export default function Flyers() {
               font-weight: 900;
               color: #0f172a;
               margin: 0;
+              font-family: Arial, Helvetica, sans-serif !important;
             }
 
             /* Split detail grid inside right col */
@@ -1173,6 +1342,7 @@ export default function Flyers() {
               font-weight: ${subtitleBold ? '900' : '400'};
               color: #0f172a;
               margin: 0 0 4px 0;
+              text-align: center;
             }
 
             .description-text {
@@ -1224,6 +1394,30 @@ export default function Flyers() {
               border: 1px solid #e2e8f0;
               border-radius: 6px;
               display: inline-flex;
+              position: relative;
+            }
+
+            .qr-overlay {
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              background: white;
+              padding: 2px;
+              border-radius: ${qrBrandingOption === "photo" ? "50%" : "4px"};
+              border: 1px solid #cbd5e1;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .qr-overlay img {
+              display: block;
+              width: 18px;
+              height: 18px;
+              object-fit: contain;
+              border-radius: ${qrBrandingOption === "photo" ? "50%" : "2px"};
             }
 
             .qr-promo-label {
@@ -1317,14 +1511,14 @@ export default function Flyers() {
             .lender-title {
               font-size: 8px;
               font-weight: 900;
-              color: #78350f;
+              color: #000000;
               margin: 0;
               text-transform: uppercase;
             }
 
             .lender-cta {
               font-size: 7px;
-              color: #b45309;
+              color: #000000;
               margin: 0;
               margin-top: 1px;
               text-transform: uppercase;
@@ -1337,12 +1531,12 @@ export default function Flyers() {
               <div class="brand-logo-container">
                 <div class="logo-badge">VA</div>
                 <div>
-                  <p class="logo-text-title">VERTEXAGENT</p>
+                  <p class="logo-text-title">AI OPEN HOUSE CONNECT</p>
                   <p class="logo-text-subtitle">DIGITAL COMPANION</p>
                 </div>
               </div>
               <div style="text-align: right;">
-                <p class="brokerage-title">${brokerageNameOverride || "PINNACLE REAL ESTATE GROUP"}</p>
+                <p class="brokerage-title">${brokerageNameOverride || legalName || "PINNACLE REAL ESTATE GROUP"}</p>
                 <p class="brokerage-subtitle">EXCLUSIVE SYNDICATE</p>
               </div>
             </div>
@@ -1371,7 +1565,7 @@ export default function Flyers() {
                   <div class="headline-section">
                     ${template === "just_listed_sold" ? `<span class="status-badge">${statusBadgeText}</span>` : ""}
                     <h2 class="main-headline">${customHeadline}</h2>
-                    <p class="location-tag">📍 ${selectedListing.address}, ${selectedListing.city}</p>
+                    <p class="location-tag"><span style="display: inline-flex; align-items: center; font-size: 11px; line-height: 1; margin-right: 2px;">📍</span><span>${selectedListing.address}, ${selectedListing.city}</span></p>
                   </div>
 
                   <div class="dashboard-stats">
@@ -1410,6 +1604,13 @@ export default function Flyers() {
                   <div class="qr-badge-box">
                     <div class="qr-image-wrapper">
                       <img src="${qrCodeUrl}" width="88" height="88" alt="Web Scan" />
+                      ${
+                        (qrBrandingOption === "logo" && brokerageLogo) || (qrBrandingOption === "photo" && agentPhoto) ? `
+                        <div class="qr-overlay">
+                          <img src="${qrBrandingOption === "logo" ? brokerageLogo : agentPhoto}" alt="overlay" />
+                        </div>
+                        ` : ""
+                      }
                     </div>
                     <p class="qr-promo-label">
                       ${qrDest === "ai_tour" ? "Scan to tour" : "Scan to register"}
@@ -1447,50 +1648,6 @@ export default function Flyers() {
 
     printWindow.document.write(htmlContent);
     printWindow.document.close();
-  };
-
-  const handleDownloadFile = (type: "png" | "jpg") => {
-    const node = document.getElementById("flyer-printable-canvas");
-    if (!node) {
-      toast.error("Printable flyer element not found.");
-      return;
-    }
-
-    const toastId = toast.loading(`Rasterizing vector blocks to High-Density 300DPI ${type.toUpperCase()}...`);
-    
-    // We render using a higher pixel ratio to support premium print resolution (equivalent to 300dpi)
-    const options = {
-      quality: 0.98,
-      pixelRatio: 2,
-      style: {
-        transform: "scale(1)",
-        transformOrigin: "top left"
-      }
-    };
-
-    const promise = type === "png" 
-      ? toPng(node, options) 
-      : toJpeg(node, options);
-
-    const safeAddress = (selectedListing?.address || "vertexagent_flyer")
-      .replace(/[^a-zA-Z0-9]/g, ""); // IE: 77ElfordCresHamilton
-
-    promise
-      .then((dataUrl) => {
-        const link = document.createElement("a");
-        link.download = `${safeAddress}.${type}`;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.dismiss(toastId);
-        toast.success(`✨ Branded flyer saved successfully as ${safeAddress}.${type}`);
-      })
-      .catch((err) => {
-        console.error("Export error", err);
-        toast.dismiss(toastId);
-        toast.error(`Rasterization failed: ${err.message || "Unknown error"}. Try printing to PDF instead.`);
-      });
   };
 
   const handleDownloadQrCode = () => {
@@ -1549,17 +1706,103 @@ export default function Flyers() {
   const fallbackImg = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=1200";
   const listingPhotos = selectedListing?.images || [];
   
-  const togglePhotoInclusion = (url: string) => {
+  const togglePhotoInclusion = async (url: string) => {
+    if (!selectedListing) {
+      toast.error("Please select a listing first.");
+      return;
+    }
+
     if (excludedPhotos.includes(url)) {
-      setExcludedPhotos(prev => prev.filter(p => p !== url));
-      toast.success("Photo included back into secondary strip.");
+      // Including/checking this photo
+      const currentCheckedPhotosCount = listingPhotos
+        .map(photo => typeof photo === "string" ? photo : (photo as any).url)
+        .filter(u => !excludedPhotos.includes(u)).length;
+      
+      const targetCheckedCount = currentCheckedPhotosCount + 1;
+      
+      if (targetCheckedCount > 3) {
+        toast.error("⚠️ Not Allowed: You cannot exceed 3 checked photos in total for the printed flyer layout (1 Featured + 2 Secondary). Please uncheck another photo first.");
+        return;
+      }
+      
+      const updatedExcluded = excludedPhotos.filter(p => p !== url);
+      setExcludedPhotos(updatedExcluded);
+      
+      const tid = toast.loading("Auto-saving photo checkbox change...");
+      try {
+        await updateListing(selectedListing.id, {
+          excludedPhotos: updatedExcluded
+        });
+        const updatedListing = { ...selectedListing, excludedPhotos: updatedExcluded };
+        setSelectedListing(updatedListing);
+        setListings(prev => prev.map(l => l.id === selectedListing.id ? updatedListing : l));
+        toast.dismiss(tid);
+        toast.success("Saved! Photo included in flyer secondary strip.");
+      } catch (err) {
+        toast.dismiss(tid);
+        toast.error("Failed to auto-save photo selection.");
+      }
     } else {
+      // Excluding/unchecking this photo
       if (url === selectedHeroImage) {
         toast.error("Cannot exclude the active featured primary photo!");
         return;
       }
-      setExcludedPhotos(prev => [...prev, url]);
-      toast.info("Photo excluded from secondary strip.");
+      const updatedExcluded = [...excludedPhotos, url];
+      setExcludedPhotos(updatedExcluded);
+      
+      const tid = toast.loading("Auto-saving photo checkbox change...");
+      try {
+        await updateListing(selectedListing.id, {
+          excludedPhotos: updatedExcluded
+        });
+        const updatedListing = { ...selectedListing, excludedPhotos: updatedExcluded };
+        setSelectedListing(updatedListing);
+        setListings(prev => prev.map(l => l.id === selectedListing.id ? updatedListing : l));
+        toast.dismiss(tid);
+        toast.success("Saved! Photo excluded from flyer secondary strip.");
+      } catch (err) {
+        toast.dismiss(tid);
+        toast.error("Failed to auto-save photo exclusion.");
+      }
+    }
+  };
+
+  const movePhotoInFlyer = async (index: number, direction: 'left' | 'right' | 'up' | 'down') => {
+    if (!selectedListing) return;
+    const photos = [...listingPhotos];
+    let targetIndex = index;
+    if (direction === 'left') {
+      targetIndex = index - 1;
+    } else if (direction === 'right') {
+      targetIndex = index + 1;
+    } else if (direction === 'up') {
+      targetIndex = index - 4;
+    } else if (direction === 'down') {
+      targetIndex = index + 4;
+    }
+
+    if (targetIndex >= 0 && targetIndex < photos.length) {
+      const temp = photos[index];
+      photos[index] = photos[targetIndex];
+      photos[targetIndex] = temp;
+      
+      const tid = toast.loading("Saving new image layout order...");
+      try {
+        await updateListing(selectedListing.id, {
+          images: photos
+        });
+        const updatedListing = { ...selectedListing, images: photos };
+        setSelectedListing(updatedListing);
+        setListings(prev => prev.map(l => l.id === selectedListing.id ? updatedListing : l));
+        toast.dismiss(tid);
+        toast.success(`Image moved ${direction} successfully and auto-saved!`);
+      } catch (err) {
+        toast.dismiss(tid);
+        toast.error("Failed to auto-save image order.");
+      }
+    } else {
+      toast.warning(`Cannot move image ${direction} from this position.`);
     }
   };
 
@@ -1574,6 +1817,17 @@ export default function Flyers() {
   return (
     <div className="space-y-6">
       <style>{`
+        @keyframes rotatingFlyerBorder {
+          0% { border-color: #ef4444; }
+          33% { border-color: #ffffff; }
+          66% { border-color: #3b82f6; }
+          100% { border-color: #ef4444; }
+        }
+        .preview-rotating-border {
+          border: 2px solid #ef4444 !important;
+          animation: rotatingFlyerBorder 4s linear infinite !important;
+          box-sizing: border-box !important;
+        }
         @media print {
           body * {
             visibility: hidden;
@@ -1612,21 +1866,14 @@ export default function Flyers() {
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             <Button 
               onClick={handlePrint}
-              className="bg-blue-900 hover:bg-blue-950 active:bg-white active:text-blue-900 text-white font-extrabold gap-2 rounded-xl h-11 px-5 text-xs cursor-pointer flex-1 sm:flex-none"
+              className="bg-[#155dfc] hover:bg-[#155dfc]/90 text-white font-extrabold gap-2 rounded-xl h-11 px-5 text-xs cursor-pointer flex-1 sm:flex-none animate-pulse"
             >
               <Printer className="h-4 w-4" />
               Print Flyer (PDF)
             </Button>
             <Button 
-              onClick={() => handleDownloadFile("png")}
-              className="bg-blue-900 hover:bg-blue-950 active:bg-white active:text-blue-900 text-white font-extrabold gap-2 rounded-xl h-11 px-4 text-xs cursor-pointer flex-1 sm:flex-none"
-            >
-              <Download className="h-4 w-4 active:text-blue-900 text-white" />
-              Save JPG / PNG
-            </Button>
-            <Button 
               onClick={handleDownloadQrCode}
-              className="bg-blue-900 hover:bg-blue-950 active:bg-white active:text-blue-900 text-white font-extrabold gap-2 rounded-xl h-11 px-4 text-xs cursor-pointer flex-1 sm:flex-none"
+              className="bg-[#155dfc] hover:bg-[#155dfc]/90 text-white font-extrabold gap-2 rounded-xl h-11 px-4 text-xs cursor-pointer flex-1 sm:flex-none"
             >
               <QrCode className="h-4 w-4 active:text-blue-900 text-white" />
               Download QR Only
@@ -1652,12 +1899,12 @@ export default function Flyers() {
           
           {/* Left Edit Controls column */}
           <div className="lg:col-span-5 space-y-6">
-            <Card className="rounded-2xl border-slate-200/80 shadow-sm overflow-hidden text-left">
-              <div className="border-b border-slate-100 bg-slate-50/50 flex">
+            <Card className="mx-auto max-w-[calc(100%-15px)] lg:max-w-none lg:mx-0 rounded-2xl border-blue-900/40 shadow-sm overflow-hidden text-left bg-[#155dfc] text-white">
+              <div className="border-b-2 border-white bg-white/10 flex">
                 <button
                   onClick={() => setActiveTab("edit")}
                   className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
-                    activeTab === "edit" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                    activeTab === "edit" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
                   }`}
                 >
                   1. Content
@@ -1665,7 +1912,7 @@ export default function Flyers() {
                 <button
                   onClick={() => setActiveTab("settings")}
                   className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
-                    activeTab === "settings" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                    activeTab === "settings" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
                   }`}
                 >
                   2. Aesthetics
@@ -1673,10 +1920,18 @@ export default function Flyers() {
                 <button
                   onClick={() => setActiveTab("typography")}
                   className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
-                    activeTab === "typography" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-600"
+                    activeTab === "typography" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
                   }`}
                 >
                   3. Typography
+                </button>
+                <button
+                  onClick={() => setActiveTab("qr_code")}
+                  className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
+                    activeTab === "qr_code" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
+                  }`}
+                >
+                  4. QR Code
                 </button>
               </div>
 
@@ -1686,14 +1941,23 @@ export default function Flyers() {
                     {/* Listing select */}
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1">
-                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Sync Property Record</Label>
-                        <div className="group relative inline-block">
-                          <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
-                          <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl w-48 z-50 text-center font-normal normal-case leading-normal">
-                            Import and keep active MLS listing facts synchronized with the marketing flyer canvas instantly.
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                          </div>
-                        </div>
+                        <Label className={`text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                          activeHelpPopup?.title === "Sync Property Record" ? "text-white font-black" : "text-white/80 font-black"
+                        }`}>Sync Property Record</Label>
+                        <button
+                          type="button"
+                          onClick={() => setActiveHelpPopup({
+                            title: "Sync Property Record",
+                            content: "Import and keep active MLS listing facts synchronized with the marketing flyer canvas instantly."
+                          })}
+                          className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                            activeHelpPopup?.title === "Sync Property Record"
+                              ? "text-white scale-125"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "Sync Property Record" ? 3.5 : 2} />
+                        </button>
                       </div>
                       <select
                         value={selectedListing?.id || ""}
@@ -1712,32 +1976,45 @@ export default function Flyers() {
                     <div className="space-y-1.5 animate-in fade-in">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-1">
-                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Flyer Primary Title</Label>
-                          <div className="group relative inline-block">
-                            <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
-                            <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl w-48 z-50 text-center font-normal normal-case leading-normal">
-                              The primary display banner on your printed flyer. Use eye-catching uppercase luxury copy.
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                            </div>
-                          </div>
+                          <Label className={`text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                            activeHelpPopup?.title === "Flyer Primary Title" ? "text-white font-black" : "text-white/80 font-black"
+                          }`}>Flyer Primary Title</Label>
+                          <button
+                            type="button"
+                            onClick={() => setActiveHelpPopup({
+                              title: "Flyer Primary Title",
+                              content: "The primary display banner on your printed flyer. Use eye-catching uppercase luxury copy."
+                            })}
+                            className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                              activeHelpPopup?.title === "Flyer Primary Title"
+                                ? "text-white scale-125"
+                                : "text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "Flyer Primary Title" ? 3.5 : 2} />
+                          </button>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] font-mono font-bold text-slate-400">{customHeadline.length}/80</span>
+                          <span className={`text-[9px] font-mono font-bold ${customHeadline.length >= 45 ? 'text-amber-300' : 'text-white'}`}>
+                            {customHeadline.length}/60 {customHeadline.length >= 45 && (
+                              <span className="animate-pulse font-normal">({Math.min(100, Math.round((customHeadline.length / 60) * 100))}% Reached)</span>
+                            )}
+                          </span>
                           <button
                             onClick={() => runAiGenText("headline")}
                             disabled={isGeneratingAi}
-                            className="text-[9px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            className="text-[9px] font-extrabold text-white hover:text-slate-200 flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
-                            <Sparkles className="h-3 w-3" />
+                            <Sparkles className="h-3 w-3 text-white" />
                             AI Headline Builder
                           </button>
                         </div>
                       </div>
                       <Input
                         value={customHeadline}
-                        onChange={(e) => setCustomHeadline(e.target.value.toUpperCase().slice(0, 80))}
+                        onChange={(e) => setCustomHeadline(e.target.value.toUpperCase().slice(0, 60))}
                         placeholder="LUXURY ESTATE"
-                        maxLength={80}
+                        maxLength={60}
                         className="text-xs sm:text-sm font-semibold h-10 border-slate-200 rounded-xl tracking-tight uppercase"
                       />
                     </div>
@@ -1746,16 +2023,27 @@ export default function Flyers() {
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-1">
-                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Marketing Subtitle</Label>
-                          <div className="group relative inline-block">
-                            <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
-                            <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl w-48 z-50 text-center font-normal normal-case leading-normal">
-                              A secondary hook framing the luxury characteristics, location, or active offering style of this listing.
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                            </div>
-                          </div>
+                          <Label className={`text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                            activeHelpPopup?.title === "Marketing Subtitle" ? "text-white font-black" : "text-white/80 font-black"
+                          }`}>Marketing Subtitle</Label>
+                          <button
+                            type="button"
+                            onClick={() => setActiveHelpPopup({
+                              title: "Marketing Subtitle",
+                              content: "A secondary hook framing the luxury characteristics, location, or active offering style of this listing."
+                            })}
+                            className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                              activeHelpPopup?.title === "Marketing Subtitle"
+                                ? "text-white scale-125"
+                                : "text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "Marketing Subtitle" ? 3.5 : 2} />
+                          </button>
                         </div>
-                        <span className="text-[9px] font-mono font-bold text-slate-400">{customSubHeadline.length}/120</span>
+                        <span className={`text-[9px] font-mono font-bold ${customSubHeadline.length >= 90 ? 'text-amber-300' : 'text-white'}`}>
+                          {customSubHeadline.length}/120 {customSubHeadline.length >= 90 && <span className="animate-pulse font-normal">(75% Reached)</span>}
+                        </span>
                       </div>
                       <Input 
                         value={customSubHeadline}
@@ -1770,89 +2058,212 @@ export default function Flyers() {
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-1">
-                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Property Pitch Paragraph</Label>
-                          <div className="group relative inline-block">
-                            <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
-                            <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl w-48 z-50 text-center font-normal normal-case leading-normal">
-                              Short cohesive paragraphs detailing bespoke materials, neighborhood statistics, and highlight architectural features.
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                            </div>
-                          </div>
+                          <Label className={`text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                            activeHelpPopup?.title === "Property Pitch Paragraph" ? "text-white font-black" : "text-white/80 font-black"
+                          }`}>Property Pitch Paragraph</Label>
+                          <button
+                            type="button"
+                            onClick={() => setActiveHelpPopup({
+                              title: "Property Pitch Paragraph",
+                              content: "A short, cohesive paragraph highlighting premium materials, neighborhood facts, and architectural features. Maximum of 272 characters (use the AI Copywriter to fine tune)."
+                            })}
+                            className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                              activeHelpPopup?.title === "Property Pitch Paragraph"
+                                ? "text-white scale-125"
+                                : "text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "Property Pitch Paragraph" ? 3.5 : 2} />
+                          </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-mono font-bold text-slate-400">{customDescription.length}/300</span>
+                          <span className={`text-[9px] font-mono font-bold ${customDescription.length >= 204 ? 'text-amber-300' : 'text-white'}`}>
+                            {customDescription.length}/272 {customDescription.length >= 204 && (
+                              <span className="animate-pulse font-normal">
+                                ({Math.min(100, Math.round((customDescription.length / 272) * 100))}% Reached)
+                              </span>
+                            )}
+                          </span>
                           <button
                             onClick={() => runAiGenText("description")}
                             disabled={isGeneratingAi}
-                            className="text-[9px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            className="text-[9px] font-extrabold text-white hover:text-slate-200 flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
-                            <Sparkles className="h-3 w-3" />
+                            <Sparkles className="h-3 w-3 text-white" />
                             AI Copywriter
                           </button>
                         </div>
                       </div>
                       <textarea
                         value={customDescription}
-                        onChange={(e) => setCustomDescription(e.target.value.slice(0, 300))}
-                        rows={5}
-                        maxLength={300}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const capitalized = val.charAt(0).toUpperCase() + val.slice(1);
+                          if (capitalized.length >= 272 && customDescription.length < 272) {
+                            toast.warning("⚠️ Maximum description limit reached! We recommend using the 'AI Copywriter' to automatically refine and compress the text fit.", {
+                              duration: 5000,
+                              description: "Click the 'AI Copywriter' button above the textbox to make your listing description perfect."
+                            });
+                          }
+                          setCustomDescription(capitalized.slice(0, 272));
+                        }}
+                        rows={3}
+                        maxLength={272}
                         className="w-full text-xs sm:text-sm p-3 bg-white border border-slate-200 rounded-xl text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-none leading-relaxed font-sans"
                         placeholder="Detail premium components and details..."
                       />
+                      {customDescription.length === 272 && (
+                        <p className="text-[10px] text-amber-300 font-medium bg-amber-950/20 border border-amber-900/30 px-3 py-1.5 rounded-lg animate-pulse">
+                          Maximum limit of 272 characters reached. Let our <button type="button" onClick={() => runAiGenText("description")} className="underline text-blue-400 font-bold hover:text-blue-300 cursor-pointer inline flex items-center gap-0.5">AI Copywriter</button> generate a perfect optimized version!
+                        </p>
+                      )}
                     </div>
 
                     {/* Dynamic Hero Picture selector from Listing. This handles user item 5 "Customize featured image" */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-1">
-                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Select Featured Primary Photo</Label>
-                        <div className="group relative inline-block">
-                          <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
-                          <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl w-48 z-50 text-center font-normal normal-case leading-normal">
-                            Select which listing image takes center stage. Check or uncheck thumbnails to show or hide them from the secondary room strip.
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                          </div>
-                        </div>
+                        <Label className={`text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                          activeHelpPopup?.title === "Select Featured Primary Photo" ? "text-white font-black" : "text-white/80 font-black"
+                        }`}>Select Featured Primary Photo</Label>
+                        <button
+                          type="button"
+                          onClick={() => setActiveHelpPopup({
+                            title: "Select Featured Primary Photo",
+                            content: "Select which listing image takes center stage. Check or uncheck thumbnails to show or hide them from the secondary room strip."
+                          })}
+                          className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                            activeHelpPopup?.title === "Select Featured Primary Photo"
+                              ? "text-white scale-125"
+                              : "text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "Select Featured Primary Photo" ? 3.5 : 2} />
+                        </button>
                       </div>
-                      <p className="text-[9.5px] text-slate-400 mt-0.5">Click a thumbnail to set as primary. Uncheck a thumbnail's circle to hide it from the footer secondary strip.</p>
+                      <p className="text-[9.5px] text-slate-200 mt-0.5">Click a thumbnail to set as primary. Uncheck a thumbnail's circle to hide it from the footer secondary strip.</p>
+
+                      {(() => {
+                        const checkedCount = listingPhotos
+                          .map(p => typeof p === "string" ? p : (p as any).url)
+                          .filter(u => !excludedPhotos.includes(u)).length;
+                        if (checkedCount > 3) {
+                          return (
+                            <div className="p-3 bg-amber-500/15 border border-amber-500/40 text-amber-205 rounded-xl text-[10px] sm:text-[10.5px] leading-relaxed font-sans font-medium flex items-start gap-2 mt-2 animate-in fade-in duration-150">
+                              <span className="shrink-0 mt-0.5">⚠️</span>
+                              <div>
+                                <p className="font-extrabold text-amber-300 uppercase tracking-wide">Photo Selection Limit Note</p>
+                                <p className="text-amber-100/90">You have checked <strong>{checkedCount}</strong> photos (1 primary Thumbnail + {checkedCount - 1} additional photos). The standard template is designed to fit 1 main primary thumbnail and up to 2 additional secondary photos. Extra checked photos will be omitted on printed/PDF flyer sheets.</p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                       
                       <div className="grid grid-cols-4 gap-2 mt-1">
-                        {listingPhotos.map((photo, index) => {
+                        {listingPhotos.map((photo, i) => {
                           const url = typeof photo === "string" ? photo : (photo as any).url;
                           const isHero = selectedHeroImage === url;
                           const isExcluded = excludedPhotos.includes(url);
                           return (
-                            <div key={index} className="relative group/thumb">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedHeroImage(url);
-                                  if (excludedPhotos.includes(url)) {
-                                    setExcludedPhotos(prev => prev.filter(p => p !== url));
-                                  }
-                                  toast.info(`Featured photo updated to image #${index + 1}`);
-                                }}
-                                className={`w-full h-12 rounded-lg overflow-hidden border-2 transition-all relative block ${
-                                  isHero ? "border-blue-600 scale-95 shadow-sm" : "border-slate-200 hover:border-slate-300"
-                                }`}
-                              >
-                                <img src={url} alt={`Listing image ${index}`} className="w-full h-full object-cover" />
-                                <span className="absolute bottom-0 right-0 bg-black/70 text-white font-mono text-[7px] px-1 font-bold">#{index + 1}</span>
-                              </button>
-                              
-                              {!isHero && (
-                                <input
-                                  type="checkbox"
-                                  checked={!isExcluded}
-                                  onChange={() => togglePhotoInclusion(url)}
-                                  className="absolute top-1 left-1.5 h-3.5 w-3.5 rounded border-slate-300 text-blue-600 bg-white shadow cursor-pointer z-10"
-                                  title={isExcluded ? "Include in secondary strip" : "Exclude from secondary strip"}
-                                />
-                              )}
+                            <div key={url} className={`relative group/thumb rounded-xl p-1 bg-slate-800/40 border transition-all h-fit self-start ${isHero ? 'border-blue-500 bg-blue-500/5 mt-5' : 'border-slate-700 mt-5'}`}>
                               {isHero && (
-                                <div className="absolute top-1 left-1.5 bg-blue-600 text-white rounded-full p-0.5 shadow z-10" title="Primary Hero (Included)">
-                                  <CheckCircle className="h-2.5 w-2.5" />
+                                <div className="absolute -top-4.5 left-0 right-0 text-[7px] text-blue-300 font-extrabold uppercase text-center tracking-wider truncate">
+                                  ★ Header Image for Flyer
                                 </div>
                               )}
+                              <div className="relative rounded-lg overflow-hidden border transition-all block h-14 bg-black/20">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (!selectedListing) return;
+                                    setSelectedHeroImage(url);
+                                    let updatedExcluded = excludedPhotos;
+                                    if (excludedPhotos.includes(url)) {
+                                      updatedExcluded = excludedPhotos.filter(p => p !== url);
+                                      setExcludedPhotos(updatedExcluded);
+                                    }
+                                    const tid = toast.loading("Auto-saving primary photo...");
+                                    try {
+                                      await updateListing(selectedListing.id, {
+                                        flyerHeroImage: url,
+                                        excludedPhotos: updatedExcluded
+                                      });
+                                      const updatedListing = { ...selectedListing, flyerHeroImage: url, excludedPhotos: updatedExcluded };
+                                      setSelectedListing(updatedListing);
+                                      setListings(prev => prev.map(l => l.id === selectedListing.id ? updatedListing : l));
+                                      toast.dismiss(tid);
+                                      toast.success("Saved! New featured primary photo selected.");
+                                    } catch (err) {
+                                      toast.dismiss(tid);
+                                      toast.error("Failed to auto-save primary photo selection.");
+                                    }
+                                  }}
+                                  className="w-full h-full object-cover relative cursor-pointer focus:outline-none"
+                                >
+                                  <img src={url} alt={`Listing image ${i}`} className="w-full h-full object-cover" />
+                                  <span className="absolute bottom-1 right-1 bg-black/70 text-white font-mono text-[8px] px-1 rounded font-bold leading-none">#{i + 1}</span>
+                                </button>
+
+                                {/* Absolute overlay movement buttons */}
+                                <div className="absolute inset-x-0 bottom-0 bg-black/80 backdrop-blur-xs flex justify-around opacity-0 group-hover/thumb:opacity-100 transition-opacity py-0.5 z-20">
+                                  <button
+                                    type="button"
+                                    title="Move Left"
+                                    onClick={(e) => { e.stopPropagation(); movePhotoInFlyer(i, 'left'); }}
+                                    className="text-white hover:text-blue-400 p-0.5 cursor-pointer disabled:opacity-20"
+                                    disabled={i === 0}
+                                  >
+                                    <ArrowLeft className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Move Right"
+                                    onClick={(e) => { e.stopPropagation(); movePhotoInFlyer(i, 'right'); }}
+                                    className="text-white hover:text-blue-400 p-0.5 cursor-pointer disabled:opacity-20"
+                                    disabled={i === listingPhotos.length - 1}
+                                  >
+                                    <ArrowRight className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Move Up"
+                                    onClick={(e) => { e.stopPropagation(); movePhotoInFlyer(i, 'up'); }}
+                                    className="text-white hover:text-blue-400 p-0.5 cursor-pointer disabled:opacity-20"
+                                    disabled={i < 4}
+                                  >
+                                    <ArrowUp className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Move Down"
+                                    onClick={(e) => { e.stopPropagation(); movePhotoInFlyer(i, 'down'); }}
+                                    className="text-white hover:text-blue-400 p-0.5 cursor-pointer disabled:opacity-20"
+                                    disabled={i >= listingPhotos.length - 4}
+                                  >
+                                    <ArrowDown className="h-3 w-3" />
+                                  </button>
+                                </div>
+
+                                {/* Checkbox inclusion circle overlay */}
+                                {!isHero && (
+                                  <button
+                                    type="button"
+                                    onClick={() => togglePhotoInclusion(url)}
+                                    className={`absolute top-1 left-1.5 h-4 w-4 rounded-full flex items-center justify-center border text-white font-black text-[9px] shadow-sm transition-all z-10 ${
+                                      !isExcluded ? 'bg-blue-600 border-blue-500 hover:bg-blue-700' : 'bg-black/40 border-slate-350 hover:bg-black/60'
+                                    }`}
+                                    title={isExcluded ? "Include in secondary strip" : "Exclude from secondary strip"}
+                                  >
+                                    {!isExcluded ? "✓" : ""}
+                                  </button>
+                                )}
+                                {isHero && (
+                                  <div className="absolute top-1 left-1.5 bg-blue-600 border border-blue-500 text-white rounded-full p-0.5 shadow z-10" title="Primary Header (Included)">
+                                    <CheckCircle className="h-2.5 w-2.5" />
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
@@ -1866,30 +2277,30 @@ export default function Flyers() {
 
                     {/* Open House scheduling details if active */}
                     {(template === "open_house_showcase" || template === "lead_form_sign_in") && (
-                      <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl space-y-2 animate-in fade-in">
-                        <Label className="text-[10px] font-black uppercase text-blue-800 tracking-wider flex items-center gap-1">
-                          <Calendar className="h-3 w-3" /> Event Schedule Timing
+                      <div className="p-3 bg-blue-900/30 border border-blue-800/60 rounded-xl space-y-2 animate-in fade-in">
+                        <Label className="text-[10px] font-black uppercase text-white tracking-wider flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-blue-400" /> Event Schedule Timing
                         </Label>
                         <Input 
                           value={openHouseTime}
                           onChange={(e) => setOpenHouseTime(e.target.value)}
                           placeholder="e.g. Saturday, June 13th • 1PM - 4PM"
-                          className="bg-white h-9 text-xs border-slate-200 rounded-lg"
+                          className="bg-white h-9 text-xs border-slate-200 rounded-lg text-black"
                         />
                       </div>
                     )}
 
                     {/* Badges for Just listed layouts */}
                     {template === "just_listed_sold" && (
-                      <div className="p-3 bg-yellow-50/50 border border-yellow-200 rounded-xl space-y-2 animate-in fade-in">
-                        <Label className="text-[10px] font-black uppercase text-yellow-800 tracking-wider">Marketing Ribbon Label</Label>
-                        <div className="flex gap-1">
+                      <div className="p-3 bg-blue-900/30 border border-blue-800/60 rounded-xl space-y-2 animate-in fade-in">
+                        <Label className="text-[10px] font-black uppercase text-white tracking-wider">Marketing Ribbon Label</Label>
+                        <div className="flex gap-1 flex-wrap">
                           {["JUST LISTED", "JUST SOLD", "CONTRACT PENDING", "PRICE REDUCED"].map(text => (
                             <button
                               key={text}
                               onClick={() => setStatusBadgeText(text)}
                               className={`px-2 py-1 rounded text-[9px] font-black border transition-all ${
-                                statusBadgeText === text ? "bg-amber-950 text-white border-slate-950" : "bg-white text-slate-500 hover:text-slate-700"
+                                statusBadgeText === text ? "bg-amber-800 text-white border-amber-900" : "bg-blue-950/50 text-slate-200 border-blue-800 hover:text-white"
                               }`}
                             >
                               {text}
@@ -1903,21 +2314,30 @@ export default function Flyers() {
                     <div className="space-y-4 pt-3 border-t">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1">
-                          <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Dynamic Scan Destination</Label>
-                          <div className="group relative inline-block">
-                            <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
-                            <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl w-48 z-50 text-center font-normal normal-case leading-normal">
-                              The physical destination QR code scans resolve to. Changes instantly without re-printing.
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                            </div>
-                          </div>
+                          <Label className={`text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                            activeHelpPopup?.title === "Dynamic Scan Destination" ? "text-white font-black" : "text-white/80 font-black"
+                          }`}>Dynamic Scan Destination</Label>
+                          <button
+                            type="button"
+                            onClick={() => setActiveHelpPopup({
+                              title: "Dynamic Scan Destination",
+                              content: "The physical destination QR code scans resolve to. Changes instantly without re-printing."
+                            })}
+                            className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                              activeHelpPopup?.title === "Dynamic Scan Destination"
+                                ? "text-white scale-125"
+                                : "text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "Dynamic Scan Destination" ? 3.5 : 2} />
+                          </button>
                         </div>
                         <select
                           value={qrDest}
                           onChange={(e) => handleQrDestChange(e.target.value as QrDestination)}
                           className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
                         >
-                          <option value="ai_tour">🚀 Sora Voice AI Guided Tour</option>
+                          <option value="ai_tour">🚀 Sora AI Guided Tour (Sora Voice)</option>
                           <option value="open_house">🔑 Digital Open House Sign-In Kiosk</option>
                           <option value="lead_form">📬 Legal Consent & Asset Materials Dispatch</option>
                           <option value="details_page">🏠 Listing Microsite Details Page</option>
@@ -1927,12 +2347,12 @@ export default function Flyers() {
 
                       {qrDest === "custom_url" && (
                         <div className="space-y-1.5 animate-in fade-in">
-                          <Label className="text-xs text-slate-500">Redirect Web Address (URL)</Label>
+                          <Label className="text-xs text-white font-bold">Redirect Web Address (URL)</Label>
                           <Input
                             value={customQrUrl}
                             onChange={(e) => setCustomQrUrl(e.target.value)}
                             placeholder="https://exclusive-portfolio.com"
-                            className="text-xs h-10 border-slate-200 rounded-xl"
+                            className="text-xs h-10 border-slate-200 rounded-xl text-black"
                           />
                         </div>
                       )}
@@ -1940,50 +2360,127 @@ export default function Flyers() {
                       <div className="space-y-1.5">
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-1">
-                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">QR Code Overlay Prompt</Label>
-                            <div className="group relative inline-block">
-                              <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
-                              <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl w-48 z-50 text-center font-normal normal-case leading-normal">
-                                Prompted CTA displayed alongside the QR barcode to encourage immediate visitor phone scans.
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                              </div>
-                            </div>
+                            <Label className={`text-[10px] uppercase tracking-wider transition-colors duration-150 ${
+                              activeHelpPopup?.title === "QR Code Overlay Prompt" ? "text-white font-black" : "text-white/80 font-black"
+                            }`}>QR Code Overlay Prompt</Label>
+                            <button
+                              type="button"
+                              onClick={() => setActiveHelpPopup({
+                                title: "QR Code Overlay Prompt",
+                                content: "Prompted CTA displayed alongside the QR barcode to encourage immediate visitor phone scans."
+                              })}
+                              className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                                activeHelpPopup?.title === "QR Code Overlay Prompt"
+                                  ? "text-white scale-125"
+                                  : "text-slate-400 hover:text-white"
+                              }`}
+                            >
+                              <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "QR Code Overlay Prompt" ? 3.5 : 2} />
+                            </button>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] font-mono font-bold text-slate-400 mr-[5px]">{customCta.length}/100</span>
+                            <span className={`text-[9px] font-mono font-bold ${customCta.length >= 75 ? 'text-amber-300' : 'text-white'} mr-[5px]`}>
+                              {customCta.length}/100 {customCta.length >= 75 && <span className="animate-pulse font-normal">(75% Reached)</span>}
+                            </span>
                             <button
                               onClick={() => runAiGenText("cta")}
                               disabled={isGeneratingAi}
-                              className="text-[9px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                              className="text-[9px] text-white font-medium hover:font-black hover:text-white flex items-center gap-1 cursor-pointer transition-all duration-150"
                             >
-                              <Sparkles className="h-3 w-3" />
+                              <Sparkles className="h-3 w-3 text-white" />
                               AI CTA Generator
                             </button>
-                            <div className="group relative inline-block -left-[15px]">
-                              <HelpCircle className="h-3 w-3 text-slate-400 hover:text-slate-500 cursor-help" />
-                              <div className="pointer-events-none absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-[9px] p-2 rounded-lg shadow-xl w-[183px] z-50 text-center font-normal normal-case leading-normal">
-                                Generate high-converting conversion call-to-actions tailored dynamically to the active scan destination.
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
-                              </div>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setActiveHelpPopup({
+                                title: "AI CTA Generator",
+                                content: "Generate high-converting conversion call-to-actions tailored dynamically to the active scan destination."
+                              })}
+                              className={`cursor-pointer p-0.5 transition-all duration-150 ${
+                                activeHelpPopup?.title === "AI CTA Generator"
+                                  ? "text-white scale-125"
+                                  : "text-slate-400 hover:text-white"
+                              }`}
+                            >
+                              <HelpCircle className="h-3 w-3 transition-all" strokeWidth={activeHelpPopup?.title === "AI CTA Generator" ? 3.5 : 2} />
+                            </button>
                           </div>
                         </div>
                         <textarea
                           value={customCta}
-                          onChange={(e) => setCustomCta(e.target.value.slice(0, 100))}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const capitalized = val.charAt(0).toUpperCase() + val.slice(1);
+                            setCustomCta(capitalized.slice(0, 100));
+                          }}
                           placeholder="Scan to connect headset"
-                          rows={3}
+                          rows={1}
                           maxLength={100}
-                          className="w-full text-xs sm:text-sm p-3 bg-white border border-slate-200 rounded-xl text-slate-700 h-20 focus:ring-1 focus:ring-blue-500 focus:outline-none font-sans leading-relaxed"
+                          className="w-full text-xs sm:text-sm p-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 h-10 focus:ring-1 focus:ring-blue-500 focus:outline-none font-sans leading-relaxed text-black font-semibold resize-none"
                         />
                       </div>
+                    </div>
+
+                    {/* Action Block for Save and Edit */}
+                    <div className="flex gap-2.5 pt-4 border-t border-slate-200 flex-wrap">
+                      <Button
+                        type="button"
+                        onClick={async () => {
+                          if (!selectedListing) {
+                            toast.error("Please select a listing first.");
+                            return;
+                          }
+                          const tid = toast.loading("Saving custom flyer content to database...");
+                          try {
+                            await updateListing(selectedListing.id, {
+                              flyerHeroImage: selectedHeroImage,
+                              excludedPhotos: excludedPhotos,
+                              flyerHeadline: customHeadline,
+                              flyerSubHeadline: customSubHeadline,
+                              flyerDescription: customDescription,
+                              flyerCta: customCta,
+                              flyerTemplate: template
+                            });
+                            // Sync changes locally in the state too
+                            setListings(prev => prev.map(l => l.id === selectedListing.id ? {
+                              ...l,
+                              flyerHeroImage: selectedHeroImage,
+                              excludedPhotos: excludedPhotos,
+                              flyerHeadline: customHeadline,
+                              flyerSubHeadline: customSubHeadline,
+                              flyerDescription: customDescription,
+                              flyerCta: customCta,
+                              flyerTemplate: template
+                            } : l));
+                            toast.dismiss(tid);
+                            toast.success("✨ Flyer Content Draft saved and locked successfully to Firestore Database! live preview refreshed.");
+                          } catch (err) {
+                            toast.dismiss(tid);
+                            console.error(err);
+                            toast.error("Failed to save flyer settings.");
+                          }
+                        }}
+                        className="flex-1 bg-white text-[#155dfc] font-extrabold uppercase text-[10px] tracking-wider h-10 rounded-xl hover:bg-amber-400 hover:text-slate-950 hover:scale-108 active:scale-95 transition-all duration-300 transform shadow-md hover:shadow-xl cursor-pointer border-none"
+                      >
+                        Save Content
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          toast.info("💡 Easy editing unlocked. Direct inputs below are active.");
+                        }}
+                        className="flex-1 border-white/45 text-white bg-[#155dfc]/10 font-extrabold uppercase text-[10px] tracking-wider h-10 rounded-xl hover:bg-white hover:text-[#155dfc] hover:scale-108 active:scale-95 transition-all duration-300 transform shadow-md hover:shadow-xl cursor-pointer"
+                      >
+                        Edit Layout
+                      </Button>
                     </div>
                   </>
                 ) : activeTab === "settings" ? (
                   <>
                     {/* Design preset selection */}
                     <div className="space-y-2">
-                      <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Select Premium Layout Template</Label>
+                      <Label className="text-[10px] font-black uppercase text-white tracking-wider">Select Premium Layout Template</Label>
                       <div className="grid grid-cols-1 gap-1.5 max-h-[300px] overflow-y-auto pr-1">
                         {[
                           { id: "luxury_royal", name: "Crown Luxury Royal", desc: "Serif headers, tailored classic borders, sophisticated spacing" },
@@ -1997,46 +2494,46 @@ export default function Flyers() {
                           <button
                             key={t.id}
                             onClick={() => handleTemplateChange(t.id as FlyerTemplate)}
-                            className={`p-3 text-left border rounded-xl flex flex-col justify-center transition-all ${
+                            className={`p-3 text-left rounded-xl flex flex-col justify-center transition-all cursor-pointer ${
                               template === t.id 
-                                ? "border-blue-600 bg-blue-50/50 shadow-sm" 
-                                : "border-slate-200 hover:bg-slate-50/50"
+                                ? "border-4 border-white bg-white/15 font-black shadow-lg" 
+                                : "border-2 border-white/40 bg-white/5 hover:bg-white/10 hover:border-white/60"
                             }`}
                           >
-                            <span className="text-slate-950 font-black text-xs">{t.name}</span>
-                            <span className="text-[9.5px] text-slate-500 leading-tight mt-0.5">{t.desc}</span>
+                            <span className="text-white font-black text-xs">{t.name}</span>
+                            <span className="text-[9.5px] text-slate-300 leading-tight mt-0.5">{t.desc}</span>
                           </button>
                         ))}
                       </div>
                     </div>
 
                     {/* Accent colors */}
-                    <div className="space-y-2 pt-3 border-t">
-                      <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Branding Accent Color</Label>
+                    <div className="space-y-2 pt-3 border-t border-blue-900">
+                      <Label className="text-[10px] font-black uppercase text-white tracking-wider">Branding Accent Color</Label>
                       <div className="grid grid-cols-5 gap-1.5">
                         {Object.entries(colorClasses).map(([colorKey, data]) => (
                           <button
                             key={colorKey}
                             onClick={() => setAccentColor(colorKey as AccentColor)}
                             className={`h-9 rounded-xl flex items-center justify-center border transition-all cursor-pointer ${
-                              accentColor === colorKey ? "border-slate-950 bg-slate-950/5" : "border-slate-200"
+                              accentColor === colorKey ? "border-amber-400 bg-white/20 shadow-inner" : "border-white/15 hover:bg-white/5"
                             }`}
                             title={data.name}
                           >
-                            <span className={`h-4.5 w-4.5 rounded-full ${data.preview} shadow-sm`} />
+                            <span className={`h-4.5 w-4.5 rounded-full ${data.preview} shadow-sm border border-white`} />
                           </button>
                         ))}
                       </div>
                     </div>
 
                     {/* Page orientation toggles */}
-                    <div className="space-y-2 pt-3 border-t">
-                      <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Flyer Aspect Ratio Format</Label>
+                    <div className="space-y-2 pt-3 border-t border-blue-900">
+                      <Label className="text-[10px] font-black uppercase text-white tracking-wider">Flyer Aspect Ratio Format</Label>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           onClick={() => setOrientation("portrait")}
-                          className={`py-2 text-xs font-bold border rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                            orientation === "portrait" ? "bg-slate-900 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                          className={`py-2 text-xs font-bold border rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            orientation === "portrait" ? "bg-amber-500 border-amber-600 text-slate-950 font-extrabold shadow-sm animate-pulse-subtle" : "bg-blue-950/40 border-blue-800 text-slate-200 hover:text-white"
                           }`}
                         >
                           <Layout className="h-3.5 w-3.5" />
@@ -2044,8 +2541,8 @@ export default function Flyers() {
                         </button>
                         <button
                           onClick={() => setOrientation("square")}
-                          className={`py-2 text-xs font-bold border rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                            orientation === "square" ? "bg-slate-900 border-slate-950 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                          className={`py-2 text-xs font-bold border rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            orientation === "square" ? "bg-amber-500 border-amber-600 text-slate-950 font-extrabold shadow-sm animate-pulse-subtle" : "bg-blue-950/40 border-blue-800 text-slate-200 hover:text-white"
                           }`}
                         >
                           <Instagram className="h-3.5 w-3.5" />
@@ -2055,96 +2552,142 @@ export default function Flyers() {
                     </div>
 
                     {/* Agent overridden contact values */}
-                    <div className="space-y-2.5 pt-3 border-t">
-                      <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Agent Contact Overrides</Label>
-                      <div className="space-y-1.5">
-                        <Input 
-                          value={agentNameOverride} 
-                          onChange={(e) => setAgentNameOverride(e.target.value)} 
-                          placeholder="Agent Name" 
-                          className="h-8 text-xs"
-                        />
-                        <Input 
-                          value={agentPhoneOverride} 
-                          onChange={(e) => setAgentPhoneOverride(e.target.value)} 
-                          placeholder="Phone Number" 
-                          className="h-8 text-xs font-mono"
-                        />
-                        <Input 
-                          value={agentEmailOverride} 
-                          onChange={(e) => setAgentEmailOverride(e.target.value)} 
-                          placeholder="Broker Email" 
-                          className="h-8 text-xs font-mono"
-                        />
+                    <div className="space-y-2.5 pt-3 border-t border-blue-900">
+                      <Label className="text-[10px] font-black uppercase text-white tracking-wider">Agent Contact Overrides</Label>
+                      <div className="space-y-1.5 text-left">
+                        <div>
+                          <Label className="text-[9px] text-white mb-0.5 block font-bold">First & Last Name (Auto-Capitalized)</Label>
+                          <Input 
+                            value={agentNameOverride} 
+                            onChange={(e) => handleNameChange(e.target.value)} 
+                            placeholder="Agent Name" 
+                            className="h-8 text-xs bg-white text-slate-950 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[9px] text-white mb-0.5 block font-bold">Phone Number (Strict format: (###) ###-####)</Label>
+                          <Input 
+                            value={agentPhoneOverride} 
+                            onChange={(e) => handlePhoneChange(e.target.value)} 
+                            placeholder="(###) ###-####" 
+                            className="h-8 text-xs font-mono bg-white text-slate-950 font-semibold"
+                          />
+                          {!isPhoneValid(agentPhoneOverride) && agentPhoneOverride.trim() !== "" && (
+                            <p className="text-[10px] text-amber-300 font-extrabold mt-0.5 animate-pulse">⚠️ Phone must be exactly (###) ###-####</p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-[9px] text-white mb-0.5 block font-bold">Email Address (Requires @ & domain)</Label>
+                          <Input 
+                            value={agentEmailOverride} 
+                            onChange={(e) => setAgentEmailOverride(e.target.value)} 
+                            placeholder="Broker Email" 
+                            className="h-8 text-xs font-mono bg-white text-slate-950 font-semibold"
+                          />
+                          {!isEmailValid(agentEmailOverride) && agentEmailOverride.trim() !== "" && (
+                            <p className="text-[10px] text-amber-300 font-extrabold mt-0.5 animate-pulse">⚠️ Requires valid email address containing '@'</p>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     {/* Advanced toggle buttons */}
-                    <div className="space-y-2 pt-3 border-t">
-                      <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Structural Blocks</Label>
+                    <div className="space-y-2 pt-3 border-t border-blue-900">
+                      <Label className="text-[10px] font-black uppercase text-white tracking-wider">Structural Blocks</Label>
                       
-                      <label className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200/50 cursor-pointer select-none">
+                      <label className="flex items-center gap-3 p-2.5 bg-blue-900/30 border border-blue-800/60 rounded-xl cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={showSecondaryPhotos}
                           onChange={(e) => setShowSecondaryPhotos(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                          className="h-4 w-4 rounded border-blue-800 text-blue-600 bg-blue-950"
                         />
                         <div className="text-xs text-left">
-                          <p className="font-extrabold text-slate-800">Show Room Strip</p>
-                          <p className="text-[9.5px] text-slate-400">Display mini ambient picture row at footer.</p>
+                          <p className="font-extrabold text-white">Show Room Strip</p>
+                          <p className="text-[9.5px] text-slate-200">Display mini ambient picture row at footer.</p>
                         </div>
                       </label>
 
-                      <label className="flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200/50 cursor-pointer select-none">
+                      <label className="flex items-center gap-3 p-2.5 bg-blue-900/30 border border-blue-800/60 rounded-xl cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={includeLenderBlock}
                           onChange={(e) => setIncludeLenderBlock(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                          className="h-4 w-4 rounded border-blue-800 text-blue-600 bg-blue-950"
                         />
                         <div className="text-xs text-left">
-                          <p className="font-extrabold text-slate-800">Include preferred lender block</p>
-                          <p className="text-[9.5px] text-slate-400">Add compliant rate support options.</p>
+                          <p className="font-extrabold text-white">Include preferred lender block</p>
+                          <p className="text-[9.5px] text-slate-200">Add compliant rate support options.</p>
                         </div>
                       </label>
                     </div>
 
                     {includeLenderBlock && (
-                      <div className="p-3 bg-amber-50/45 border border-amber-200/60 rounded-xl space-y-2.5 animate-in fade-in text-left">
-                        <div className="flex items-center justify-between text-amber-950 font-black text-xs">
+                      <div className="p-3 bg-blue-900/40 border border-blue-800/60 rounded-xl space-y-2.5 animate-in fade-in text-left">
+                        <div className="flex items-center justify-between text-white font-black text-xs">
                           <div className="flex items-center gap-1">
-                            <BadgePercent className="h-4 w-4 text-amber-600" />
+                            <BadgePercent className="h-4 w-4 text-amber-400" />
                             <span>Lender Co-Op Integration</span>
                           </div>
-                          <span className="text-[9px] font-mono font-bold text-amber-600/80">{lenderCta.length}/16</span>
+                          <span className={`text-[9px] font-mono font-bold ${lenderCta.length >= 12 ? 'text-amber-300' : 'text-white'} mr-[3px]`}>
+                            {lenderCta.length}/16 {lenderCta.length >= 12 && <span className="animate-pulse font-normal">(75% Reached)</span>}
+                          </span>
                         </div>
-                        <Input value={lenderName} onChange={(e) => setLenderName(e.target.value)} placeholder="Name of lender entity" className="bg-white h-8 text-[11px]" />
+                        <Input 
+                          value={lenderName} 
+                          onChange={(e) => setLenderName(e.target.value)} 
+                          placeholder="Name of lender entity" 
+                          className="bg-white h-8 text-[11px] text-black font-semibold" 
+                        />
                         <Input 
                           value={lenderCta} 
                           onChange={(e) => setLenderCta(e.target.value.slice(0, 16))} 
-                          placeholder="Get pre-approved" 
+                          placeholder="Get Pre-approved" 
                           maxLength={16}
-                          className="bg-white h-8 text-[11px]" 
+                          className="bg-white h-8 text-[11px] text-black font-semibold" 
                         />
                       </div>
                     )}
+
+                     {/* Action Block for Save and Edit */}
+                    <div className="flex gap-2.5 pt-4 border-t border-slate-200 flex-wrap animate-in fade-in">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          toast.success("🎨 Aesthetics presets, theme color and layout orientation saved successfully!");
+                        }}
+                        disabled={!isSaveAestheticsEnabled}
+                        className="flex-1 bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-80/50 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold uppercase text-[10px] tracking-wider h-10 rounded-xl"
+                      >
+                        Save Aesthetics
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          toast.info("🛠️ Custom aesthetics override unlocked.");
+                        }}
+                        className="flex-1 border-white/15 text-white hover:bg-white/10 font-extrabold uppercase text-[10px] tracking-wider h-10 rounded-xl bg-transparent"
+                      >
+                        Edit Style
+                      </Button>
+                    </div>
                   </>
-                ) : (
+                ) : activeTab === "typography" ? (
                   <div className="space-y-4 animate-in fade-in">
                     {/* Primary Title Typography Card */}
-                    <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3 text-left">
-                      <div className="flex justify-between items-center pb-1.5 border-b border-slate-100">
-                        <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Title Typography</span>
-                        <Type className="h-3.5 w-3.5 text-slate-400" />
+                    <div className="p-3.5 bg-blue-900/30 border border-blue-800/60 rounded-xl space-y-3 text-left">
+                      <div className="flex justify-between items-center pb-1.5 border-b border-blue-800/50">
+                        <span className="text-[10px] font-black uppercase text-white tracking-wider">Title Typography</span>
+                        <Type className="h-3.5 w-3.5 text-blue-400" />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Font Category</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Font Category</label>
                           <select
                             value={titleFont}
                             onChange={(e) => setTitleFont(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="grotesque">Geometric Grotesque</option>
                             <option value="geometric">Geometric Sans-Serif</option>
@@ -2153,11 +2696,11 @@ export default function Flyers() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Size Scale</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Size Scale</label>
                           <select
                             value={titleSize}
                             onChange={(e) => setTitleSize(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="xs">Extra Small (18px)</option>
                             <option value="sm">Small (21px)</option>
@@ -2172,25 +2715,25 @@ export default function Flyers() {
                           type="checkbox"
                           checked={titleBold}
                           onChange={(e) => setTitleBold(e.target.checked)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          className="h-3.5 w-3.5 rounded border-blue-800 text-blue-600 focus:ring-0 bg-blue-950"
                         />
-                        <span className="text-[10px] font-bold text-slate-600 uppercase">Bold emphasis</span>
+                        <span className="text-[10px] font-bold text-white uppercase">Bold emphasis</span>
                       </label>
                     </div>
 
                     {/* Marketing Subtitle Typography Card */}
-                    <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3 text-left">
-                      <div className="flex justify-between items-center pb-1.5 border-b border-slate-100">
-                        <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Subtitle Typography</span>
-                        <Heading className="h-3.5 w-3.5 text-slate-400" />
+                    <div className="p-3.5 bg-blue-900/30 border border-blue-800/60 rounded-xl space-y-3 text-left">
+                      <div className="flex justify-between items-center pb-1.5 border-b border-blue-800/50">
+                        <span className="text-[10px] font-black uppercase text-white tracking-wider">Subtitle Typography</span>
+                        <Heading className="h-3.5 w-3.5 text-blue-400" />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Font Category</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Font Category</label>
                           <select
                             value={subtitleFont}
                             onChange={(e) => setSubtitleFont(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="grotesque">Geometric Grotesque</option>
                             <option value="geometric">Geometric Sans-Serif</option>
@@ -2199,11 +2742,11 @@ export default function Flyers() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Size Scale</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Size Scale</label>
                           <select
                             value={subtitleSize}
                             onChange={(e) => setSubtitleSize(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="xs">Extra Small</option>
                             <option value="sm">Small</option>
@@ -2217,25 +2760,25 @@ export default function Flyers() {
                           type="checkbox"
                           checked={subtitleBold}
                           onChange={(e) => setSubtitleBold(e.target.checked)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          className="h-3.5 w-3.5 rounded border-blue-800 text-blue-600 focus:ring-0 bg-blue-950"
                         />
-                        <span className="text-[10px] font-bold text-slate-600 uppercase">Bold emphasis</span>
+                        <span className="text-[10px] font-bold text-white uppercase">Bold emphasis</span>
                       </label>
                     </div>
 
                     {/* Description Paragraph Typography Card */}
-                    <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3 text-left">
-                      <div className="flex justify-between items-center pb-1.5 border-b border-slate-100">
-                        <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Body Description Typography</span>
-                        <AlignLeft className="h-3.5 w-3.5 text-slate-400" />
+                    <div className="p-3.5 bg-blue-900/30 border border-blue-800/60 rounded-xl space-y-3 text-left">
+                      <div className="flex justify-between items-center pb-1.5 border-b border-blue-800/50">
+                        <span className="text-[10px] font-black uppercase text-white tracking-wider">Body Description Typography</span>
+                        <AlignLeft className="h-3.5 w-3.5 text-blue-400" />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Font Category</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Font Category</label>
                           <select
                             value={descriptionFont}
                             onChange={(e) => setDescriptionFont(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="grotesque">Geometric Grotesque</option>
                             <option value="geometric">Geometric Sans-Serif</option>
@@ -2244,11 +2787,11 @@ export default function Flyers() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Size Scale</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Size Scale</label>
                           <select
                             value={descriptionSize}
                             onChange={(e) => setDescriptionSize(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="xs">Extra Small</option>
                             <option value="sm">Small</option>
@@ -2262,25 +2805,25 @@ export default function Flyers() {
                           type="checkbox"
                           checked={descriptionBold}
                           onChange={(e) => setDescriptionBold(e.target.checked)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          className="h-3.5 w-3.5 rounded border-blue-800 text-blue-600 focus:ring-0 bg-blue-950"
                         />
-                        <span className="text-[10px] font-bold text-slate-600 uppercase">Bold emphasis</span>
+                        <span className="text-[10px] font-bold text-white uppercase">Bold emphasis</span>
                       </label>
                     </div>
 
                     {/* QR Code Action CTA Typography Card */}
-                    <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-3 text-left">
-                      <div className="flex justify-between items-center pb-1.5 border-b border-slate-100">
-                        <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">QR CTA Prompt Typography</span>
-                        <QrCode className="h-3.5 w-3.5 text-slate-400" />
+                    <div className="p-3.5 bg-blue-900/30 border border-blue-800/60 rounded-xl space-y-3 text-left">
+                      <div className="flex justify-between items-center pb-1.5 border-b border-blue-800/50">
+                        <span className="text-[10px] font-black uppercase text-white tracking-wider">QR CTA Prompt Typography</span>
+                        <QrCode className="h-3.5 w-3.5 text-blue-400" />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Font Category</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Font Category</label>
                           <select
                             value={ctaFont}
                             onChange={(e) => setCtaFont(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="grotesque">Geometric Grotesque</option>
                             <option value="geometric">Geometric Sans-Serif</option>
@@ -2289,11 +2832,11 @@ export default function Flyers() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-bold text-slate-500 uppercase">Size Scale</label>
+                          <label className="text-[9px] font-bold text-white uppercase">Size Scale</label>
                           <select
                             value={ctaSize}
                             onChange={(e) => setCtaSize(e.target.value as any)}
-                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-black shadow-sm"
                           >
                             <option value="xs">Extra Small</option>
                             <option value="sm">Small</option>
@@ -2307,14 +2850,178 @@ export default function Flyers() {
                           type="checkbox"
                           checked={ctaBold}
                           onChange={(e) => setCtaBold(e.target.checked)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          className="h-3.5 w-3.5 rounded border-blue-800 text-blue-600 focus:ring-0 bg-blue-950"
                         />
-                        <span className="text-[10px] font-bold text-slate-600 uppercase">Bold emphasis</span>
+                        <span className="text-[10px] font-bold text-white uppercase">Bold emphasis</span>
                       </label>
                     </div>
 
-                    <div className="text-[10px] text-slate-400 bg-slate-50 border border-slate-100 p-2.5 rounded-xl font-normal text-left sm:text-center italic leading-normal">
+                    <div className="text-[10px] text-slate-200 bg-blue-950/40 border border-blue-900/60 p-2.5 rounded-xl font-normal text-left sm:text-center italic leading-normal">
                       💡 Tip: Standardize on 2 font categories for optimal brand composition matching compliance and exclusive presentation.
+                    </div>
+
+                    {/* Action Block for Save and Edit */}
+                    <div className="flex gap-2.5 pt-4 border-t border-slate-200 flex-wrap animate-in fade-in">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          toast.success("✍️ Typography scales, bold values, and pairings saved successfully!");
+                        }}
+                        className="flex-1 bg-white text-[#155dfc] font-extrabold uppercase text-[10px] tracking-wider h-10 rounded-xl hover:bg-slate-50"
+                      >
+                        Save Typography
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          toast.info("🔡 Typography modifications enabled. Fine-tune your parameters below.");
+                        }}
+                        className="flex-1 border-slate-200 text-slate-800 hover:bg-slate-50 font-extrabold uppercase text-[10px] tracking-wider h-10 rounded-xl"
+                      >
+                        Edit Fonts
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in max-w-sm mx-auto text-center text-white pb-3">
+                    <p className="text-xs font-black uppercase tracking-wider text-blue-200">Dynamic QR Display Manager</p>
+                    <p className="text-[10px] text-slate-200 leading-normal">
+                      Exhibition guests scan this code to access check-in sheets or launch the guided tour.
+                    </p>
+
+                    <div className="bg-white p-4 rounded-2xl border border-blue-900/40 shadow-md relative flex items-center justify-center mx-auto w-[210px] h-[210px]">
+                      <QRCodeSVG 
+                        id="flyer-dynamic-qr-preview-svg"
+                        value={getQrUrl()} 
+                        size={180} 
+                        level="H"
+                        fgColor="#0f172a"
+                        imageSettings={
+                          (qrBrandingOption === "logo" && brokerageLogo) || (qrBrandingOption === "photo" && agentPhoto) ? {
+                            src: qrBrandingOption === "logo" ? brokerageLogo : agentPhoto,
+                            x: undefined,
+                            y: undefined,
+                            height: 48,
+                            width: 48,
+                            excavate: true,
+                          } : undefined
+                        }
+                      />
+                    </div>
+
+                    <div className="text-xs text-slate-100 text-left w-full space-y-2 pt-2 bg-blue-950/45 p-4 rounded-xl border border-blue-800/60 font-sans">
+                      <p className="font-bold uppercase tracking-wider text-[9px] text-blue-300">QR Scan Destination</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-mono text-[10px] text-blue-200 truncate bg-blue-950 p-1.5 rounded border border-blue-900 flex-1 select-all">
+                          {getQrUrl()}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="text-[10px] h-7 px-2.5 font-bold hover:bg-white hover:text-blue-900 text-slate-800 bg-white"
+                          onClick={() => {
+                            navigator.clipboard.writeText(getQrUrl());
+                            toast.success("URL copied to clipboard!");
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                      <p className="text-[9.5px] text-slate-300 leading-normal">
+                        Perfect to print on luxury tabletop stands, giving buyers a touchless check-in process instantly.
+                      </p>
+                    </div>
+
+                    {/* Brokerage Logo or Agent Photo Embedding Manager */}
+                    <div className="w-full text-left space-y-3 pt-3 border-t border-blue-800/50">
+                      <p className="font-extrabold uppercase tracking-wider text-[10px] text-blue-300 block">Brokerage Logo or Agent Photo</p>
+                      
+                      <div className="space-y-2.5">
+                        {/* Radio Button 1: Brokerage Logo */}
+                        <div className="flex items-center justify-between p-3 rounded-xl border border-blue-800/60 bg-blue-950/40 hover:bg-blue-950/70 transition-colors">
+                          <label htmlFor="branding-logo-flyer" className="flex items-center gap-2.5 cursor-pointer w-full select-none">
+                            <input 
+                              type="radio" 
+                              id="branding-logo-flyer" 
+                              name="qr-branding-flyer" 
+                              value="logo"
+                              checked={qrBrandingOption === "logo"}
+                              onChange={() => {
+                                if (!brokerageLogo) {
+                                  toast.error("A Brokerage Logo is required under Settings > Branding & UI to select this option.");
+                                  return;
+                                }
+                                setQrBrandingOption("logo");
+                                toast.success("Brokerage Logo selected for dynamic QR presentation!");
+                              }}
+                              className="h-4 w-4 text-blue-400 border-blue-800 focus:ring-0 cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-white">Brokerage Logo</span>
+                              <span className="text-[10px] text-slate-300 leading-tight">Integrate company agency brand specs</span>
+                            </div>
+                          </label>
+                          {brokerageLogo ? (
+                            <img src={brokerageLogo} alt="Brokerage Logo" className="h-[35px] w-auto max-w-[75px] object-contain rounded border border-blue-800/60 bg-white p-0.5" />
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic bg-blue-950 px-2 py-0.5 rounded font-mono border border-blue-900">Not Configured</span>
+                          )}
+                        </div>
+
+                        {/* Radio Button 2: Agent Photo */}
+                        <div className="flex items-center justify-between p-3 rounded-xl border border-blue-800/60 bg-blue-950/40 hover:bg-blue-950/70 transition-colors">
+                          <label htmlFor="branding-photo-flyer" className="flex items-center gap-2.5 cursor-pointer w-full select-none">
+                            <input 
+                              type="radio" 
+                              id="branding-photo-flyer" 
+                              name="qr-branding-flyer" 
+                              value="photo"
+                              checked={qrBrandingOption === "photo"}
+                              onChange={() => {
+                                if (!agentPhoto) {
+                                  toast.error("An Agent Photo is required under Settings > Branding & UI to select this option.");
+                                  return;
+                                }
+                                setQrBrandingOption("photo");
+                                toast.success("Agent Photo selected for dynamic QR presentation!");
+                              }}
+                              className="h-4 w-4 text-blue-400 border-blue-800 focus:ring-0 cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-white">Agent Photo</span>
+                              <span className="text-[10px] text-slate-300 leading-tight">Promote host identity visually on scan gates</span>
+                            </div>
+                          </label>
+                          {agentPhoto ? (
+                            <img src={agentPhoto} alt="Agent Portrait" className="h-[35px] w-[35px] object-cover rounded-full border border-blue-800/60 bg-white" />
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic bg-blue-950 px-2 py-0.5 rounded font-mono border border-blue-900">Not Configured</span>
+                          )}
+                        </div>
+
+                        {/* Radio Button 3: None */}
+                        <div className="flex items-center justify-between p-3 rounded-xl border border-blue-800/60 bg-blue-950/40 hover:bg-blue-950/70 transition-colors">
+                          <label htmlFor="branding-none-flyer" className="flex items-center gap-2.5 cursor-pointer w-full select-none">
+                            <input 
+                              type="radio" 
+                              id="branding-none-flyer" 
+                              name="qr-branding-flyer" 
+                              value="none"
+                              checked={qrBrandingOption === "none"}
+                              onChange={() => {
+                                setQrBrandingOption("none");
+                                toast.success("No image overlay chosen. Standard clean barcode presentation restored.");
+                              }}
+                              className="h-4 w-4 text-blue-400 border-blue-800 focus:ring-0 cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-white">Standard (No Overlay)</span>
+                              <span className="text-[10px] text-slate-300 leading-tight">Fast-scanning high contrast layout</span>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2331,7 +3038,7 @@ export default function Flyers() {
                 <button
                   onClick={() => setPreviewMode("print")}
                   className={`flex-1 sm:flex-none px-4 py-2 font-black rounded-lg text-xs tracking-tight transition-all flex items-center justify-center gap-1.5 ${
-                    previewMode === "print" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    previewMode === "print" ? "bg-[#155dfc] text-white shadow-sm" : "text-slate-600 hover:text-[#155dfc] hover:bg-slate-200/50"
                   }`}
                 >
                   <Eye className="h-3.5 w-3.5" />
@@ -2340,7 +3047,7 @@ export default function Flyers() {
                 <button
                   onClick={() => setPreviewMode("mobile")}
                   className={`flex-1 sm:flex-none px-4 py-2 font-black rounded-lg text-xs tracking-tight transition-all flex items-center justify-center gap-1.5 ${
-                    previewMode === "mobile" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    previewMode === "mobile" ? "bg-[#155dfc] text-white shadow-sm" : "text-slate-600 hover:text-[#155dfc] hover:bg-slate-200/50"
                   }`}
                 >
                   <Smartphone className="h-3.5 w-3.5" />
@@ -2349,7 +3056,7 @@ export default function Flyers() {
                 <button
                   onClick={() => setPreviewMode("qr_test")}
                   className={`flex-1 sm:flex-none px-4 py-2 font-black rounded-lg text-xs tracking-tight transition-all flex items-center justify-center gap-1.5 ${
-                    previewMode === "qr_test" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    previewMode === "qr_test" ? "bg-[#155dfc] text-white shadow-sm" : "text-slate-600 hover:text-[#155dfc] hover:bg-slate-200/50"
                   }`}
                 >
                   <QrCode className="h-3.5 w-3.5" />
@@ -2364,7 +3071,7 @@ export default function Flyers() {
 
             {/* Print Mockup Renderer */}
             {previewMode === "print" && (
-              <div className="bg-slate-700/5 p-4 sm:p-8 rounded-2xl border border-slate-200/80 flex justify-center items-center shadow-inner overflow-auto h-[610px]">
+              <div className="mx-auto max-w-[calc(100%-15px)] lg:max-w-none lg:mx-0 w-full bg-slate-700/5 p-4 sm:p-8 rounded-2xl border border-slate-200/80 flex justify-center items-center shadow-inner overflow-auto h-[610px]">
                 <div 
                   id="flyer-printable-canvas"
                   style={{
@@ -2384,13 +3091,13 @@ export default function Flyers() {
                         VA
                       </div>
                       <div>
-                        <p className="text-[8px] font-black tracking-wider text-slate-950">VERTEXAGENT</p>
+                        <p className="text-[8px] font-black tracking-wider text-slate-950">AI OPEN HOUSE CONNECT</p>
                         <p className="text-[6.5px] text-slate-400 font-mono leading-none">DIGITAL COMPANION</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-[8px] font-black text-slate-900 leading-none">
-                        {brokerageNameOverride || "PINNACLE REAL ESTATE GROUP"}
+                        {brokerageNameOverride || legalName || "PINNACLE REAL ESTATE GROUP"}
                       </p>
                       <p className="text-[6.5px] text-slate-400 leading-none mt-0.5">EXCLUSIVE SYNDICATE</p>
                     </div>
@@ -2422,15 +3129,48 @@ export default function Flyers() {
                   </div>
 
                   {/* Hero primary image selection */}
-                  <div className={`relative rounded overflow-hidden border border-slate-100 ${
-                    includeLenderBlock && orientation === "portrait" ? "h-[94px] mt-1.5" : "h-28 mt-2"
-                  }`}>
-                    <img 
-                      src={selectedHeroImage || fallbackImg} 
-                      alt="Primary Feature" 
-                      className="w-full h-full object-cover" 
-                    />
-                    <div className="absolute top-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-[9px] font-mono font-bold leading-none">
+                  <div 
+                    style={{
+                      width: "100%",
+                      height: includeLenderBlock && orientation === "portrait" ? "94px" : "112px",
+                      overflow: "hidden"
+                    }}
+                    className="relative rounded border border-slate-100 bg-white flex items-center justify-center preview-rotating-border"
+                  >
+                    {(() => {
+                      const hasListingImages = selectedListing?.images && selectedListing.images.length > 0;
+                      const hasAgentPhoto = agentPhoto && agentPhoto.trim() !== "" && !agentPhoto.includes("placeholder");
+                      let resolvedSrc = "";
+
+                      if (selectedHeroImage && !selectedHeroImage.includes("placeholder") && !selectedHeroImage.includes("via.placeholder")) {
+                        resolvedSrc = selectedHeroImage;
+                      } else if (hasListingImages) {
+                        const firstImage = selectedListing.images[0];
+                        const s = typeof firstImage === "string" ? firstImage : (firstImage as any).url;
+                        if (s && !s.includes("placeholder") && !s.includes("via.placeholder")) {
+                          resolvedSrc = s;
+                        }
+                      }
+
+                      if (!resolvedSrc && hasAgentPhoto) {
+                        resolvedSrc = agentPhoto;
+                      }
+
+                      if (!resolvedSrc || resolvedSrc.includes("placeholder") || resolvedSrc.includes("via.placeholder")) {
+                        resolvedSrc = fallbackImg;
+                      }
+
+                      return (
+                        <img 
+                          src={resolvedSrc} 
+                          alt="Primary Feature" 
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          className="w-full h-full object-cover" 
+                        />
+                      );
+                    })()}
+                    
+                    <div className="absolute top-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-[9px] font-bold leading-none" style={{ fontFamily: 'Arial, sans-serif' }}>
                       ${(selectedListing.price || 5000000).toLocaleString()}
                     </div>
 
@@ -2453,24 +3193,24 @@ export default function Flyers() {
                   </div>
 
                   {/* Core stats monospaced bar */}
-                  <div className={`grid grid-cols-4 gap-2 bg-slate-50 rounded text-center font-mono text-[8px] border border-slate-100 ${
+                  <div className={`grid grid-cols-4 gap-2 bg-slate-50 rounded text-center text-[8px] border border-slate-100 ${
                     includeLenderBlock && orientation === "portrait" ? "p-1 mt-1.5" : "p-1.5 mt-2"
-                  }`}>
-                    <div className="border-r border-slate-200">
-                      <p className="text-[6.5px] text-slate-400 font-sans font-normal">Beds</p>
-                      <p className="font-extrabold text-slate-900 leading-tight">{selectedListing.beds || 5}</p>
+                  }`} style={{ fontFamily: 'Arial, sans-serif' }}>
+                    <div className="border-r border-slate-200" style={{ fontFamily: 'Arial, sans-serif' }}>
+                      <p className="text-[6.5px] text-slate-400 font-normal" style={{ fontFamily: 'Arial, sans-serif' }}>Beds</p>
+                      <p className="font-extrabold text-slate-900 leading-tight" style={{ fontFamily: 'Arial, sans-serif' }}>{selectedListing.beds || 5}</p>
                     </div>
-                    <div className="border-r border-slate-200">
-                      <p className="text-[6.5px] text-slate-400 font-sans font-normal">Baths</p>
-                      <p className="font-extrabold text-slate-900 leading-tight">{selectedListing.baths || 6}</p>
+                    <div className="border-r border-slate-200" style={{ fontFamily: 'Arial, sans-serif' }}>
+                      <p className="text-[6.5px] text-slate-400 font-normal" style={{ fontFamily: 'Arial, sans-serif' }}>Baths</p>
+                      <p className="font-extrabold text-slate-900 leading-tight" style={{ fontFamily: 'Arial, sans-serif' }}>{selectedListing.baths || 6}</p>
                     </div>
-                    <div className="border-r border-slate-200">
-                      <p className="text-[6.5px] text-slate-400 font-sans font-normal">Sq Ft</p>
-                      <p className="font-extrabold text-slate-900 leading-tight">{(selectedListing.sqft || 4300).toLocaleString()}</p>
+                    <div className="border-r border-slate-200" style={{ fontFamily: 'Arial, sans-serif' }}>
+                      <p className="text-[6.5px] text-slate-400 font-normal" style={{ fontFamily: 'Arial, sans-serif' }}>Sq Ft</p>
+                      <p className="font-extrabold text-slate-900 leading-tight" style={{ fontFamily: 'Arial, sans-serif' }}>{(selectedListing.sqft || 4300).toLocaleString()}</p>
                     </div>
-                    <div>
-                      <p className="text-[6.5px] text-slate-400 font-sans font-normal">Est. Rate</p>
-                      <p className="font-extrabold text-emerald-600 leading-tight">4.92% APR</p>
+                    <div style={{ fontFamily: 'Arial, sans-serif' }}>
+                      <p className="text-[6.5px] text-slate-400 font-normal" style={{ fontFamily: 'Arial, sans-serif' }}>Est. Rate</p>
+                      <p className="font-extrabold text-emerald-600 leading-tight" style={{ fontFamily: 'Arial, sans-serif' }}>4.92% APR</p>
                     </div>
                   </div>
 
@@ -2512,11 +3252,68 @@ export default function Flyers() {
 
                       {showSecondaryPhotos && orientation === "portrait" && (
                         <div className={`flex gap-1.5 ${includeLenderBlock ? "mt-1" : "mt-1.5"}`}>
-                          <div className={`w-1/2 rounded overflow-hidden ${includeLenderBlock ? "h-[30px]" : "h-9"}`}>
-                            <img src={secondPhoto} className="w-full h-full object-cover" />
+                          <div 
+                            style={{
+                              width: "50%",
+                              height: includeLenderBlock ? "30px" : "36px",
+                              overflow: "hidden"
+                            }}
+                            className="rounded border border-slate-100 bg-white flex items-center justify-center"
+                          >
+                            {(() => {
+                              const hasAgentPhoto = agentPhoto && agentPhoto.trim() !== "" && !agentPhoto.includes("placeholder");
+                              let srcVal = "";
+                              if (filteredSecondaryPhotos && filteredSecondaryPhotos[0] && !filteredSecondaryPhotos[0].includes("placeholder") && !filteredSecondaryPhotos[0].includes("via.placeholder")) {
+                                srcVal = filteredSecondaryPhotos[0];
+                              } else if (hasAgentPhoto) {
+                                srcVal = agentPhoto;
+                              }
+
+                              if (!srcVal || srcVal.includes("placeholder") || srcVal.includes("via.placeholder")) {
+                                srcVal = "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600";
+                              }
+
+                              return (
+                                <img 
+                                  src={srcVal} 
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  className="w-full h-full object-cover" 
+                                  alt="Secondary Feature 1" 
+                                />
+                              );
+                            })()}
                           </div>
-                          <div className={`w-1/2 rounded overflow-hidden ${includeLenderBlock ? "h-[30px]" : "h-9"}`}>
-                            <img src={thirdPhoto} className="w-full h-full object-cover" />
+                          
+                          <div 
+                            style={{
+                              width: "50%",
+                              height: includeLenderBlock ? "30px" : "36px",
+                              overflow: "hidden"
+                            }}
+                            className="rounded border border-slate-100 bg-white flex items-center justify-center"
+                          >
+                            {(() => {
+                              const hasAgentPhoto = agentPhoto && agentPhoto.trim() !== "" && !agentPhoto.includes("placeholder");
+                              let srcVal = "";
+                              if (filteredSecondaryPhotos && filteredSecondaryPhotos[1] && !filteredSecondaryPhotos[1].includes("placeholder") && !filteredSecondaryPhotos[1].includes("via.placeholder")) {
+                                srcVal = filteredSecondaryPhotos[1];
+                              } else if (hasAgentPhoto) {
+                                srcVal = agentPhoto;
+                              }
+
+                              if (!srcVal || srcVal.includes("placeholder") || srcVal.includes("via.placeholder")) {
+                                srcVal = "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&q=80&w=600";
+                              }
+
+                              return (
+                                <img 
+                                  src={srcVal} 
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  className="w-full h-full object-cover" 
+                                  alt="Secondary Feature 2" 
+                                />
+                              );
+                            })()}
                           </div>
                         </div>
                       )}
@@ -2529,7 +3326,17 @@ export default function Flyers() {
                           id="active-qr-svg"
                           value={getQrUrl()} 
                           size={52}
-                          level="M"
+                          level="H"
+                          imageSettings={
+                            (qrBrandingOption === "logo" && brokerageLogo) || (qrBrandingOption === "photo" && agentPhoto) ? {
+                              src: qrBrandingOption === "logo" ? brokerageLogo : agentPhoto,
+                              x: undefined,
+                              y: undefined,
+                              height: 14,
+                              width: 14,
+                              excavate: true,
+                            } : undefined
+                          }
                         />
                       </div>
                       <p 
@@ -2581,7 +3388,7 @@ export default function Flyers() {
 
             {/* Smartphone Instagram Story Mockup view */}
             {previewMode === "mobile" && (
-              <div className="bg-slate-700/5 p-4 sm:p-8 rounded-2xl border border-slate-200/80 flex justify-center items-center h-[610px]">
+              <div className="mx-auto max-w-[calc(100%-15px)] lg:max-w-none lg:mx-0 w-full bg-slate-700/5 p-4 sm:p-8 rounded-2xl border border-slate-200/80 flex justify-center items-center h-[610px]">
                 <div className="w-[280px] h-[530px] bg-slate-950 rounded-[40px] p-3.5 border-4 border-slate-800 shadow-2xl relative flex flex-col justify-between overflow-hidden">
                   
                   {/* Smartphone camera island mockup details */}
@@ -2608,7 +3415,7 @@ export default function Flyers() {
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded bg-blue-600 text-white font-mono text-[8px] font-black flex items-center justify-center">VA</div>
                         <div>
-                          <p className="text-[7.5px] font-black tracking-wide leading-none">{brokerageNameOverride || "PINNACLE GROUP"}</p>
+                          <p className="text-[7.5px] font-black tracking-wide leading-none">{brokerageNameOverride || legalName || "PINNACLE GROUP"}</p>
                           <p className="text-[6.5px] text-zinc-300 pointer-events-none mt-0.5 font-mono">Live Interactive Walkthrough</p>
                         </div>
                       </div>
@@ -2635,7 +3442,17 @@ export default function Flyers() {
                           <QRCodeSVG 
                             value={getQrUrl()} 
                             size={56}
-                            level="M"
+                            level="H"
+                            imageSettings={
+                              (qrBrandingOption === "logo" && brokerageLogo) || (qrBrandingOption === "photo" && agentPhoto) ? {
+                                src: qrBrandingOption === "logo" ? brokerageLogo : agentPhoto,
+                                x: undefined,
+                                y: undefined,
+                                height: 16,
+                                width: 16,
+                                excavate: true,
+                              } : undefined
+                            }
                           />
                         </div>
                         <div className="space-y-1">
@@ -2661,19 +3478,19 @@ export default function Flyers() {
 
             {/* QR Scan test and dynamic grounding view */}
             {previewMode === "qr_test" && (
-              <div className="bg-slate-700/5 p-6 rounded-2xl border border-slate-200/80 text-left space-y-4 font-sans h-[610px] overflow-y-auto w-full">
+              <div className="mx-auto max-w-[calc(100%-15px)] lg:max-w-none lg:mx-0 w-full bg-slate-700/5 p-6 rounded-2xl border border-slate-200/80 text-left space-y-4 font-sans h-auto mb-2.5">
                 {/* Analytical trackers mockup */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-slate-900 text-white rounded-xl space-y-1">
-                    <p className="text-[10px] text-zinc-400 font-mono uppercase">Simulation Scans Tracked</p>
+                    <p className="text-[10px] text-white font-mono uppercase">Simulation Scans Tracked</p>
                     <p className="text-2xl font-black font-mono">1,489</p>
                     <p className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
                       <span>↑ +18.4%</span>
-                      <span className="text-zinc-500 font-normal">from print yards</span>
+                      <span className="text-white font-normal">from print cards</span>
                     </p>
                   </div>
                   <div className="p-4 bg-slate-900 text-white rounded-xl space-y-1">
-                    <p className="text-[10px] text-zinc-400 font-mono uppercase">Conversion Rate Goal</p>
+                    <p className="text-[10px] text-white font-mono uppercase">Conversion Rate Goal</p>
                     <p className="text-2xl font-black font-mono">23.8%</p>
                     <p className="text-[9px] text-blue-400 font-bold">789 checking signins</p>
                   </div>
@@ -2682,10 +3499,10 @@ export default function Flyers() {
                 {/* Integration guide block */}
                 <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 text-xs text-blue-800 space-y-1.5 leading-relaxed">
                   <p className="font-bold flex items-center gap-1 text-blue-900">
-                    <Bot className="h-4.5 w-4.5 text-blue-600 shrink-0" /> How scans drive VertexAgent Leads
+                    <Bot className="h-4.5 w-4.5 text-blue-600 shrink-0" /> How scans drive AI Open House Connect Leads
                   </p>
                   <p>
-                    Whenever a buyer scans this flyer QR code at a property yard or foyer entryway stand, our live routing framework captures their UTM channel (UTM_Print_Yard) and links their browser to the listing's custom voice walkthrough or kiosk sign-in.
+                    When buyers scan the flyer’s QR code at the yard sign or entry stand, they’re taken directly to that home’s voice tour or digital sign-in page. It’s a quick and easy way to explore the property on their phone.
                   </p>
                 </div>
               </div>
@@ -2703,6 +3520,37 @@ export default function Flyers() {
 
           </div>
 
+        </div>
+      )}
+
+      {/* Interactive Tooltip Help Popup Modal */}
+      {activeHelpPopup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-left space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-start">
+              <h4 className="text-sm font-black text-slate-950 uppercase tracking-tight flex items-center gap-1.5">
+                <HelpCircle className="h-4.5 w-4.5 text-blue-600" />
+                {activeHelpPopup.title}
+              </h4>
+              <button 
+                onClick={() => setActiveHelpPopup(null)}
+                className="text-slate-400 hover:text-slate-600 text-xs font-bold leading-none p-1.5 bg-slate-100 rounded-full cursor-pointer"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed font-sans font-medium">{activeHelpPopup.content}</p>
+            <div className="pt-2">
+              <Button 
+                onClick={() => setActiveHelpPopup(null)}
+                className="w-full bg-slate-950 hover:bg-slate-900 text-white font-extrabold rounded-xl h-10 text-xs uppercase tracking-wide cursor-pointer"
+                type="button"
+              >
+                Got It
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

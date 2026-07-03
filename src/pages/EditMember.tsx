@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, User, Mail, Building2, ExternalLink, Shield, Key, Database, Globe, X } from "lucide-react";
+import { ArrowLeft, Save, User, Mail, Building2, ExternalLink, Shield, Key, Database, Globe, X, Calendar, BookOpen } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,12 +32,19 @@ export default function EditMember() {
     name: "",
     email: "",
     office: "Main Office",
-    role: "Agent (Standard)"
+    role: "Agent (Standard)",
+    createdAtDate: "06/18/2026",
+    hasReadOnboarding: false,
+    onboardingReadAt: undefined as number | undefined,
+    hasDownloadedOnboardingPdf: false,
+    onboardingDownloadedAt: undefined as number | undefined
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [apiKey, setApiKey] = useState("********-****-****-****-************");
+  const [isReplacingApiKey, setIsReplacingApiKey] = useState(false);
 
   useEffect(() => {
     async function loadMemberDetail() {
@@ -53,7 +60,12 @@ export default function EditMember() {
             name: uData.name || "",
             email: uData.email || "",
             office: uData.brokerage || "Main Office",
-            role: uData.role || "Agent"
+            role: uData.role || "Agent",
+            createdAtDate: uData.createdAtDate || (uData.createdAt ? new Date(uData.createdAt.toDate ? uData.createdAt.toDate() : uData.createdAt).toLocaleDateString() : "06/18/2026"),
+            hasReadOnboarding: uData.hasReadOnboarding || false,
+            onboardingReadAt: uData.onboardingReadAt,
+            hasDownloadedOnboardingPdf: uData.hasDownloadedOnboardingPdf || false,
+            onboardingDownloadedAt: uData.onboardingDownloadedAt
           });
           return;
         }
@@ -71,7 +83,12 @@ export default function EditMember() {
             name: iData.name || "",
             email: iData.email || "",
             office: iData.brokerage || "Main Office",
-            role: iData.role || "Agent"
+            role: iData.role || "Agent",
+            createdAtDate: iData.createdAtDate || (iData.createdAt ? new Date(iData.createdAt.toDate ? iData.createdAt.toDate() : iData.createdAt).toLocaleDateString() : "06/18/2026"),
+            hasReadOnboarding: false,
+            onboardingReadAt: undefined,
+            hasDownloadedOnboardingPdf: false,
+            onboardingDownloadedAt: undefined
           });
           return;
         }
@@ -79,8 +96,8 @@ export default function EditMember() {
         console.error("Error fetching Firestore invite details:", err);
       }
 
-      // 3. Check localStorage vertex_team_data
-      const savedMembers = localStorage.getItem('vertex_team_data');
+      // 3. Check localStorage first
+      const savedMembers = localStorage.getItem('aiopenhouseconnect_team_data') || localStorage.getItem('vertex_team_data');
       let foundMember = null;
       
       if (savedMembers) {
@@ -98,7 +115,12 @@ export default function EditMember() {
           name: foundMember.name,
           email: foundMember.email,
           office: (foundMember as any).office || (foundMember as any).brokerage || "Main Office",
-          role: (foundMember as any).role || "Agent"
+          role: (foundMember as any).role || "Agent",
+          createdAtDate: (foundMember as any).createdAtDate || "06/18/2026",
+          hasReadOnboarding: (foundMember as any).hasReadOnboarding || (foundMember.email === "luc.valade@gmail.com" ? true : false),
+          onboardingReadAt: (foundMember as any).onboardingReadAt || (foundMember.email === "luc.valade@gmail.com" ? Date.now() : undefined),
+          hasDownloadedOnboardingPdf: (foundMember as any).hasDownloadedOnboardingPdf || false,
+          onboardingDownloadedAt: (foundMember as any).onboardingDownloadedAt
         });
       }
     }
@@ -164,7 +186,8 @@ export default function EditMember() {
           name: formData.name,
           email: formData.email,
           brokerage: formData.office,
-          role: formData.role
+          role: formData.role,
+          createdAtDate: formData.createdAtDate
         });
       } else {
         // Check if it's an invitation we are updating in Firestore
@@ -175,16 +198,17 @@ export default function EditMember() {
             name: formData.name,
             email: formData.email,
             brokerage: formData.office,
-            role: formData.role
+            role: formData.role,
+            createdAtDate: formData.createdAtDate
           });
         } else {
           // Persist to localStorage to simulate a database update for dummy/offline members
-          const savedMembers = localStorage.getItem('vertex_team_data');
+          const savedMembers = localStorage.getItem('aiopenhouseconnect_team_data') || localStorage.getItem('vertex_team_data');
           let team = savedMembers ? JSON.parse(savedMembers) : [
-            { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", active: true, listings: 4 },
-            { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", active: true, listings: 12 },
-            { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", active: true, listings: 8 },
-            { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", active: true, listings: 0 },
+            { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 4, joinedAt: "06/18/2026 03:02 PM", hasAccepted: true, createdAtDate: "06/18/2026" },
+            { id: "2", name: "Sarah Jenkins", email: "sarah.j@aiopenhouseconnect.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 12, createdAtDate: "12/10/2025" },
+            { id: "3", name: "Michael Chang", email: "m.chang@aiopenhouseconnect.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 8, createdAtDate: "01/22/2026" },
+            { id: "4", name: "Jessica Smith", email: "admin@aiopenhouseconnect.com", role: "Office Manager", brokerage: "AI Open House Connect Agent Group", listings: 0, createdAtDate: "09/14/2024" },
           ];
 
           const memberIdx = team.findIndex((m: any) => m.id === memberId);
@@ -201,6 +225,7 @@ export default function EditMember() {
             team.push(updatedMember);
           }
 
+          localStorage.setItem('aiopenhouseconnect_team_data', JSON.stringify(team));
           localStorage.setItem('vertex_team_data', JSON.stringify(team));
         }
       }
@@ -310,6 +335,58 @@ export default function EditMember() {
           </div>
         </div>
 
+        <div className="pt-6 border-t border-slate-100 grid md:grid-cols-2 gap-8 text-left animate-in fade-in duration-300">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Calendar className="h-3 w-3 text-slate-400" /> Created On Date
+              </Label>
+              <Input 
+                type="text" 
+                placeholder="MM/DD/YYYY"
+                className="h-11 font-bold bg-white text-stone-900 border-slate-200"
+                value={formData.createdAtDate || "06/18/2026"}
+                onChange={e => setFormData(prev => ({ ...prev, createdAtDate: e.target.value }))}
+              />
+              <p className="text-[10px] text-slate-400 font-medium leading-relaxed">Specify when this member account record was first initiated.</p>
+            </div>
+          </div>
+          
+          <div className="space-y-3 bg-slate-50 p-4 border rounded-xl">
+            <Label className="text-xs font-bold text-slate-550 uppercase tracking-wider flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-blue-600" /> Onboarding Tracking Stats
+            </Label>
+            
+            <div className="space-y-2.5 text-xs text-slate-600">
+              <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100">
+                <span className="font-semibold text-slate-600">Read Status:</span>
+                {formData.hasReadOnboarding ? (
+                  <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[10px]">
+                    Read ({formData.onboardingReadAt ? new Date(formData.onboardingReadAt).toLocaleDateString() : "06/18/2026"})
+                  </span>
+                ) : (
+                  <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded text-[10px]">
+                    Not Read Yet
+                  </span>
+                )}
+              </div>
+              
+              <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100">
+                <span className="font-semibold text-slate-600">PDF Kit Downloaded:</span>
+                {formData.hasDownloadedOnboardingPdf ? (
+                  <span className="bg-sky-100 text-sky-800 font-bold px-2 py-0.5 rounded text-[10px]">
+                    Downloaded ({formData.onboardingDownloadedAt ? new Date(formData.onboardingDownloadedAt).toLocaleDateString() : "06/18/2026"})
+                  </span>
+                ) : (
+                  <span className="bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded text-[10px]">
+                    Not Downloaded
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="pt-6 border-t border-slate-100 bg-slate-50/50 -mx-8 px-8 pb-8 rounded-b-xl">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -365,19 +442,52 @@ export default function EditMember() {
           </DialogHeader>
 
           <div className="space-y-6 py-6 text-left">
-            <div className="space-y-4">
+              <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <Database className="h-4 w-4 text-blue-500" />
-                  <span className="font-black text-xs uppercase tracking-widest">Personal CRM Sync</span>
+                  <span className="font-black text-xs uppercase tracking-widest text-slate-800">Personal CRM Sync</span>
                 </div>
                 <div className="h-2 w-10 bg-green-500 rounded-full" />
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">HubSpot / Salesforce API Key</Label>
                 <div className="relative">
-                  <Input type="password" value="********-****-****-****-************" readOnly className="pr-10 font-mono text-xs bg-slate-50" />
-                  <button className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600 text-[10px] font-bold hover:underline">REPLACE</button>
+                  <Input 
+                    type={isReplacingApiKey ? "text" : "password"} 
+                    value={apiKey} 
+                    onChange={(e) => {
+                      if (isReplacingApiKey) {
+                        setApiKey(e.target.value);
+                      }
+                    }}
+                    readOnly={!isReplacingApiKey} 
+                    className="pr-16 font-mono text-xs bg-white border-slate-200" 
+                    placeholder="Enter new CRM API Key..."
+                  />
+                  {!isReplacingApiKey ? (
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setApiKey("");
+                        setIsReplacingApiKey(true);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-600 text-[10px] font-bold hover:underline cursor-pointer"
+                    >
+                      REPLACE
+                    </button>
+                  ) : (
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setIsReplacingApiKey(false);
+                        toast.success("CRM API Key configured successfully. Remember to save changes.");
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-600 text-[10px] font-bold hover:underline cursor-pointer"
+                    >
+                      CONFIRM
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
