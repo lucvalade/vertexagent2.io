@@ -169,6 +169,7 @@ export default function ProtectedLayout() {
     { label: "Lenders", icon: Link2, path: "/app/lenders" },
     { label: "Teams", icon: Building2, path: "/app/team" },
     { label: "Billing & Plans", icon: CreditCard, path: "/app/billing" },
+    { label: "Pilot Admin", icon: Zap, path: "/app/pilot-admin" },
   ];
 
   const adminLinks = [
@@ -181,6 +182,7 @@ export default function ProtectedLayout() {
     { label: "Launch Notifications FREE Plan", icon: Bell, path: "/app/admin/notifications" },
     { label: "System Logs", icon: FileBox, path: "/app/admin/logs" },
     { label: "Settings", icon: Settings, path: "/app/admin/settings" },
+    { label: "Pilot Admin", icon: Zap, path: "/app/pilot-admin" },
   ];
 
   const currentLinks = viewMode === 'ADMIN' ? adminLinks : navLinks;

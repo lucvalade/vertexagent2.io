@@ -37,6 +37,7 @@ import AdminNotifications from './pages/admin/AdminNotifications.tsx';
 import AdminLogs from './pages/admin/AdminLogs.tsx';
 import InviteAgent from './pages/admin/InviteAgent.tsx';
 import BrokerageSettings from './pages/admin/BrokerageSettings.tsx';
+import PilotAdmin from './pages/admin/PilotAdmin.tsx';
 import Flyers from './pages/Flyers.tsx';
 import Lenders from './pages/Lenders.tsx';
 import AiTours from './pages/AiTours.tsx';
@@ -125,6 +126,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="tour/:listingId" element={<Tour />} />
             <Route path="microsite/:listingId" element={<ListingMicrosite />} />
             <Route path="settings/embeds/welcome-message-defaults" element={<WelcomeMessageDefaultsEmbed />} />
+            <Route path="pilot-admin" element={<PilotAdmin />} />
             
             {/* New public subpages */}
             <Route path="product" element={<ProductPage />} />
@@ -163,6 +165,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="team/:memberId/edit" element={<EditMember />} />
               <Route path="billing" element={<Billing />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="pilot-admin" element={<PilotAdmin />} />
               <Route path="admin">
                 <Route index element={<AdminDashboard />} />
                 <Route path="users" element={<AdminUsers />} />

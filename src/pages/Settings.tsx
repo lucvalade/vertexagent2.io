@@ -701,7 +701,16 @@ export default function Settings() {
 
   const handleStartLiveStream = async () => {
     setIsInitializingLive(true);
-    const avatarId = avatarType === "gallery" ? selectedGalleryId : (digitalTwinAvatarId || "dt-agent-clone-99");
+    let avatarId = avatarType === "gallery" ? selectedGalleryId : (digitalTwinAvatarId || "dt-agent-clone-99");
+    if (avatarId === "kore") {
+      avatarId = "073b60a9-89a8-45aa-8902-c358f64d2852";
+    } else if (avatarId === "puck") {
+      avatarId = "dt-agent-clone-01";
+    } else if (avatarId === "zephyr") {
+      avatarId = "dt-agent-clone-02";
+    } else if (avatarId === "charon") {
+      avatarId = "dt-agent-clone-03";
+    }
     try {
       const res = await fetch("/api/heygen/live-session", {
         method: "POST",
@@ -711,7 +720,7 @@ export default function Settings() {
       if (res.ok) {
         const data = await res.json();
         setLiveSessionDetails({
-          session_id: data.sessionId,
+          session_id: data.session_id || data.sessionId,
           quality: "1080p WebRTC",
           sdp: "m=video 9 UDP/TLS/RTP/SAVPF..."
         });
@@ -2090,46 +2099,66 @@ export default function Settings() {
                       
                       {/* Active Video Screen simulation */}
                       {liveSessionDetails ? (
-                        <div className="absolute inset-0 flex flex-col justify-between p-4 z-10 animate-in fade-in duration-300">
-                          {/* Live Indicator */}
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 bg-red-600/90 text-[9px] text-white font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full animate-pulse shadow-sm">
-                              <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                              webrtc stream
-                            </span>
-                            <span className="text-[9px] font-mono text-slate-400 bg-slate-950/80 backdrop-blur-sm px-1.5 py-0.5 rounded border border-slate-850">
-                              {liveSessionDetails.quality || "1080p"}
-                            </span>
-                          </div>
-
-                          {/* Central Pulsing Avatar Graphic representing active stream */}
-                          <div className="flex flex-col items-center justify-center grow">
-                            <div className="relative animate-pulse">
-                              <div className="absolute -inset-1.5 rounded-full bg-blue-500 opacity-20 blur" />
-                              <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-blue-400 flex items-center justify-center text-white text-2xl font-black shadow-lg">
-                                {avatarType === "gallery" 
-                                  ? (selectedGalleryId === "kore" ? "So" : selectedGalleryId === "puck" ? "Al" : selectedGalleryId === "zephyr" ? "So" : "Ma") 
-                                  : "DT"
-                                }
-                              </div>
+                        <>
+                          <video
+                            key={selectedGalleryId}
+                            src={
+                              selectedGalleryId === "kore"
+                                ? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4"
+                                : selectedGalleryId === "puck"
+                                ? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4"
+                                : selectedGalleryId === "zephyr"
+                                ? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4"
+                                : "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+                            }
+                            className="absolute inset-0 w-full h-full object-cover opacity-60"
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            crossOrigin="anonymous"
+                          />
+                          <div className="absolute inset-0 flex flex-col justify-between p-4 z-10 animate-in fade-in duration-300 bg-slate-950/20">
+                            {/* Live Indicator */}
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1.5 bg-red-600/90 text-[9px] text-white font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full animate-pulse shadow-sm">
+                                <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                                webrtc stream
+                              </span>
+                              <span className="text-[9px] font-mono text-slate-400 bg-slate-950/80 backdrop-blur-sm px-1.5 py-0.5 rounded border border-slate-850">
+                                {liveSessionDetails.quality || "1080p"}
+                              </span>
                             </div>
-                            <span className="text-sm font-bold text-white mt-3 shadow-sm">
-                              {avatarType === "gallery" 
-                                ? (selectedGalleryId === "kore" ? "Sora Classic" : selectedGalleryId === "puck" ? "Alex (Puck)" : selectedGalleryId === "zephyr" ? "Sophia (Sophia)" : "Marcus (Marcus)") 
-                                : "My Digital Twin"
-                              }
-                            </span>
-                            <span className="text-[10px] text-slate-400 mt-1 font-mono">Status: Connected to live WebRTC port</span>
-                          </div>
 
-                          {/* Live Speech transcript indicator */}
-                          <div className="bg-slate-950/80 backdrop-blur-sm border border-slate-800 p-2.5 rounded-xl text-center space-y-1">
-                            <span className="text-[8px] uppercase tracking-widest text-slate-500 font-extrabold block">Live script transcript feedback</span>
-                            <p className="text-[10px] text-slate-300 leading-normal line-clamp-2 italic">
-                              {isPlayingPreview ? scriptToModerate : "Listening for voice direction/script updates..."}
-                            </p>
+                            {/* Central Pulsing Avatar Graphic representing active stream */}
+                            <div className="flex flex-col items-center justify-center grow">
+                              <div className="relative animate-pulse">
+                                <div className="absolute -inset-1.5 rounded-full bg-blue-500 opacity-20 blur" />
+                                <div className="h-20 w-20 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-blue-400 flex items-center justify-center text-white text-2xl font-black shadow-lg">
+                                  {avatarType === "gallery" 
+                                    ? (selectedGalleryId === "kore" ? "So" : selectedGalleryId === "puck" ? "Al" : selectedGalleryId === "zephyr" ? "So" : "Ma") 
+                                    : "DT"
+                                  }
+                                </div>
+                              </div>
+                              <span className="text-sm font-bold text-white mt-3 shadow-sm">
+                                {avatarType === "gallery" 
+                                  ? (selectedGalleryId === "kore" ? "Sora Standard" : selectedGalleryId === "puck" ? "Sora Friendly" : selectedGalleryId === "zephyr" ? "Sora Professional" : "Sora Luxury") 
+                                  : "My Digital Twin"
+                                }
+                              </span>
+                              <span className="text-[10px] text-slate-300 mt-1 font-mono drop-shadow bg-slate-950/40 px-1.5 py-0.5 rounded">Status: Connected to live WebRTC port</span>
+                            </div>
+
+                            {/* Live Speech transcript indicator */}
+                            <div className="bg-slate-950/80 backdrop-blur-sm border border-slate-800 p-2.5 rounded-xl text-center space-y-1">
+                              <span className="text-[8px] uppercase tracking-widest text-slate-500 font-extrabold block">Live script transcript feedback</span>
+                              <p className="text-[10px] text-slate-300 leading-normal line-clamp-2 italic">
+                                {isPlayingPreview ? scriptToModerate : "Listening for voice direction/script updates..."}
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        </>
                       ) : (
                         <div className="flex flex-col items-center justify-center p-6 text-center space-y-3">
                           <div className="h-14 w-14 rounded-full bg-slate-850 flex items-center justify-center text-slate-500 border border-slate-800">
@@ -2155,7 +2184,7 @@ export default function Settings() {
                             <span className="text-[9px] text-slate-500 block uppercase">Avatar Name</span>
                             <span className="font-bold text-white leading-normal block">
                               {avatarType === "gallery" 
-                                ? (selectedGalleryId === "kore" ? "Sora Classic" : selectedGalleryId === "puck" ? "Alex" : selectedGalleryId === "zephyr" ? "Sophia" : "Marcus") 
+                                ? (selectedGalleryId === "kore" ? "Sora Standard" : selectedGalleryId === "puck" ? "Sora Friendly" : selectedGalleryId === "zephyr" ? "Sora Professional" : "Sora Luxury") 
                                 : "My Digital Twin"
                               }
                             </span>

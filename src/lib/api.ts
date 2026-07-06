@@ -78,6 +78,7 @@ export interface Listing {
   flyerSubHeadline?: string;
   flyerDescription?: string;
   flyerCta?: string;
+  avatarEnabled?: boolean;
   flyerTemplate?: string;
   flyerAccentColor?: string;
   flyerOrientation?: string;
@@ -244,6 +245,29 @@ export async function deleteListingOp(listingId: string) {
 }
 
 export async function getListingBasic(listingId: string): Promise<Pick<Listing, "id" | "address" | "ownerId" | "city" | "province" | "price" | "beds" | "baths" | "images" | "openHouseDate" | "openHouseTime" | "qrDestination" | "country" | "welcome_en" | "welcome_fr"> | null> {
+  if (listingId === "pilot-listing-01") {
+    const full = await getListing(listingId);
+    if (full) {
+      return {
+        id: full.id,
+        address: full.address,
+        ownerId: full.ownerId,
+        city: full.city,
+        province: full.province,
+        price: full.price,
+        beds: full.beds,
+        baths: full.baths,
+        images: full.images,
+        openHouseDate: full.openHouseDate,
+        openHouseTime: full.openHouseTime,
+        qrDestination: full.qrDestination,
+        country: full.country,
+        welcome_en: full.welcome_en,
+        welcome_fr: full.welcome_fr
+      };
+    }
+    return null;
+  }
   const path = `listings/${listingId}`;
   try {
     const d = await getDoc(doc(db, "listings", listingId));
@@ -274,6 +298,46 @@ export async function getListingBasic(listingId: string): Promise<Pick<Listing, 
 }
 
 export async function getListing(listingId: string): Promise<Listing | null> {
+  if (listingId === "pilot-listing-01") {
+    const path = `properties/pilot-listing-01`;
+    try {
+      const pDoc = await getDoc(doc(db, "properties", "pilot-listing-01"));
+      if (pDoc.exists()) {
+        const pData = pDoc.data();
+        const mappedData: Listing = {
+          id: "pilot-listing-01",
+          ownerId: pData.agentUid || "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
+          address: pData.address || "Pilot Property Address",
+          city: pData.city || "Hamilton",
+          province: pData.province || "ON",
+          postalCode: pData.postalCode || "",
+          price: pData.listPrice ?? pData.price,
+          beds: pData.bedrooms ?? pData.beds,
+          baths: pData.bathrooms ?? pData.baths,
+          sqft: pData.squareFeet ?? pData.sqft,
+          propertyType: pData.propertyType || "Residential",
+          mlsNumber: pData.mlsNumber || "",
+          description: pData.description || "",
+          talkingPoints: pData.features || pData.talkingPoints || [],
+          avatarEnabled: pData.avatarEnabled ?? true,
+          qrDestination: pData.qrDestination || "tour",
+          status: pData.status || "Active",
+          images: pData.images || [
+            "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80",
+            "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80",
+            "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80"
+          ],
+          welcome_en: pData.welcome_en || "/audio/welcome_en.mp3",
+          welcome_fr: pData.welcome_fr || "",
+          createdAt: pData.createdAt || Date.now(),
+          updatedAt: pData.updatedAt || Date.now()
+        };
+        return mappedData;
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, path);
+    }
+  }
   const path = `listings/${listingId}`;
   try {
     const d = await getDoc(doc(db, "listings", listingId));

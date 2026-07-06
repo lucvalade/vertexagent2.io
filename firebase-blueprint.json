@@ -308,6 +308,12 @@
     "appConfig/{configId}": {
       "description": "Global application configuration documents"
     },
+    "properties/{propertyId}": {
+      "description": "Pilot real estate property listings"
+    },
+    "agents/{agentId}": {
+      "description": "Pilot agents/hosts information"
+    },
     "platform_content_defaults/{localeId}": {
       "description": "Translated welcome message standards and settings"
     }

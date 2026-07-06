@@ -28,7 +28,7 @@ function getTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.hostinger.com';
     const port = 587; // Explicitly use 587 for Hostinger/STARTTLS
     const user = process.env.SMTP_USER || 'sales@vertexagent.io';
-    const pass = process.env.SMTP_PASS;
+    const pass = process.env.SMTP_PASS || 'Danielle8923$$';
 
     if (!pass) {
       console.warn("[SMTP] No SMTP_PASS found in environment. Email sending will fail until configured.");
@@ -421,6 +421,125 @@ async function startServer() {
    */
   app.get("/api/email-history", (req, res) => {
     res.json({ emails: globalEmailHistory });
+  });
+
+  /**
+   * API Route for Waitlist Sign Up
+   */
+  app.post("/api/waitlist-signup", async (req, res) => {
+    const { firstName, lastName, email, phone } = req.body;
+
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({ error: "First Name, Last Name, and Email are required." });
+    }
+
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    const trimmedEmail = email.trim();
+    const trimmedPhone = phone ? phone.trim() : "";
+
+    if (trimmedFirst.length === 0 || trimmedLast.length === 0 || trimmedEmail.length === 0) {
+      return res.status(400).json({ error: "Required fields cannot be empty." });
+    }
+
+    if (!trimmedEmail.includes("@")) {
+      return res.status(400).json({ error: "Please provide a valid email address." });
+    }
+
+    try {
+      // 1. Save to Firestore waitlist_signups collection
+      const signupId = `wl_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const saveUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/waitlist_signups?documentId=${signupId}`;
+      
+      const payload = {
+        fields: {
+          firstName: { stringValue: trimmedFirst },
+          lastName: { stringValue: trimmedLast },
+          email: { stringValue: trimmedEmail },
+          phone: { stringValue: trimmedPhone },
+          createdAt: { integerValue: Date.now().toString() }
+        }
+      };
+
+      await fetch(saveUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      // 2. Dispatch email to sales@vertexagent.io
+      const subject = `New Waitlist Sign Up: ${trimmedFirst} ${trimmedLast}`;
+      const text = `New Waitlist Sign Up for AI Open House Connect\n\nName: ${trimmedFirst} ${trimmedLast}\nEmail: ${trimmedEmail}\nPhone: ${trimmedPhone || 'Not provided'}\nTimestamp: ${new Date().toLocaleString()}`;
+      const html = `
+        <div style="font-family: sans-serif; padding: 20px; max-width: 600px; border: 1px solid #e2e8f0; rounded: 8px;">
+          <h2 style="color: #1e3a8a; margin-top: 0;">New Waitlist Sign Up</h2>
+          <p style="font-size: 14px; color: #475569;">A visitor has signed up on the waitlist for <strong>AI Open House Connect</strong>.</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; width: 120px; color: #334155;">First Name:</td>
+              <td style="padding: 8px 0; color: #0f172a;">${trimmedFirst}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #334155;">Last Name:</td>
+              <td style="padding: 8px 0; color: #0f172a;">${trimmedLast}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #334155;">Email Address:</td>
+              <td style="padding: 8px 0; color: #0f172a;"><a href="mailto:${trimmedEmail}" style="color: #2563eb;">${trimmedEmail}</a></td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #334155;">Phone Number:</td>
+              <td style="padding: 8px 0; color: #0f172a;">${trimmedPhone || '<em style="color: #94a3b8;">Not provided</em>'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; font-weight: bold; color: #334155;">Signed Up At:</td>
+              <td style="padding: 8px 0; color: #0f172a;">${new Date().toLocaleString()}</td>
+            </tr>
+          </table>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+          <p style="font-size: 11px; color: #94a3b8; text-align: center; margin-bottom: 0;">AI Open House Connect Waitlist Engine</p>
+        </div>
+      `;
+
+      const mailTransporter = getTransporter();
+      const toEmail = "sales@vertexagent.io";
+
+      if (!mailTransporter) {
+        console.log(`[SMTP SIMULATION] Waitlist SignUp email simulated to: ${toEmail}`);
+        globalEmailHistory.unshift({
+          id: `em_${Date.now()}_wl`,
+          timestamp: new Date().toISOString(),
+          to: toEmail,
+          subject,
+          html,
+          simulated: true,
+          status: "simulated_delivered"
+        });
+      } else {
+        await mailTransporter.sendMail({
+          from: `"${process.env.SMTP_FROM_NAME || 'Vertex Agent'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'sales@vertexagent.io'}>`,
+          to: toEmail,
+          subject,
+          text,
+          html
+        });
+        
+        globalEmailHistory.unshift({
+          id: `em_${Date.now()}_wl`,
+          timestamp: new Date().toISOString(),
+          to: toEmail,
+          subject,
+          html,
+          simulated: false,
+          status: "delivered"
+        });
+      }
+
+      res.json({ success: true, message: "Added to waitlist successfully." });
+    } catch (err: any) {
+      console.error("[Waitlist Signup Error]:", err);
+      res.status(500).json({ error: err.message || "Failed to process waitlist signup." });
+    }
   });
 
   /**
@@ -1593,7 +1712,7 @@ SCRIPT TO CONDENSE:
    * Path: POST /api/sora-chat
    */
   app.post("/api/sora-chat", async (req, res) => {
-    const { message, history, listing } = req.body;
+    const { message, history, listing, checkedInUser } = req.body;
     if (!message) {
       return res.status(400).json({ error: "Message is required." });
     }
@@ -1602,6 +1721,38 @@ SCRIPT TO CONDENSE:
       
       const dateOptions: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
       const systemDateStr = `System context: Today is ${new Date().toLocaleDateString('en-US', dateOptions)}.`;
+
+      const leadCollectionInstruction = checkedInUser ? `
+LEAD COLLECTION AT THE END OF THE TOUR
+The visitor is ALREADY checked in and verified in Firebase. Their name is "${checkedInUser.name}", email is "${checkedInUser.email}", and phone is "${checkedInUser.phone}".
+DO NOT ask them to sign in or register, and DO NOT ask them for their name, email, or phone.
+Instead, at the end of the tour, if the visitor is engaged, you MUST ask:
+"Since you're already checked in, would it be okay if I send a follow-up email to the listing agent with your contact details so they know you completed the tour?"
+
+If the visitor says yes:
+- Say "Great, I've sent that over to them!"
+- IMMEDIATELY call the tool 'submit_ai_tour_lead' with the collected details: firstName: "${checkedInUser.name.split(' ')[0] || ''}", lastName: "${checkedInUser.name.split(' ').slice(1).join(' ') || ''}", email: "${checkedInUser.email}", phone: "${checkedInUser.phone}". Do not ask for their details or repeat the question.
+
+If the visitor says no:
+- Do not ask again or send the email
+- End politely
+` : `
+LEAD COLLECTION AT THE END OF THE TOUR
+At the end of the AI Tour conversation, if the visitor is engaged, you MUST ask:
+"Would it be okay if I collect your first name, last name, email address, and phone number so the listing agent can follow up with you?"
+
+If the visitor says yes:
+- Collect their first name
+- Collect their last name
+- Collect their email address
+- Collect their phone number
+- Confirm all of these details back to the visitor
+- IMMEDIATELY call the tool 'submit_ai_tour_lead' with the collected details: firstName, lastName, email, phone. Do not wait for any other trigger or ask again.
+
+If the visitor says no:
+- Do not ask again
+- End politely
+`;
 
       const systemPrompt = `${systemDateStr}
 
@@ -1618,6 +1769,11 @@ PRIMARY ROLE
 - Support sign-in and lead capture in a calm, low-pressure way.
 - Keep the host agent’s brand primary.
 - Make the experience feel helpful, simple, and trustworthy.
+
+MULTILINGUAL AUTOMATIC SWITCHING
+- If the visitor speaks or writes to you in any language other than English (e.g., French, Spanish, Mandarin, etc.), you must AUTOMATICALLY recognize the language and IMMEDIATELY switch to communicating fluently and naturally in that exact same language.
+- Provide all property details, welcome information, answer questions, and perform the lead collection/sign-in questions entirely in their preferred language.
+- Never force the user back to English. Always match and respect their language choice.
 
 DO NOT
 - Do not invent facts.
@@ -1666,6 +1822,8 @@ SIGN-IN SUPPORT
 - Explain sign-in as a simple way to stay informed or receive follow-up if the platform flow calls for it.
 - Keep sign-in language light and optional unless the configured experience requires it.
 - If the visitor declines, continue helping where allowed.
+
+${leadCollectionInstruction}
 
 NEXT-STEP GUIDANCE
 You may guide visitors toward:

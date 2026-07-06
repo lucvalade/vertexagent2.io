@@ -1,7 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { getListing, getAgent, createLead, Listing, sendEmail } from "@/lib/api";
+import { Type } from "@google/genai";
 import { trackEvent } from "@/lib/analytics";
+import { db } from "@/lib/firebase";
+import { query, collection, where, getDocs } from "firebase/firestore";
 import { 
   Loader2, 
   Mic, 
@@ -169,6 +172,41 @@ export default function ListingMicrosite() {
   const [mortgageConsent, setMortgageConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [hasRegistered, setHasRegistered] = useState(false);
+
+  const [dbVerifiedCheckIn, setDbVerifiedCheckIn] = useState(false);
+  const [checkedInUser, setCheckedInUser] = useState<{name: string, email: string, phone: string} | null>(null);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("visitor_email");
+    const savedName = localStorage.getItem("visitor_name") || "Guest Visitor";
+    const savedPhone = localStorage.getItem("visitor_phone") || "";
+
+    if (savedEmail && listingId) {
+      setCheckedInUser({ name: savedName, email: savedEmail, phone: savedPhone });
+      setDbVerifiedCheckIn(true);
+      setHasRegistered(true);
+
+      const q = query(
+        collection(db, "leads"),
+        where("email", "==", savedEmail),
+        where("listingId", "==", listingId)
+      );
+      getDocs(q).then((snapshot) => {
+        if (!snapshot.empty) {
+          const docData = snapshot.docs[0].data();
+          setDbVerifiedCheckIn(true);
+          setCheckedInUser({
+            name: docData.name || savedName,
+            email: docData.email || savedEmail,
+            phone: docData.phone || savedPhone
+          });
+          setHasRegistered(true);
+        }
+      }).catch((err) => {
+        console.error("Firebase registration verification failed:", err);
+      });
+    }
+  }, [listingId]);
 
   // Showing Request Form States
   const [showDate, setShowDate] = useState("");
@@ -453,6 +491,38 @@ export default function ListingMicrosite() {
   const dateOptions: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const systemDateStr = `System context: Today is ${new Date().toLocaleDateString('en-US', dateOptions)}.`;
 
+  const leadCollectionInstruction = (dbVerifiedCheckIn && checkedInUser) ? `
+LEAD COLLECTION AT THE END OF THE TOUR
+The visitor is ALREADY checked in and verified in Firebase. Their name is "${checkedInUser.name}", email is "${checkedInUser.email}", and phone is "${checkedInUser.phone}".
+DO NOT ask them to sign in or register, and DO NOT ask them for their name, email, or phone.
+Instead, at the end of the tour, if the visitor is engaged, you MUST ask:
+"Since you're already checked in, would it be okay if I send a follow-up email to the listing agent with your contact details so they know you completed the tour?"
+
+If the visitor says yes:
+- Say "Great, I've sent that over to them!"
+- IMMEDIATELY call the tool 'submit_ai_tour_lead' with the collected details: firstName: "${checkedInUser.name.split(' ')[0] || ''}", lastName: "${checkedInUser.name.split(' ').slice(1).join(' ') || ''}", email: "${checkedInUser.email}", phone: "${checkedInUser.phone}". Do not ask for their details or repeat the question.
+
+If the visitor says no:
+- Do not ask again or send the email
+- End politely
+` : `
+LEAD COLLECTION AT THE END OF THE TOUR
+At the end of the AI Tour conversation, if the visitor is engaged, you MUST ask:
+"Would it be okay if I collect your first name, last name, email address, and phone number so the listing agent can follow up with you?"
+
+If the visitor says yes:
+- Collect their first name
+- Collect their last name
+- Collect their email address
+- Collect their phone number
+- Confirm all of these details back to the visitor
+- IMMEDIATELY call the tool 'submit_ai_tour_lead' with the collected details: firstName, lastName, email, phone. Do not wait for any other trigger or ask again.
+
+If the visitor says no:
+- Do not ask again
+- End politely
+`;
+
   const systemInstruction = `${systemDateStr}
 
 SYSTEM PROMPT — SORA FOR AI OPEN HOUSE CONNECT
@@ -468,6 +538,11 @@ PRIMARY ROLE
 - Support sign-in and lead capture in a calm, low-pressure way.
 - Keep the host agent’s brand primary.
 - Make the experience feel helpful, simple, and trustworthy.
+
+MULTILINGUAL AUTOMATIC SWITCHING
+- If the visitor speaks or writes to you in any language other than English (e.g., French, Spanish, Mandarin, etc.), you must AUTOMATICALLY recognize the language and IMMEDIATELY switch to communicating fluently and naturally in that exact same language.
+- Provide all property details, welcome information, answer questions, and perform the lead collection/sign-in questions entirely in their preferred language.
+- Never force the user back to English. Always match and respect their language choice.
 
 DO NOT
 - Do not invent facts.
@@ -516,6 +591,8 @@ SIGN-IN SUPPORT
 - Explain sign-in as a simple way to stay informed or receive follow-up if the platform flow calls for it.
 - Keep sign-in language light and optional unless the configured experience requires it.
 - If the visitor declines, continue helping where allowed.
+
+${leadCollectionInstruction}
 
 NEXT-STEP GUIDANCE
 You may guide visitors toward:
@@ -602,15 +679,91 @@ LENDER DETAILS:
 ${pairedLender && listing?.lenderHandoff !== false ? `- Active Financing Partner: ${pairedLender.name} (${pairedLender.company})` : "- Currently there is no active paired lender for this tour."}
 `;
 
+  const submit_ai_tour_lead_tool = {
+    name: "submit_ai_tour_lead",
+    description: "Triggers a lead notification email to the listing agent with the collected contact details from the visitor.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        firstName: {
+          type: Type.STRING,
+          description: "The visitor's first name."
+        },
+        lastName: {
+          type: Type.STRING,
+          description: "The visitor's last name."
+        },
+        email: {
+          type: Type.STRING,
+          description: "The visitor's email address."
+        },
+        phone: {
+          type: Type.STRING,
+          description: "The visitor's phone number."
+        }
+      },
+      required: ["firstName", "lastName", "email", "phone"]
+    }
+  };
+
   // Establish live WebSocket connection with Sora (Gemini Live API)
   const handleToolCall = async (name: string, args: any) => {
     console.log("Microsite Tool Invoked:", name, args);
+    if (name === "submit_ai_tour_lead") {
+      try {
+        const { firstName, lastName, email, phone } = args;
+        const leadId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+        
+        await createLead(listingId || "unknown_listing", {
+          id: leadId,
+          listingId: listingId || "unknown_listing",
+          listingAddress: listing?.address || "Unknown Address",
+          agentId: listing?.ownerId || agent?.id || "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
+          name: `${firstName} ${lastName}`.trim(),
+          email: email,
+          phone: phone,
+          message: "Lead captured via AI Tour voice/chat prompt on Microsite.",
+          status: "New",
+          createdAt: Date.now()
+        });
+
+        const agentEmail = agent?.email || "sales@vertexagent.io";
+        const emailBody = `
+          <h2>New AI Tour Lead Captured!</h2>
+          <p>A visitor has completed the AI Tour and consented to share their contact information.</p>
+          <hr />
+          <p><strong>Name:</strong> ${firstName} ${lastName}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Phone:</strong> ${phone}</p>
+          <p><strong>Property:</strong> ${listing?.address || "Unknown Address"}</p>
+          <p><strong>Date Captured:</strong> ${new Date().toLocaleString()}</p>
+          <hr />
+          <p>This lead has been saved in your AI Open House Connect account.</p>
+        `;
+
+        await sendEmail({
+          to: agentEmail,
+          subject: `New AI Tour Lead - ${listing?.address || "Unknown Address"}`,
+          html: emailBody
+        });
+
+        return {
+          success: true,
+          message: "Lead details captured and email notification sent to the listing agent."
+        };
+      } catch (err: any) {
+        console.error("Error in submit_ai_tour_lead tool on Microsite:", err);
+        return {
+          error: `Failed to submit lead: ${err.message || err}`
+        };
+      }
+    }
     return { success: true };
   };
 
   const { connected, connecting, error: voiceError, startSession, stopSession } = useLiveVoice(
     systemInstruction,
-    [],
+    [{ functionDeclarations: [submit_ai_tour_lead_tool] }],
     handleToolCall,
     "Aoede"
   );
@@ -659,7 +812,8 @@ ${pairedLender && listing?.lenderHandoff !== false ? `- Active Financing Partner
             sqft: listing.sqft,
             description: listing.description,
             talkingPoints: listing.talkingPoints
-          }
+          },
+          checkedInUser: dbVerifiedCheckIn ? checkedInUser : null
         })
       });
 
@@ -725,6 +879,12 @@ ${pairedLender && listing?.lenderHandoff !== false ? `- Active Financing Partner
       geoProvider: "IP-Heuristics (Cloudflare / MaxMind)",
       jurisdictionRulesApplied: isUS ? "USA RESPA Strict" : "Canada Co-Marketing Flexible"
     };
+
+    localStorage.setItem("visitor_email", formEmail);
+    localStorage.setItem("visitor_name", formName);
+    localStorage.setItem("visitor_phone", formPhone);
+    setCheckedInUser({ name: formName, email: formEmail, phone: formPhone });
+    setDbVerifiedCheckIn(true);
 
     if (isOffline) {
       // Offline Event Buffer logic - matches Rule 4

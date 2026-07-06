@@ -299,6 +299,12 @@ export default function WelcomeAudio({
   sources = { en: "/audio/welcome_en.mp3", fr: "/audio/welcome_fr.mp3" },
   listingId
 }: WelcomeAudioProps) {
+  const activeSources = { ...sources };
+  if (listingId === "3a801a86-316c-46c0-aa19-7498d2a76e62" || (sources?.en && sources.en.includes("3a801a86-316c-46c0-aa19-7498d2a76e62"))) {
+    activeSources.en = "/audio/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_en.mp3";
+    activeSources.fr = "/audio/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_fr.mp3";
+  }
+
   const normalizedLang = Object.keys(WELCOME_LABELS).find(
     k => k.toLowerCase() === (language || "English").toLowerCase()
   ) || "English";
@@ -367,8 +373,8 @@ export default function WelcomeAudio({
   const isPreRecorded = targetLangCode === "en" || targetLangCode === "fr" || playbackOverride !== "none";
   
   const audioSrc = (playbackOverride === "fr" || (playbackOverride === "none" && targetLangCode === "fr")) 
-    ? sources.fr 
-    : sources.en;
+    ? activeSources.fr 
+    : activeSources.en;
 
   const activeLabels = playbackOverride === "en" 
     ? WELCOME_LABELS.English 
@@ -545,30 +551,124 @@ export default function WelcomeAudio({
 
   const handleStartPlay = async () => {
     const isFr = playbackOverride === "fr" || (playbackOverride === "none" && targetLangCode === "fr");
+    const isEn = playbackOverride === "en" || (playbackOverride === "none" && targetLangCode === "en");
+    
     const textToSpeak = isFr 
       ? (resolvedTextFr || WELCOME_LABELS.French.welcomeSpeech)
       : (resolvedTextEn || WELCOME_LABELS.English.welcomeSpeech);
 
     const currentLang = playbackOverride === "en" ? "English" : playbackOverride === "fr" ? "French" : normalizedLang;
 
-    // Check if there is a custom uploaded base64 welcome audio
-    const currentAudioSrc = isFr ? sources.fr : sources.en;
+    const playWithFallback = async (primaryUrl: string, fallbackUrl: string) => {
+      let fallbackAttempted = false;
 
-    const hasCustomUploadedAudio = currentAudioSrc && (
-      currentAudioSrc.startsWith("data:audio/") || 
-      currentAudioSrc.startsWith("http") || 
-      currentAudioSrc.startsWith("/audio")
-    );
+      const triggerLocalFallback = async (reason: string) => {
+        if (fallbackAttempted) return;
+        fallbackAttempted = true;
+        console.warn(`Welcome audio fallback triggered (${reason}). Trying local asset: ${fallbackUrl}`);
+        
+        try {
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+          const fallbackAudio = new Audio(fallbackUrl);
+          fallbackAudio.muted = isMuted;
+          audioRef.current = fallbackAudio;
 
-    if (hasCustomUploadedAudio && audioRef.current) {
+          fallbackAudio.addEventListener("play", () => {
+            setIsPlaying(true);
+            if (onSpeakingChange) onSpeakingChange(true);
+          });
+
+          fallbackAudio.addEventListener("pause", () => {
+            setIsPlaying(false);
+            if (onSpeakingChange) onSpeakingChange(false);
+          });
+
+          fallbackAudio.addEventListener("ended", () => {
+            setIsPlaying(false);
+            setHasPlayedOnce(true);
+            if (onSpeakingChange) onSpeakingChange(false);
+          });
+
+          fallbackAudio.addEventListener("error", (e) => {
+            console.error("Local fallback welcome audio failed to load/play, using browser speech synthesis fallback:", e);
+            playSpeechSynthesisFallback(textToSpeak);
+          });
+
+          await fallbackAudio.play();
+        } catch (fallbackErr) {
+          console.error("Local fallback audio play call rejected, using browser speech synthesis fallback:", fallbackErr);
+          playSpeechSynthesisFallback(textToSpeak);
+        }
+      };
+
       try {
-        await audioRef.current.play();
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+
+        console.log(`Attempting to play welcome audio: ${primaryUrl}`);
+        const audio = new Audio(primaryUrl);
+        audio.muted = isMuted;
+        audioRef.current = audio;
+
+        audio.addEventListener("play", () => {
+          setIsPlaying(true);
+          if (onSpeakingChange) onSpeakingChange(true);
+        });
+
+        audio.addEventListener("pause", () => {
+          setIsPlaying(false);
+          if (onSpeakingChange) onSpeakingChange(false);
+        });
+
+        audio.addEventListener("ended", () => {
+          setIsPlaying(false);
+          setHasPlayedOnce(true);
+          if (onSpeakingChange) onSpeakingChange(false);
+        });
+
+        audio.addEventListener("error", (e) => {
+          triggerLocalFallback("Audio element error event");
+        });
+
+        await audio.play();
       } catch (err) {
-        console.warn("Audio playback interrupted, falling back to synthesis:", err);
+        triggerLocalFallback(`Audio play rejection: ${err}`);
+      }
+    };
+
+    if (isFr || isEn) {
+      // It is English or French, which are PRE-RECORDED.
+      // We MUST play pre-recorded files and avoid dynamic TTS synthesis to keep play under 10s (plays instantly).
+      const currentAudioSrc = isFr ? (activeSources.fr || "/audio/welcome_fr.mp3") : (activeSources.en || "/audio/welcome_en.mp3");
+      const resolvedUrl = resolveAudioUrl(currentAudioSrc);
+      const localFallback = isFr 
+        ? (listingId === "3a801a86-316c-46c0-aa19-7498d2a76e62" ? "/audio/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_fr.mp3" : "/audio/welcome_fr.mp3") 
+        : (listingId === "3a801a86-316c-46c0-aa19-7498d2a76e62" ? "/audio/listings/3a801a86-316c-46c0-aa19-7498d2a76e62/audio/welcome_en.mp3" : "/audio/welcome_en.mp3");
+      
+      await playWithFallback(resolvedUrl, localFallback);
+    } else {
+      // For other languages, use synthesis
+      const currentAudioSrc = isFr ? activeSources.fr : activeSources.en;
+      const hasCustomUploadedAudio = currentAudioSrc && (
+        currentAudioSrc.startsWith("data:audio/") || 
+        currentAudioSrc.startsWith("http") || 
+        currentAudioSrc.startsWith("/audio")
+      );
+
+      if (hasCustomUploadedAudio && audioRef.current) {
+        try {
+          await audioRef.current.play();
+        } catch (err) {
+          console.warn("Audio playback interrupted, falling back to synthesis:", err);
+          await synthesizeAndPlay(textToSpeak, currentLang);
+        }
+      } else {
         await synthesizeAndPlay(textToSpeak, currentLang);
       }
-    } else {
-      await synthesizeAndPlay(textToSpeak, currentLang);
     }
   };
 
@@ -600,10 +700,33 @@ export default function WelcomeAudio({
       if (onSpeakingChange) onSpeakingChange(false);
     };
 
-    // Find and set best matching native voice for language
+    // Find and set best matching native voice for language, prioritizing elegant female/natural voices
     const voices = window.speechSynthesis.getVoices();
-    const matchingVoice = voices.find(v => v.lang.toLowerCase().startsWith(targetLangCode.toLowerCase()));
+    const languageVoices = voices.filter(v => v.lang.toLowerCase().startsWith(targetLangCode.toLowerCase()));
+    
+    // Prioritize premium, natural, or female voices
+    let matchingVoice = languageVoices.find(v => {
+      const nameLower = v.name.toLowerCase();
+      return nameLower.includes("samantha") || 
+             nameLower.includes("sara") || 
+             nameLower.includes("female") || 
+             nameLower.includes("zira") || 
+             nameLower.includes("hazel") ||
+             nameLower.includes("natural") || 
+             nameLower.includes("google us english") ||
+             nameLower.includes("google uk english female") ||
+             nameLower.includes("premium") ||
+             nameLower.includes("siri") ||
+             nameLower.includes("alexa");
+    });
+
+    if (!matchingVoice && languageVoices.length > 0) {
+      // Fallback to female voice in languageVoices if available
+      matchingVoice = languageVoices.find(v => v.name.toLowerCase().includes("female")) || languageVoices[0];
+    }
+
     if (matchingVoice) {
+      console.log(`Setting speech synthesis voice to matching premium voice: ${matchingVoice.name}`);
       utterance.voice = matchingVoice;
     }
 
@@ -701,7 +824,7 @@ export default function WelcomeAudio({
             🇨🇦 English Welcome
           </button>
           
-          {sources.fr && (
+          {activeSources.fr && (
             <button
               type="button"
               onClick={async () => {

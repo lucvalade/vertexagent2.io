@@ -1,6 +1,13 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager,
+  doc,
+  getDocFromServer
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
 
@@ -23,7 +30,35 @@ const resolvedConfig = getFirebaseConfig();
 
 export const app = initializeApp(resolvedConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, resolvedConfig.firestoreDatabaseId);
+
+let initializedDb: any;
+try {
+  initializedDb = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  }, resolvedConfig.firestoreDatabaseId);
+  console.log("[Firebase Init] Firestore persistent multi-tab local cache initialized successfully.");
+} catch (err) {
+  console.warn("[Firebase Init] Failed to initialize persistent local cache, falling back to standard Firestore:", err);
+  initializedDb = getFirestore(app, resolvedConfig.firestoreDatabaseId);
+}
+
+export const db = initializedDb;
+
+// Validate Connection to Firestore (MANDATORY skill check constraint)
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, "appConfig", "global"));
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes("the client is offline") || error.message.includes("unavailable") || (error as any).code === "unavailable")) {
+      console.warn("[Firebase Init] Connection check: Firestore client is operating in offline mode as expected.");
+    } else {
+      console.error("[Firebase Init] Firestore connection error:", error);
+    }
+  }
+}
+testConnection();
 
 let safeStorage: any = null;
 try {

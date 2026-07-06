@@ -722,6 +722,46 @@ export default function EditListing() {
   const agentPhoto = (user as any)?.branding?.agentPhotoUrl || "";
   const [tourDescriptors, setTourDescriptors] = useState<string[]>(new Array(16).fill(""));
 
+  // Automatically sync image labels into tourDescriptors slots (Slot 1, Slot 2, etc.) in real-time
+  useEffect(() => {
+    if (images && images.length > 0) {
+      setTourDescriptors(prev => {
+        const next = [...prev];
+        let changed = false;
+        for (let i = 0; i < 16; i++) {
+          if (i < images.length) {
+            let name = images[i].name || "";
+            name = name.replace(/\.[^/.]+$/, ""); // Strip extensions
+            name = name.split(/[_\-\s]+/)
+              .filter(Boolean)
+              .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(" ");
+            const val = name.slice(0, 30);
+            if (next[i] !== val) {
+              next[i] = val;
+              changed = true;
+            }
+          } else {
+            if (next[i] !== "") {
+              next[i] = "";
+              changed = true;
+            }
+          }
+        }
+        return changed ? next : prev;
+      });
+    } else {
+      // If there are no images, make sure descriptors are cleared
+      setTourDescriptors(prev => {
+        const isAllEmpty = prev.every(v => v === "");
+        if (!isAllEmpty) {
+          return new Array(16).fill("");
+        }
+        return prev;
+      });
+    }
+  }, [images]);
+
   // CRM integration States
   const [crmLinks, setCrmLinks] = useState<Record<string, string>>({
     "HubSpot": "https://www.hubspot.com",
@@ -2745,31 +2785,30 @@ export default function EditListing() {
               {/* MEDIA ROOM-LABELER/ASSETS SECTION */}
               <div className="space-y-4 pt-6 mt-6 border-t font-sans">
                 <div>
-                  <h3 className="font-bold text-base text-slate-800">Media Room-Labeler/Assets</h3>
+                  <h3 className="font-bold text-base text-slate-800 flex items-center gap-2">
+                    Media Room-Labeler/Assets
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                      Automated
+                    </span>
+                  </h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    This section holds physical asset and property features mapped from digital uploads to guide interactive virtual tours.
+                    This section automatically maps physical asset and property features from photo labels to guide interactive virtual tours.
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-150">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/40 p-3 rounded-xl border border-blue-100">
                   <div>
                     <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1">
                       <Sparkles className="h-3.5 w-3.5 text-blue-500" />
                       Tour Feature Descriptors (16 total slots)
                     </h4>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Ensure names align with image labels and will be displayed in the AI Tour "Ask Me About" section.
+                      These slots are fully automated and synchronized in real-time to match your Listing Media Room-Labeler/Labels above.
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-[11px] font-bold border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-blue-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shrink-0 bg-white"
-                    onClick={() => autoFillDescriptorsFromImages()}
-                  >
-                    <Sparkles className="h-3 w-3 text-blue-500 animate-pulse" />
-                    Auto-Fill from Photo Labels
-                  </Button>
+                  <div className="text-[10px] font-bold text-blue-600 bg-white border border-blue-200 px-2.5 py-1 rounded-lg shadow-xs shrink-0 select-none flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                    Synced with Labels
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {tourDescriptors.map((desc, idx) => (
@@ -2777,13 +2816,9 @@ export default function EditListing() {
                       <span className="text-[10px] font-mono text-slate-400 font-bold">Slot {idx+1}</span>
                       <Input 
                         value={desc} 
-                        onChange={e => {
-                          const updated = [...tourDescriptors];
-                          updated[idx] = e.target.value.slice(0, 30);
-                          setTourDescriptors(updated);
-                        }}
-                        placeholder={`Descriptor key`}
-                        className="h-9 text-xs"
+                        readOnly
+                        placeholder={`Empty Slot`}
+                        className="h-9 text-xs bg-slate-50 border-slate-150 text-slate-500 font-medium select-none focus:ring-0 focus:border-slate-150 cursor-not-allowed"
                       />
                     </div>
                   ))}

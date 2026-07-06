@@ -232,6 +232,14 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    match /properties/{propertyId} {
+      allow read, write: if true;
+    }
+
+    match /agents/{agentId} {
+      allow read, write: if true;
+    }
+
     match /auditLogs/{docId} {
       allow read, write: if isSignedIn();
     }
