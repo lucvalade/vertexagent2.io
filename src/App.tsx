@@ -8,8 +8,10 @@ import { Outlet } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { Lock, Eye, EyeOff, User, Mail, Phone, Sparkles, CheckCircle, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "./hooks/useAuth";
 
 export default function App() {
+  const { user } = useAuth();
   const [password, setPassword] = useState("");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -24,12 +26,12 @@ export default function App() {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   useEffect(() => {
-    // Clear old localStorage and sessionStorage lock states to ensure it always prompts waitlist on load
-    localStorage.removeItem("site_password_unlocked");
-    sessionStorage.removeItem("site_password_unlocked");
+    // Read the existing unlock state so we do not clear it on every single reload
+    const storedUnlocked = sessionStorage.getItem("site_password_unlocked") === "true" || 
+                           localStorage.getItem("site_password_unlocked") === "true";
     
     // Check if we are on a tour page to set initial state appropriately
-    if (window.location.pathname.includes("/tour/")) {
+    if (window.location.pathname.includes("/tour/") || storedUnlocked) {
       setIsUnlocked(true);
     } else {
       setIsUnlocked(false);
@@ -37,12 +39,13 @@ export default function App() {
   }, []);
 
   const isTourPage = window.location.pathname.includes("/tour/");
-  const effectiveUnlocked = isUnlocked || isTourPage;
+  const effectiveUnlocked = isUnlocked || isTourPage || !!user;
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === "Danielle8923$$" || password === "8923") {
       sessionStorage.setItem("site_password_unlocked", "true");
+      localStorage.setItem("site_password_unlocked", "true");
       setIsUnlocked(true);
       setIsAdminPopupOpen(false);
       toast.success("Welcome to AI Open House Connect!");

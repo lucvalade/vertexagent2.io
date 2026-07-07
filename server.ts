@@ -1659,12 +1659,10 @@ SCRIPT TO CONDENSE:
       let geminiVoice = "Aoede";
       if (requestedVoiceName) {
         const name = requestedVoiceName.toLowerCase();
-        if (name.includes("professional female") || name.includes("sora")) geminiVoice = "Kore";
+        if (name.includes("professional female") || name.includes("sora") || name.includes("calm reassuring") || name.includes("charon") || name.includes("deep narrator") || name.includes("fenrir")) geminiVoice = "Kore";
         else if (name.includes("executive british")) geminiVoice = "Zephyr";
         else if (name.includes("storyteller") || name.includes("aoede")) geminiVoice = "Aoede";
         else if (name.includes("warm energetic") || name.includes("warm male") || name.includes("puck")) geminiVoice = "Puck";
-        else if (name.includes("calm reassuring") || name.includes("calm male") || name.includes("charon")) geminiVoice = "Charon";
-        else if (name.includes("deep narrator") || name.includes("narrator") || name.includes("fenrir")) geminiVoice = "Fenrir";
       }
 
       const systemInstruction = `Speak natural, beautiful, and fluidly in ${lang}. Maintain a friendly, supportive, and extremely professional real estate agent guide tone. Do not announce yourself with metadata, just read the script perfectly.`;

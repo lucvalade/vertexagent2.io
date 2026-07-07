@@ -886,13 +886,13 @@ const getGeminiVoice = (voiceName: string = ""): string => {
     name.includes("calm male") ||
     name.includes("charon")
   )
-    return "Charon";
+    return "Kore";
   if (
     name.includes("deep narrator") ||
     name.includes("narrator") ||
     name.includes("fenrir")
   )
-    return "Fenrir";
+    return "Kore";
   return "Kore"; // default fallback - premium professional female voice
 };
 

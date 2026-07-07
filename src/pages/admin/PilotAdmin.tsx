@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, Save, Globe, Plus, Trash2, ShieldAlert } from "lucide-react";
+import { Loader2, Save, Globe, Plus, Trash2, ShieldAlert, Play, Pause, Volume2 } from "lucide-react";
 
 // Translations dictionary for EN/FR UI support
 const TRANSLATIONS = {
@@ -23,7 +23,7 @@ const TRANSLATIONS = {
     group2: "Group 2 — Listing Details",
     group3: "Group 3 — Specs",
     group4: "Group 4 — Narrative",
-    group5: "Group 5 — Open House",
+    group5: "Group 5 — Listing Media Room",
     group6: "Group 6 — Controls",
     address: "Address",
     city: "City",
@@ -81,7 +81,7 @@ const TRANSLATIONS = {
     group2: "Groupe 2 — Détails de l'annonce",
     group3: "Groupe 3 — Caractéristiques",
     group4: "Groupe 4 — Description & Listes",
-    group5: "Groupe 5 — Portes Ouvertes",
+    group5: "Groupe 5 — Pièce Médias de l'Annonce",
     group6: "Groupe 6 — Contrôles",
     address: "Adresse",
     city: "Ville",
@@ -234,6 +234,74 @@ export default function PilotAdmin() {
   const [upgrades, setUpgrades] = useState<string[]>([]);
   
   const [openHouseTimes, setOpenHouseTimes] = useState<{ start: string; end: string }[]>([]);
+  const [images, setImages] = useState<string[]>([]);
+  const [welcomeEn, setWelcomeEn] = useState("/audio/welcome_en.mp3");
+  const [welcomeFr, setWelcomeFr] = useState("");
+  const [playingEn, setPlayingEn] = useState(false);
+  const [playingFr, setPlayingFr] = useState(false);
+  const [audioEn, setAudioEn] = useState<HTMLAudioElement | null>(null);
+  const [audioFr, setAudioFr] = useState<HTMLAudioElement | null>(null);
+
+  // Clean up audios on unmount
+  useEffect(() => {
+    return () => {
+      if (audioEn) {
+        audioEn.pause();
+      }
+      if (audioFr) {
+        audioFr.pause();
+      }
+    };
+  }, [audioEn, audioFr]);
+
+  const togglePlayEn = () => {
+    if (playingEn) {
+      audioEn?.pause();
+      setPlayingEn(false);
+    } else {
+      if (audioFr) {
+        audioFr.pause();
+        setPlayingFr(false);
+      }
+      const url = welcomeEn.trim() || "/audio/welcome_en.mp3";
+      const audio = new Audio(url);
+      audio.play().then(() => {
+        setPlayingEn(true);
+        setAudioEn(audio);
+        audio.onended = () => setPlayingEn(false);
+      }).catch(err => {
+        console.error("Audio playback error:", err);
+        toast.error("Could not play English audio file. Make sure it's a valid URL or local file.");
+      });
+    }
+  };
+
+  const togglePlayFr = () => {
+    if (playingFr) {
+      audioFr?.pause();
+      setPlayingFr(false);
+    } else {
+      if (audioEn) {
+        audioEn.pause();
+        setPlayingEn(false);
+      }
+      const url = welcomeFr.trim();
+      if (!url) {
+        toast.error("No French audio URL specified.");
+        return;
+      }
+      const audio = new Audio(url);
+      audio.play().then(() => {
+        setPlayingFr(true);
+        setAudioFr(audio);
+        audio.onended = () => setPlayingFr(false);
+      }).catch(err => {
+        console.error("Audio playback error:", err);
+        toast.error("Could not play French audio file. Make sure it's a valid URL.");
+      });
+    }
+  };
+
   const [avatarEnabled, setAvatarEnabled] = useState(true);
   const [agentUid] = useState("HTzvSsD3bqOzfuGLQs0MFEJmUQA2");
 
@@ -278,6 +346,21 @@ export default function PilotAdmin() {
         } else {
           setFeatures([]);
         }
+
+        // Import photos/images
+        if (data.images && Array.isArray(data.images)) {
+          const importedImages = data.images.map((img: any) => {
+            if (typeof img === "string") return img;
+            if (img && typeof img === "object" && img.url) return img.url;
+            return "";
+          }).filter(Boolean);
+          setImages(importedImages);
+        } else {
+          setImages([]);
+        }
+
+        setWelcomeEn(data.welcome_en || "/audio/welcome_en.mp3");
+        setWelcomeFr(data.welcome_fr || "");
 
         // Import agent information
         if (data.agentName) {
@@ -349,7 +432,19 @@ export default function PilotAdmin() {
         setDescription(data.description || "");
         setFeatures(data.features || []);
         setUpgrades(data.upgrades || []);
+        setWelcomeEn(data.welcome_en || "/audio/welcome_en.mp3");
+        setWelcomeFr(data.welcome_fr || "");
         setAvatarEnabled(data.avatarEnabled ?? true);
+        
+        if (data.images && Array.isArray(data.images)) {
+          setImages(data.images);
+        } else {
+          setImages([
+            "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80",
+            "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80",
+            "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=80"
+          ]);
+        }
         
         if (data.openHouseTimes && Array.isArray(data.openHouseTimes)) {
           const rows = data.openHouseTimes.map((item: any) => ({
@@ -428,6 +523,21 @@ export default function PilotAdmin() {
     setUpgrades(upgrades.filter((_, i) => i !== index));
   };
 
+  // Repeatable array helpers for photos/images
+  const handleAddPhoto = () => {
+    setImages([...images, ""]);
+  };
+
+  const handleUpdatePhoto = (index: number, val: string) => {
+    const updated = [...images];
+    updated[index] = val;
+    setImages(updated);
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setImages(images.filter((_, i) => i !== index));
+  };
+
   // Repeatable array helpers for open houses
   const handleAddOpenHouse = () => {
     setOpenHouseTimes([...openHouseTimes, { start: "", end: "" }]);
@@ -485,7 +595,10 @@ export default function PilotAdmin() {
         upgrades: upgrades.filter((u) => u.trim() !== ""),
         openHouseTimes: dbTimes,
         avatarEnabled,
-        agentUid
+        agentUid,
+        images: images.filter((img) => img.trim() !== ""),
+        welcome_en: welcomeEn,
+        welcome_fr: welcomeFr
       };
 
       await setDoc(doc(db, "properties", "pilot-listing-01"), payload, { merge: true });
@@ -935,59 +1048,83 @@ export default function PilotAdmin() {
                   </div>
                 </div>
 
-                {/* Group 5: Open House repeatable times */}
+                {/* Group 5: Listing Media Room */}
                 <div className="bg-slate-950/60 rounded-xl p-4 sm:p-6 border border-slate-800/80 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400">
-                      {t.group5}
-                    </h3>
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                        {t.group5}
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {lang === "en" ? "Manage property photo gallery showcase" : "Gérer la galerie de photos de la propriété"}
+                      </p>
+                    </div>
                     <Button
                       type="button"
-                      onClick={handleAddOpenHouse}
-                      className="h-7 px-2 bg-blue-600 hover:bg-blue-700 text-[10px] font-bold rounded-md flex gap-1 items-center"
+                      onClick={handleAddPhoto}
+                      className="h-7 px-2 bg-blue-600 hover:bg-blue-700 text-[10px] font-bold rounded-md flex gap-1 items-center text-white border-0"
                     >
                       <Plus className="h-3 w-3" />
-                      {t.addOpenHouse}
+                      {lang === "en" ? "Add Photo" : "Ajouter une photo"}
                     </Button>
                   </div>
 
-                  {openHouseTimes.length === 0 ? (
-                    <p className="text-xs text-slate-600 italic py-1">{t.noOpenHouses}</p>
+                  {images.length === 0 ? (
+                    <p className="text-xs text-slate-600 italic py-4 text-center">{lang === "en" ? "No photos added yet." : "Aucune photo ajoutée."}</p>
                   ) : (
-                    <div className="space-y-4">
-                      {openHouseTimes.map((row, index) => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {images.map((imgUrl, index) => (
                         <div
                           key={index}
-                          className="flex flex-col sm:flex-row gap-3 items-end sm:items-center bg-slate-900/40 p-3 rounded-lg border border-slate-800"
+                          className="flex flex-col gap-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/80 hover:border-slate-700/60 transition group relative"
                         >
-                          <div className="grid grid-cols-2 gap-2 flex-1 w-full">
-                            <div className="space-y-1">
-                              <span className="text-[10px] text-slate-500 font-bold uppercase">{t.start}</span>
-                              <input
-                                type="datetime-local"
-                                value={row.start}
-                                onChange={(e) => handleUpdateOpenHouse(index, "start", e.target.value)}
-                                className="w-full h-8 px-2.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-100 text-xs font-mono outline-none focus:border-blue-500"
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              {lang === "en" ? `Photo #${index + 1}` : `Photo #${index + 1}`}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={() => handleRemovePhoto(index)}
+                              className="h-7 w-7 p-0 rounded-lg shrink-0 flex items-center justify-center bg-red-950 hover:bg-red-900 border border-red-800/50 hover:border-red-700 transition"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            </Button>
+                          </div>
+
+                          {/* Image preview box */}
+                          <div className="w-full h-32 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-center overflow-hidden relative group-hover:border-slate-700/60 transition">
+                            {imgUrl.trim() ? (
+                              <img
+                                src={imgUrl}
+                                alt={`Listing view #${index + 1}`}
+                                className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = "none";
+                                  const fallbackText = document.getElementById(`fallback-text-${index}`);
+                                  if (fallbackText) fallbackText.style.display = "block";
+                                }}
                               />
-                            </div>
-                            <div className="space-y-1">
-                              <span className="text-[10px] text-slate-500 font-bold uppercase">{t.end}</span>
-                              <input
-                                type="datetime-local"
-                                value={row.end}
-                                onChange={(e) => handleUpdateOpenHouse(index, "end", e.target.value)}
-                                className="w-full h-8 px-2.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-100 text-xs font-mono outline-none focus:border-blue-500"
-                              />
+                            ) : null}
+                            <div
+                              id={`fallback-text-${index}`}
+                              style={{ display: imgUrl.trim() ? "none" : "block" }}
+                              className="text-[10px] text-slate-600 italic text-center px-4"
+                            >
+                              {lang === "en" ? "No preview available (empty or invalid URL)" : "Aucun aperçu disponible"}
                             </div>
                           </div>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={() => handleRemoveOpenHouse(index)}
-                            className="h-8 w-8 p-0 rounded-lg shrink-0 flex items-center justify-center bg-red-950 hover:bg-red-900 border border-red-800"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-400" />
-                          </Button>
+
+                          <div className="space-y-1">
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{lang === "en" ? "Image URL" : "URL de l'image"}</span>
+                            <Input
+                              value={imgUrl}
+                              onChange={(e) => handleUpdatePhoto(index, e.target.value)}
+                              placeholder="https://images.unsplash.com/..."
+                              className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-700 text-xs font-mono h-8"
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1015,7 +1152,87 @@ export default function PilotAdmin() {
                       </label>
                     </div>
 
-                    <div className="space-y-1.5">
+                    {/* Welcome Greetings Audio files */}
+                    <div className="pt-3 border-t border-slate-800/80 space-y-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        {lang === "en" ? "Welcome Audio Greetings (.mp3)" : "Messages Vocaux de Bienvenue (.mp3)"}
+                      </h4>
+
+                      {/* English audio input */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-slate-400">
+                            {lang === "en" ? "English Welcome Audio (MP3 URL)" : "Audio de Bienvenue en Anglais (URL MP3)"}
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={togglePlayEn}
+                            className="h-6 px-2 text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-slate-900 border border-slate-800"
+                          >
+                            {playingEn ? (
+                              <>
+                                <Pause className="h-3 w-3 animate-pulse text-red-400" />
+                                <span>{lang === "en" ? "Pause" : "Pause"}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3" />
+                                <span>{lang === "en" ? "Play Test" : "Tester"}</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <Input
+                          value={welcomeEn}
+                          onChange={(e) => setWelcomeEn(e.target.value)}
+                          placeholder="/audio/welcome_en.mp3"
+                          className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-700 text-xs font-mono"
+                        />
+                        <p className="text-[10px] text-slate-500">
+                          {lang === "en" ? "Default: /audio/welcome_en.mp3" : "Par défaut : /audio/welcome_en.mp3"}
+                        </p>
+                      </div>
+
+                      {/* French audio input */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-slate-400">
+                            {lang === "en" ? "French Welcome Audio (MP3 URL)" : "Audio de Bienvenue en Français (URL MP3)"}
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={togglePlayFr}
+                            disabled={!welcomeFr.trim()}
+                            className="h-6 px-2 text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-slate-900 border border-slate-800 disabled:opacity-50"
+                          >
+                            {playingFr ? (
+                              <>
+                                <Pause className="h-3 w-3 animate-pulse text-red-400" />
+                                <span>{lang === "en" ? "Pause" : "Pause"}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3" />
+                                <span>{lang === "en" ? "Play Test" : "Tester"}</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <Input
+                          value={welcomeFr}
+                          onChange={(e) => setWelcomeFr(e.target.value)}
+                          placeholder="https://your-domain.com/audio/welcome_fr.mp3"
+                          className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-700 text-xs font-mono"
+                        />
+                        <p className="text-[10px] text-slate-500">
+                          {lang === "en" ? "Optional French welcome audio path or URL." : "Chemin ou URL facultatif pour l'audio en français."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-slate-800/85">
                       <label className="text-xs font-medium text-slate-400">{t.agentUid}</label>
                       <Input
                         value={agentUid}

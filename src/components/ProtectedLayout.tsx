@@ -155,6 +155,7 @@ export default function ProtectedLayout() {
     { label: "Listings", icon: List, path: "/app/listings" },
     { label: "AI Tour", icon: Mic2, path: "/app/aitours" },
     { label: "AI Video Avatars", icon: Video, path: "/app/settings?tab=avatars" },
+    { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
     { 
       label: "Open Houses", 
       icon: Home, 
@@ -179,6 +180,7 @@ export default function ProtectedLayout() {
     { label: "Manage Agents", icon: Users, path: "/app/admin/users" },
     { label: "All Listings", icon: List, path: "/app/admin/listings" },
     { label: "Welcome Messages", icon: Volume2, path: "/app/admin/welcomes" },
+    { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
     { label: "Launch Notifications FREE Plan", icon: Bell, path: "/app/admin/notifications" },
     { label: "System Logs", icon: FileBox, path: "/app/admin/logs" },
     { label: "Settings", icon: Settings, path: "/app/admin/settings" },

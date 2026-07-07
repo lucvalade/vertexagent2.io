@@ -1,4 +1,4 @@
-import { Mic2, Play, Plus, RefreshCw, Star, MoreVertical, Pencil, Trash2, Save, X, Volume2, Music, CheckCircle2, Upload, Loader2, Zap, MessageSquare, StopCircle } from "lucide-react";
+import { Mic2, Play, Pause, Download, Plus, RefreshCw, Star, MoreVertical, Pencil, Trash2, Save, X, Volume2, Music, CheckCircle2, Upload, Loader2, Zap, MessageSquare, StopCircle } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
@@ -39,7 +39,7 @@ const INITIAL_VOICES: Voice[] = [
   { id: "v2", name: "Open House Sign-In (Sora)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 95, tags: ["Female", "Polished", "Front Desk"] },
   { id: "v3", name: "AI Tour Intro (Aoede)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 202, tags: ["Female", "Tour Guide", "Expressive"] },
   { id: "v4", name: "Lender Handoff (Sora)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 78, tags: ["Female", "High-Trust", "Financing"] },
-  { id: "v5", name: "Follow-Up Message (Umbriel)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 147, tags: ["Female", "Refined", "Nurture"] },
+  { id: "v5", name: "Follow-Up Message (Sora)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 147, tags: ["Female", "Refined", "Nurture"] },
   { id: "2", name: "Professional Female Synthetic (Sora)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 45, tags: ["Female", "Professional", "Sora"] },
   { id: "5", name: "Executive British (Female) Synthetic", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 22, tags: ["Female", "British", "Executive", "Zephyr"] },
   { id: "7", name: "Dynamic Storyteller (British Female) Synthetic", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 56, tags: ["Female", "British", "Expressive", "Aoede"] },
@@ -84,6 +84,36 @@ export default function VoiceLab() {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const playbackQueueRef = useRef<Int16Array[]>([]);
   const isPlayingRef = useRef(false);
+
+  // Welcome Messages Audio Builder States
+  const [welcomeVoiceId, setWelcomeVoiceId] = useState<string>("");
+  const [welcomeEnText, setWelcomeEnText] = useState("[slow] Hi, I’m Sora, your AI property assistant. [pause] Welcome to this open house experience. [pause] I’m here to help you explore the home, answer questions, and guide you through the next steps at your own pace.");
+  const [welcomeFrText, setWelcomeFrText] = useState("[slow] Bonjour, je suis Sora, votre assistante immobilière IA. [pause] Bienvenue à cette visite de portes ouvertes. [pause] Je suis là pour vous aider à explorer la maison, répondre à vos questions et vous guider à votre propre rythme.");
+  const [generatingEn, setGeneratingEn] = useState(false);
+  const [generatingFr, setGeneratingFr] = useState(false);
+  const [enAudioUrl, setEnAudioUrl] = useState<string | null>(null);
+  const [frAudioUrl, setFrAudioUrl] = useState<string | null>(null);
+  const [playingEnWelcome, setPlayingEnWelcome] = useState(false);
+  const [playingFrWelcome, setPlayingFrWelcome] = useState(false);
+  const [welcomeEnAudio, setWelcomeEnAudio] = useState<HTMLAudioElement | null>(null);
+  const [welcomeFrAudio, setWelcomeFrAudio] = useState<HTMLAudioElement | null>(null);
+
+  // Auto-initialize selected welcome voice once voices load
+  useEffect(() => {
+    const list = voices.length > 0 ? voices : INITIAL_VOICES;
+    if (list.length > 0 && !welcomeVoiceId) {
+      const defaultVoice = list.find(v => v.isDefault) || list[0];
+      setWelcomeVoiceId(defaultVoice.id);
+    }
+  }, [voices, welcomeVoiceId]);
+
+  // Clean up any welcome playing audios on unmount
+  useEffect(() => {
+    return () => {
+      if (welcomeEnAudio) welcomeEnAudio.pause();
+      if (welcomeFrAudio) welcomeFrAudio.pause();
+    };
+  }, [welcomeEnAudio, welcomeFrAudio]);
 
   // Sync with Firestore
   useEffect(() => {
@@ -206,14 +236,14 @@ export default function VoiceLab() {
 
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [testAudioBuffer, setTestAudioBuffer] = useState<AudioBuffer | null>(null);
-
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
 
   const runTest = async () => {
     if (!activeVoice || !testText) return;
     setIsTesting(true);
     setPreviewReady(false);
     setTestAudioBuffer(null);
+    setTestAudioUrl(null);
 
     try {
       // Map voices to prebuilt names for variety
@@ -245,12 +275,12 @@ Director's Notes: Sound warm, highly informative, and confident. Keep the pace c
 Audio Profile: High-trust, mature, exceptionally composed, warm, and helpful female assistant handling sensitive real estate financing handoffs.
 Scene: Introducing an optional mortgage pre-approval or financing handoff.
 Director's Notes: Maintain a deeply respectful, supportive, steady, trustworthy, and non-pushy tone. Project calm authority and neutral helpfulness.`;
-      } else if (lowerName.includes('follow-up') || lowerName.includes('umbriel') || lowerName.includes('nurture')) {
-        voiceName = 'Umbriel';
-        styleInstruction = `Configure Voice: Umbriel.
-Audio Profile: Warm, deeply refined, thoughtful, friendly, and reassuring assistant handling post-visit real estate operations.
+      } else if (lowerName.includes('follow-up') || lowerName.includes('sora') || lowerName.includes('umbriel') || lowerName.includes('nurture')) {
+        voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Sora.
+Audio Profile: Warm, deeply refined, thoughtful, friendly, and reassuring female assistant handling post-visit real estate operations.
 Scene: Follow-up message engaging a home buyer after their open house visit.
-Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the cadence steady, rhythmic, and natural. Make the message feel personalized, professional, and accessible.`;
+Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sora). Keep the cadence steady, rhythmic, and natural. Make the message feel personalized, professional, and accessible.`;
       } else if (lowerName.includes('professional female')) {
         voiceName = 'Kore';
         styleInstruction = "Say smoothly, confidently, and professionally without sounding overly excited: ";
@@ -264,33 +294,38 @@ Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the c
         voiceName = 'Puck';
         styleInstruction = "Deliver this with an energetic, friendly, and spirited tone: ";
       } else if (lowerName.includes('calm reassuring') || lowerName.includes('charon')) {
-        voiceName = 'Charon';
-        styleInstruction = "Deliver this with a calm, friendly, reassuring, and highly trustworthy tone: ";
+        voiceName = 'Kore';
+        styleInstruction = "Configure Voice: Sora. Deliver this with a calm, friendly, reassuring, and highly trustworthy female tone: ";
       } else if (lowerName.includes('deep narrator') || lowerName.includes('fenrir')) {
-        voiceName = 'Fenrir';
-        styleInstruction = "Deliver this in a slow, soothing, deep-narrative cadence: ";
+        voiceName = 'Kore';
+        styleInstruction = "Configure Voice: Sora. Deliver this in a slow, soothing, deep-narrative cadence using a professional female voice: ";
       }
 
       const promptText = `${styleInstruction}\n\nDeliver the following script with precise pacing:\n${testText}`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-tts-preview",
-        contents: [{ parts: [{ text: promptText }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: { 
-              prebuiltVoiceConfig: { 
-                voiceName: voiceName
-              } 
-            }
-          }
-        }
+      const response = await fetch("/api/tts-simple", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: promptText,
+          lang: activeVoice.name.toLowerCase().includes("french") ? "French" : "English",
+          voiceName: activeVoice.name,
+        }),
       });
 
-      const audioPart = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-      const base64Audio = audioPart?.inlineData?.data;
-      if (!base64Audio) throw new Error("No audio data returned from Gemini TTS model");
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.base64Audio) {
+        throw new Error("No audio data returned from TTS API");
+      }
+
+      const base64Audio = data.base64Audio;
 
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -318,6 +353,10 @@ Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the c
           channelData[i] = pcm16[i] / 32768.0;
         }
       }
+
+      const testBlob = new Blob([bytes], { type: "audio/mp3" });
+      const testUrl = URL.createObjectURL(testBlob);
+      setTestAudioUrl(testUrl);
 
       setTestAudioBuffer(buffer);
       setPreviewReady(true);
@@ -435,8 +474,8 @@ Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the c
                   if (lowercaseVoiceName.includes('executive british')) return 'Zephyr';
                   if (lowercaseVoiceName.includes('storyteller')) return 'Aoede';
                   if (lowercaseVoiceName.includes('warm energetic')) return 'Puck';
-                  if (lowercaseVoiceName.includes('calm reassuring')) return 'Charon';
-                  if (lowercaseVoiceName.includes('deep narrator') || lowercaseVoiceName.includes('narrator')) return 'Fenrir';
+                  if (lowercaseVoiceName.includes('calm reassuring')) return 'Kore';
+                  if (lowercaseVoiceName.includes('deep narrator') || lowercaseVoiceName.includes('narrator')) return 'Kore';
                   return 'Kore';
                 })()
               } 
@@ -707,6 +746,181 @@ Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the c
     }
   };
 
+  const generateWelcomeAudio = async (lang: 'en' | 'fr') => {
+    const activeList = voices.length > 0 ? voices : INITIAL_VOICES;
+    const selectedVoice = activeList.find(v => v.id === welcomeVoiceId);
+    if (!selectedVoice) {
+      toast.error("Please select a voice model first.");
+      return;
+    }
+
+    const isEn = lang === 'en';
+    const text = isEn ? welcomeEnText : welcomeFrText;
+    
+    if (isEn) {
+      setGeneratingEn(true);
+      if (welcomeEnAudio) {
+        welcomeEnAudio.pause();
+        setPlayingEnWelcome(false);
+      }
+    } else {
+      setGeneratingFr(true);
+      if (welcomeFrAudio) {
+        welcomeFrAudio.pause();
+        setPlayingFrWelcome(false);
+      }
+    }
+
+    try {
+      // Map voice model name to Gemini TTS voice
+      let voiceName = 'Kore';
+      let styleInstruction = "";
+      const lowerName = selectedVoice.name.toLowerCase();
+
+      if (lowerName.includes('welcome') || lowerName.includes('first touch')) {
+        voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Sora.
+Audio Profile: Polished, warm, smooth, stable, and premium female persona. Sounds trustworthy, elegant, and highly professional, fitting a luxury real estate brand.
+Director's Notes: Deliver with a smooth, warm, client-friendly tone. Pacing must be calm, relaxed, and completely natural. Do not sound high-pitched, excited, rushed, or robotic. Speak with absolute confidence and clarity. Use natural breathing pauses.`;
+      } else if (lowerName.includes('tour intro') || lowerName.includes('aoede')) {
+        voiceName = 'Aoede';
+        styleInstruction = `Configure Voice: Aoede.
+Audio Profile: Premium, fluid, highly engaging AI tour guide. Possesses an elegant, smooth rhythm with deep conversational inflections.
+Director's Notes: Sound warm, highly informative, and confident. Keep the pace completely relaxed. The buyer should feel fluidly guided and educated, never hard-sold.`;
+      } else if (lowerName.includes('lender') || lowerName.includes('financing')) {
+        voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Sora.
+Audio Profile: High-trust, mature, exceptionally composed, warm, and helpful female assistant handling sensitive real estate financing handoffs.
+Director's Notes: Maintain a deeply respectful, supportive, steady, trustworthy, and non-pushy tone. Project calm authority and neutral helpfulness.`;
+      } else if (lowerName.includes('follow-up') || lowerName.includes('sora') || lowerName.includes('umbriel') || lowerName.includes('nurture')) {
+        voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Sora.
+Audio Profile: Warm, deeply refined, thoughtful, friendly, and reassuring female assistant handling post-visit real estate operations.
+Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sora). Keep the cadence steady, rhythmic, and natural.`;
+      } else if (lowerName.includes('professional female')) {
+        voiceName = 'Kore';
+      } else if (lowerName.includes('executive british') || lowerName.includes('zephyr')) {
+        voiceName = 'Zephyr';
+      } else if (lowerName.includes('storyteller')) {
+        voiceName = 'Aoede';
+      } else if (lowerName.includes('warm energetic') || lowerName.includes('puck')) {
+        voiceName = 'Puck';
+      } else if (lowerName.includes('calm reassuring') || lowerName.includes('charon')) {
+        voiceName = 'Kore';
+      } else if (lowerName.includes('deep narrator') || lowerName.includes('fenrir')) {
+        voiceName = 'Kore';
+      }
+
+      const promptText = `${styleInstruction}\n\nDeliver the following script with precise pacing:\n${text}`;
+
+      const response = await fetch("/api/tts-simple", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: promptText,
+          lang: isEn ? "English" : "French",
+          voiceName: selectedVoice.name,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.base64Audio) {
+        throw new Error("No audio data returned from TTS API");
+      }
+
+      // Convert base64 to Blob
+      const binary = atob(data.base64Audio);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      
+      const blob = new Blob([bytes], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+
+      if (isEn) {
+        setEnAudioUrl(url);
+        toast.success("English welcome greeting generated successfully!");
+      } else {
+        setFrAudioUrl(url);
+        toast.success("French welcome greeting generated successfully!");
+      }
+    } catch (err: any) {
+      console.error("Generate welcome audio error:", err);
+      toast.error(`Failed to generate welcome audio: ${err.message || "Unknown error"}`);
+    } finally {
+      if (isEn) {
+        setGeneratingEn(false);
+      } else {
+        setGeneratingFr(false);
+      }
+    }
+  };
+
+  const togglePlayWelcomeEn = () => {
+    if (playingEnWelcome) {
+      welcomeEnAudio?.pause();
+      setPlayingEnWelcome(false);
+    } else {
+      if (playingFrWelcome) {
+        welcomeFrAudio?.pause();
+        setPlayingFrWelcome(false);
+      }
+      if (!enAudioUrl) return;
+      const audio = new Audio(enAudioUrl);
+      audio.play().then(() => {
+        setPlayingEnWelcome(true);
+        setWelcomeEnAudio(audio);
+        audio.onended = () => setPlayingEnWelcome(false);
+      }).catch(err => {
+        console.error("Welcome play error:", err);
+        toast.error("Could not play generated English audio.");
+      });
+    }
+  };
+
+  const togglePlayWelcomeFr = () => {
+    if (playingFrWelcome) {
+      welcomeFrAudio?.pause();
+      setPlayingFrWelcome(false);
+    } else {
+      if (playingEnWelcome) {
+        welcomeEnAudio?.pause();
+        setPlayingEnWelcome(false);
+      }
+      if (!frAudioUrl) return;
+      const audio = new Audio(frAudioUrl);
+      audio.play().then(() => {
+        setPlayingFrWelcome(true);
+        setWelcomeFrAudio(audio);
+        audio.onended = () => setPlayingFrWelcome(false);
+      }).catch(err => {
+        console.error("Welcome play error:", err);
+        toast.error("Could not play generated French audio.");
+      });
+    }
+  };
+
+  const downloadWelcomeAudio = (lang: 'en' | 'fr') => {
+    const url = lang === 'en' ? enAudioUrl : frAudioUrl;
+    if (!url) {
+      toast.error("Please generate the audio greeting first.");
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = lang === 'en' ? 'welcome_en.mp3' : 'welcome_fr.mp3';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast.success(`${lang === 'en' ? 'English' : 'French'} welcome greeting downloaded as welcome_${lang}.mp3!`);
+  };
+
   const handleSaveRename = async () => {
     if (!activeVoice || !user?.id) return;
     
@@ -800,8 +1014,177 @@ Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the c
         </div>
       </div>
 
+      {/* Welcome Message Audio Builder Section */}
+      <div className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden p-6 space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Volume2 className="h-5 w-5 text-blue-600" /> Welcome Greetings Audio Builder
+          </h2>
+          <p className="text-slate-500 text-xs mt-1">
+            Configure, generate, and download high-quality MP3 welcome messages for your open houses and pilot listings.
+          </p>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+          <div className="space-y-1.5 flex-1">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Selected Voice Model</label>
+            <select
+              value={welcomeVoiceId}
+              onChange={(e) => {
+                setWelcomeVoiceId(e.target.value);
+                // Reset generated URLs to prompt re-generation for the new voice model
+                setEnAudioUrl(null);
+                setFrAudioUrl(null);
+                if (welcomeEnAudio) welcomeEnAudio.pause();
+                if (welcomeFrAudio) welcomeFrAudio.pause();
+                setPlayingEnWelcome(false);
+                setPlayingFrWelcome(false);
+              }}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            >
+              {(voices.length > 0 ? voices : INITIAL_VOICES).filter(v => v.status === "Active").map(v => (
+                <option key={v.id} value={v.id}>{v.name} ({v.type})</option>
+              ))}
+              {(voices.length > 0 ? voices : INITIAL_VOICES).filter(v => v.status !== "Active").length > 0 && <option disabled>─── Inactive Voices ───</option>}
+              {(voices.length > 0 ? voices : INITIAL_VOICES).filter(v => v.status !== "Active").map(v => (
+                <option key={v.id} value={v.id} disabled>{v.name} (Inactive)</option>
+              ))}
+            </select>
+          </div>
+          <div className="text-xs text-slate-500 md:max-w-md pt-2 md:pt-4">
+            Generates optimized neural MP3 files tailored specifically for real estate open house greetings.
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* English Welcome Builder */}
+          <div className="border border-slate-100 rounded-xl bg-slate-50/30 p-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">English Welcome Script</span>
+                <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-bold">EN</span>
+              </div>
+              <textarea
+                value={welcomeEnText}
+                onChange={(e) => {
+                  setWelcomeEnText(e.target.value);
+                  setEnAudioUrl(null); // Reset URL on text change to force regeneration
+                }}
+                rows={4}
+                className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                placeholder="Write the English welcome message here..."
+              />
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <Button
+                onClick={() => generateWelcomeAudio('en')}
+                disabled={generatingEn || !welcomeVoiceId}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs gap-2 shrink-0"
+              >
+                {generatingEn ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="h-4 w-4" />
+                    Generate Audio
+                  </>
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!enAudioUrl}
+                onClick={togglePlayWelcomeEn}
+                className="border-slate-200 text-slate-700 hover:bg-slate-50 gap-2 disabled:opacity-50"
+              >
+                {playingEnWelcome ? <Pause className="h-4 w-4 text-red-500" /> : <Play className="h-4 w-4 text-blue-600" />}
+                {playingEnWelcome ? "Pause" : "Play Preview"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!enAudioUrl}
+                onClick={() => downloadWelcomeAudio('en')}
+                className="border-slate-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 gap-2 disabled:opacity-50 ml-auto"
+              >
+                <Download className="h-4 w-4" />
+                Download MP3
+              </Button>
+            </div>
+          </div>
+
+          {/* French Welcome Builder */}
+          <div className="border border-slate-100 rounded-xl bg-slate-50/30 p-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-600">French Welcome Script</span>
+                <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-bold">FR</span>
+              </div>
+              <textarea
+                value={welcomeFrText}
+                onChange={(e) => {
+                  setWelcomeFrText(e.target.value);
+                  setFrAudioUrl(null); // Reset URL on text change to force regeneration
+                }}
+                rows={4}
+                className="w-full text-xs text-slate-700 bg-white border border-slate-200 rounded-lg p-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                placeholder="Write the French welcome message here..."
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <Button
+                onClick={() => generateWelcomeAudio('fr')}
+                disabled={generatingFr || !welcomeVoiceId}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs gap-2 shrink-0"
+              >
+                {generatingFr ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="h-4 w-4" />
+                    Generate Audio
+                  </>
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!frAudioUrl}
+                onClick={togglePlayWelcomeFr}
+                className="border-slate-200 text-slate-700 hover:bg-slate-50 gap-2 disabled:opacity-50"
+              >
+                {playingFrWelcome ? <Pause className="h-4 w-4 text-red-500" /> : <Play className="h-4 w-4 text-blue-600" />}
+                {playingFrWelcome ? "Pause" : "Play Preview"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!frAudioUrl}
+                onClick={() => downloadWelcomeAudio('fr')}
+                className="border-slate-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 gap-2 disabled:opacity-50 ml-auto"
+              >
+                <Download className="h-4 w-4" />
+                Download MP3
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {voices.map((voice) => (
+        {(voices.length > 0 ? voices : INITIAL_VOICES).map((voice) => (
           <div key={voice.id} className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden flex flex-col hover:border-blue-400 hover:shadow-lg hover:shadow-blue-50 transition-all duration-300 group">
             <div className="p-6 relative">
               <div className="absolute top-4 right-2 z-10">
@@ -1104,9 +1487,27 @@ Director's Notes: Use an encouraging, welcoming, and reassuring tone. Keep the c
                   >
                     <Play className="h-8 w-8 ml-1" />
                   </div>
-                  <div className="text-center">
+                  <div className="text-center flex flex-col items-center">
                     <p className="text-sm font-bold text-blue-900">Audio preview ready</p>
-                    <p className="text-xs text-blue-600 mt-1">Click the button above to listen</p>
+                    <p className="text-xs text-blue-600 mt-1 mb-3">Click the button above to listen</p>
+                    {testAudioUrl && (
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const a = document.createElement('a');
+                          a.href = testAudioUrl;
+                          a.download = `${activeVoice?.name || "voice"}_preview.mp3`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          toast.success("Preview downloaded successfully!");
+                        }}
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-2 shadow-sm"
+                      >
+                        <Download className="h-4 w-4" /> Download MP3
+                      </Button>
+                    )}
                   </div>
                 </div>
 
