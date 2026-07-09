@@ -1732,15 +1732,35 @@ Global rules
 
       // Map dynamic storage URLs to local paths using the same robust mapping logic
       if (audioUrl.includes("/listings/") && audioUrl.includes("/audio/")) {
-        const idx = audioUrl.indexOf("listings/");
-        if (idx !== -1) {
-          audioUrl = `/audio/${audioUrl.substring(idx)}`;
+        const knownIds = [
+          "b1dbdb5d-b5fc-43e8-ba11-2c69b431a3ed",
+          "c3507e9a-b388-43ea-ac92-76d7d7a2154a",
+          "3a801a86-316c-46c0-aa19-7498d2a76e62"
+        ];
+        const hasKnownId = knownIds.some(id => audioUrl.includes(id));
+        if (hasKnownId) {
+          const idx = audioUrl.indexOf("listings/");
+          if (idx !== -1) {
+            audioUrl = `/audio/${audioUrl.substring(idx)}`;
+            if (audioUrl.endsWith(".wav")) {
+              audioUrl = audioUrl.substring(0, audioUrl.length - 4) + ".mp3";
+            }
+          }
+        } else {
+          audioUrl = isFr ? "/audio/welcome_fr.mp3" : "/audio/welcome_en.mp3";
         }
       } else if (audioUrl.includes("/welcome_") && !audioUrl.includes("/listings/")) {
         const filename = audioUrl.substring(audioUrl.lastIndexOf("/") + 1);
         audioUrl = `/audio/${filename}`;
+        if (audioUrl.endsWith(".wav")) {
+          audioUrl = audioUrl.substring(0, audioUrl.length - 4) + ".mp3";
+        }
       } else if (audioUrl.startsWith("https://storage.googleapis.com/")) {
         audioUrl = isFr ? "/audio/welcome_fr.mp3" : "/audio/welcome_en.mp3";
+      }
+
+      if (audioUrl.endsWith(".wav")) {
+        audioUrl = audioUrl.substring(0, audioUrl.length - 4) + ".mp3";
       }
 
       console.log("[Tour Start Button] Playing welcome audio:", audioUrl);

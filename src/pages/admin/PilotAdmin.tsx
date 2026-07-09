@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, Save, Globe, Plus, Trash2, ShieldAlert, Play, Pause, Volume2 } from "lucide-react";
+import { Loader2, Save, Globe, Plus, Trash2, ShieldAlert, Play, Pause, Volume2, Upload } from "lucide-react";
 
 // Translations dictionary for EN/FR UI support
 const TRANSLATIONS = {
@@ -237,6 +238,8 @@ export default function PilotAdmin() {
   const [images, setImages] = useState<string[]>([]);
   const [welcomeEn, setWelcomeEn] = useState("/audio/welcome_en.mp3");
   const [welcomeFr, setWelcomeFr] = useState("");
+  const [uploadingEn, setUploadingEn] = useState(false);
+  const [uploadingFr, setUploadingFr] = useState(false);
   const [playingEn, setPlayingEn] = useState(false);
   const [playingFr, setPlayingFr] = useState(false);
   const [audioEn, setAudioEn] = useState<HTMLAudioElement | null>(null);
@@ -299,6 +302,91 @@ export default function PilotAdmin() {
         console.error("Audio playback error:", err);
         toast.error("Could not play French audio file. Make sure it's a valid URL.");
       });
+    }
+  };
+
+  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>, lang: "en" | "fr") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("audio/") && !file.name.endsWith(".mp3")) {
+      toast.error(lang === "en" 
+        ? "Please upload a valid MP3 audio file." 
+        : "Veuillez télécharger un fichier audio MP3 valide.");
+      return;
+    }
+
+    if (lang === "en") setUploadingEn(true);
+    else setUploadingFr(true);
+
+    try {
+      // 1. Attempt upload to our Express backend which saves directly to local disk /public/audio
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`/api/upload-audio?lang=${lang}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (!result.success || !result.url) {
+        throw new Error("Invalid response from server upload.");
+      }
+
+      const fileUrl = result.url;
+
+      if (lang === "en") {
+        setWelcomeEn(fileUrl);
+        toast.success("English welcome audio uploaded successfully!");
+      } else {
+        setWelcomeFr(fileUrl);
+        toast.success("French welcome audio uploaded successfully!");
+      }
+    } catch (err: any) {
+      console.warn("Local server upload failed, falling back to Firebase Storage:", err);
+      toast.info(lang === "en"
+        ? "Local server upload failed. Attempting Firebase Storage..."
+        : "Échec du chargement local. Tentative sur Firebase Storage...");
+
+      try {
+        if (!storage) {
+          throw new Error("Firebase Storage is not initialized or configured.");
+        }
+
+        const filename = `welcome_${lang}_${Date.now()}.mp3`;
+        const storageRef = ref(storage, `properties/pilot-listing-01/${filename}`);
+        
+        // Wrap Firebase Storage upload with a 15s timeout
+        const uploadPromise = uploadBytes(storageRef, file);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Firebase Storage timed out (15s). Please make sure Firebase Storage is enabled in your console.")), 15000)
+        );
+
+        const snap = await Promise.race([uploadPromise, timeoutPromise]);
+        const downloadUrl = await getDownloadURL(snap.ref);
+
+        if (lang === "en") {
+          setWelcomeEn(downloadUrl);
+          toast.success("English welcome audio uploaded successfully via Storage!");
+        } else {
+          setWelcomeFr(downloadUrl);
+          toast.success("French welcome audio uploaded successfully via Storage!");
+        }
+      } catch (fallbackErr: any) {
+        console.error("Audio upload failure under both methods:", fallbackErr);
+        toast.error(lang === "en"
+          ? `Upload failed. Server error: ${err.message || "Unknown"}. Firebase error: ${fallbackErr.message || "Unknown"}`
+          : `Le chargement a échoué. Erreur serveur : ${err.message || "Inconnu"}. Erreur Firebase : ${fallbackErr.message || "Inconnu"}`);
+      }
+    } finally {
+      if (lang === "en") setUploadingEn(false);
+      else setUploadingFr(false);
     }
   };
 
@@ -1158,6 +1246,22 @@ export default function PilotAdmin() {
                         {lang === "en" ? "Welcome Audio Greetings (.mp3)" : "Messages Vocaux de Bienvenue (.mp3)"}
                       </h4>
 
+                      <div className="text-[11px] text-slate-400 bg-slate-900/60 p-3 rounded-lg border border-slate-800/80 leading-relaxed space-y-1">
+                        <p className="font-semibold text-slate-300">
+                          {lang === "en" ? "💡 Audio File Upload & Storage Options:" : "💡 Options de téléchargement et de stockage audio :"}
+                        </p>
+                        <p>
+                          {lang === "en" 
+                            ? "You can drag-and-drop or select a local MP3 file to upload directly to your Firebase Storage bucket." 
+                            : "Vous pouvez glisser-déposer ou sélectionner un fichier MP3 local pour le télécharger directement sur votre espace de stockage Firebase."}
+                        </p>
+                        <p>
+                          {lang === "en"
+                            ? "If uploads time out, make sure Firebase Storage is enabled in your Firebase Console and rules permit unauthenticated writes. Alternatively, you can always copy-paste any public MP3 web URL directly into the fields below."
+                            : "Si les téléchargements expirent, vérifiez que Firebase Storage est activé dans votre console Firebase et que les règles autorisent l'écriture publique. Vous pouvez également copier-coller toute URL Web MP3 publique directement dans les champs ci-dessous."}
+                        </p>
+                      </div>
+
                       {/* English audio input */}
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -1189,6 +1293,36 @@ export default function PilotAdmin() {
                           placeholder="/audio/welcome_en.mp3"
                           className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-700 text-xs font-mono"
                         />
+                        
+                        {/* English file upload zone */}
+                        <div className="mt-2.5 p-3.5 border border-dashed border-slate-800 hover:border-blue-500/50 bg-slate-900/20 hover:bg-slate-900/40 rounded-xl transition group relative flex flex-col items-center justify-center text-center">
+                          <input
+                            type="file"
+                            accept="audio/mpeg,audio/mp3,audio/*"
+                            onChange={(e) => handleAudioUpload(e, "en")}
+                            disabled={uploadingEn}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                          {uploadingEn ? (
+                            <div className="flex flex-col items-center gap-1.5 py-2">
+                              <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                              <span className="text-xs text-blue-400 font-medium">
+                                {lang === "en" ? "Uploading MP3..." : "Téléchargement en cours..."}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1.5 py-1">
+                              <Upload className="h-5 w-5 text-slate-500 group-hover:text-blue-400 transition" />
+                              <span className="text-xs font-semibold text-slate-300 group-hover:text-blue-300 transition">
+                                {lang === "en" ? "Click to Upload English MP3" : "Cliquez pour télécharger le MP3 anglais"}
+                              </span>
+                              <span className="text-[10px] text-slate-600 font-medium">
+                                {lang === "en" ? "Drag & drop or select file" : "Glissez-déposez ou sélectionnez un fichier"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
                         <p className="text-[10px] text-slate-500">
                           {lang === "en" ? "Default: /audio/welcome_en.mp3" : "Par défaut : /audio/welcome_en.mp3"}
                         </p>
@@ -1226,6 +1360,36 @@ export default function PilotAdmin() {
                           placeholder="https://your-domain.com/audio/welcome_fr.mp3"
                           className="bg-slate-950 border-slate-800 text-slate-100 placeholder:text-slate-700 text-xs font-mono"
                         />
+                        
+                        {/* French file upload zone */}
+                        <div className="mt-2.5 p-3.5 border border-dashed border-slate-800 hover:border-blue-500/50 bg-slate-900/20 hover:bg-slate-900/40 rounded-xl transition group relative flex flex-col items-center justify-center text-center">
+                          <input
+                            type="file"
+                            accept="audio/mpeg,audio/mp3,audio/*"
+                            onChange={(e) => handleAudioUpload(e, "fr")}
+                            disabled={uploadingFr}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                          {uploadingFr ? (
+                            <div className="flex flex-col items-center gap-1.5 py-2">
+                              <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                              <span className="text-xs text-blue-400 font-medium">
+                                {lang === "en" ? "Uploading MP3..." : "Téléchargement en cours..."}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1.5 py-1">
+                              <Upload className="h-5 w-5 text-slate-500 group-hover:text-blue-400 transition" />
+                              <span className="text-xs font-semibold text-slate-300 group-hover:text-blue-300 transition">
+                                {lang === "en" ? "Click to Upload French MP3" : "Cliquez pour télécharger le MP3 français"}
+                              </span>
+                              <span className="text-[10px] text-slate-600 font-medium">
+                                {lang === "en" ? "Drag & drop or select file" : "Glissez-déposez ou sélectionnez un fichier"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
                         <p className="text-[10px] text-slate-500">
                           {lang === "en" ? "Optional French welcome audio path or URL." : "Chemin ou URL facultatif pour l'audio en français."}
                         </p>

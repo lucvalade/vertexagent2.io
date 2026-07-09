@@ -10,6 +10,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
 import nodemailer from "nodemailer";
 import puppeteer from 'puppeteer';
+import multer from "multer";
 
 const dotEnvResult = dotenv.config();
 console.log("[DotEnv] Result:", dotEnvResult.error ? "No .env file found" : "Loaded .env file");
@@ -256,6 +257,74 @@ async function startServer() {
   const apiKey = configContent.apiKey || "AIzaSyCVqNGati2Cw6RrBr3zm1aqSIhIkV2VdEg";
 
   app.use(express.json());
+
+  // Set up disk storage for uploads
+  const uploadDir = path.join(process.cwd(), "public/audio");
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const storageConfig = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const lang = req.query.lang === "fr" ? "fr" : "en";
+      cb(null, `welcome_${lang}.mp3`);
+    }
+  });
+
+  const upload = multer({
+    storage: storageConfig,
+    limits: { fileSize: 15 * 1024 * 1024 } // 15MB limit
+  });
+
+  // Serve the public/audio directory under /audio statically in dev and production
+  app.use("/audio", express.static(uploadDir));
+
+  // Fallback audio proxy for files not found locally (e.g. legacy/remote files in firebase storage)
+  app.get("/audio/*", async (req: any, res: any) => {
+    const relativePath = req.params[0];
+    if (!relativePath) {
+      return res.status(404).send("Not found");
+    }
+
+    const remoteUrl = `https://storage.googleapis.com/gen-lang-client-0289343453.firebasestorage.app/${relativePath}`;
+    console.log(`[Audio Fallback Proxy] Request: ${req.url} -> Fetching from remote storage: ${remoteUrl}`);
+    try {
+      const response = await fetch(remoteUrl);
+      if (!response.ok) {
+        console.warn(`[Audio Fallback Proxy] Remote file not found. Status: ${response.status}`);
+        return res.status(response.status).send("Audio file not found.");
+      }
+      
+      const contentType = response.headers.get("content-type") || "audio/mpeg";
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=31536000");
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      return res.send(buffer);
+    } catch (err: any) {
+      console.error("[Audio Fallback Proxy] Proxy error:", err);
+      return res.status(500).send("Error proxying audio file");
+    }
+  });
+
+  // Audio upload API endpoint
+  app.post("/api/upload-audio", upload.single("file"), (req: any, res: any) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file was uploaded." });
+      }
+      const fileUrl = `/audio/${req.file.filename}`;
+      console.log(`[Audio Upload] File saved successfully: ${req.file.path} -> ${fileUrl}`);
+      return res.json({ success: true, url: fileUrl });
+    } catch (err: any) {
+      console.error("[Audio Upload] Error handling file upload:", err);
+      return res.status(500).json({ error: err.message || "Failed to process uploaded file." });
+    }
+  });
 
   /**
    * Health check endpoint for monitoring and self-diagnosis.
@@ -1665,12 +1734,12 @@ SCRIPT TO CONDENSE:
         else if (name.includes("warm energetic") || name.includes("warm male") || name.includes("puck")) geminiVoice = "Puck";
       }
 
-      const systemInstruction = `Speak natural, beautiful, and fluidly in ${lang}. Maintain a friendly, supportive, and extremely professional real estate agent guide tone. Do not announce yourself with metadata, just read the script perfectly.`;
+      const fullPrompt = `You are Sora, a warm, professional female real-estate assistant. \nSpeak the following text naturally in ${lang}, using the Kore voice. \nKeep tone consistent across all languages — same Sora identity, moderate \npace, welcoming but not saccharine. Do not add any words that aren't in \nthe source text. Do not translate. Speak the text exactly as provided.\n\nText to speak:\n${text}`;
       
       const response = await callAiWithRetry(() => 
         ai.models.generateContent({
           model: "gemini-3.1-flash-tts-preview",
-          contents: [{ parts: [{ text }] }],
+          contents: [{ parts: [{ text: fullPrompt }] }],
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
@@ -3337,11 +3406,13 @@ Input Message:
             else if (name.includes("deep narrator") || name.includes("narrator") || name.includes("fenrir")) geminiVoice = "Fenrir";
           }
 
+          const fullPrompt = `You are Sora, a warm, professional female real-estate assistant. \nSpeak the following text naturally in ${locale}, using the Kore voice. \nKeep tone consistent across all languages — same Sora identity, moderate \npace, welcoming but not saccharine. Do not add any words that aren't in \nthe source text. Do not translate. Speak the text exactly as provided.\n\nText to speak:\n${text}`;
+
           console.log(`[Welcome Save] Synthesizing [${locale}] using voice character ${geminiVoice}...`);
           const response = await callAiWithRetry(() => 
             ai.models.generateContent({
               model: "gemini-3.1-flash-tts-preview",
-              contents: [{ parts: [{ text }] }],
+              contents: [{ parts: [{ text: fullPrompt }] }],
               config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {

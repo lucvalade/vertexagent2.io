@@ -39,6 +39,13 @@ export default function App() {
   }, []);
 
   const isTourPage = window.location.pathname.includes("/tour/");
+  const isDevOrStudio = 
+    window.location.hostname.includes("run.app") || 
+    window.location.hostname.includes("localhost") || 
+    window.location.hostname.includes("127.0.0.1") ||
+    window.location.hostname.includes("webcontainer") ||
+    window.location.hostname.includes("stackblitz");
+
   const effectiveUnlocked = isUnlocked || isTourPage || !!user;
 
   const handleUnlock = (e: React.FormEvent) => {

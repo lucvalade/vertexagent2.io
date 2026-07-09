@@ -10,9 +10,9 @@ async function main() {
   const projectId = configContent.projectId;
   const dbId = configContent.firestoreDatabaseId;
   const apiKey = configContent.apiKey;
-  const listingId = "c3507e9a-b388-43ea-ac92-76d7d7a2154a";
+  const listingId = "pilot-listing-01";
 
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/listings/${listingId}?key=${apiKey}`;
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${dbId}/documents/properties/${listingId}?key=${apiKey}`;
   const res = await fetch(url);
   if (!res.ok) {
     console.log("Failed to fetch. Status:", res.status, await res.text());
