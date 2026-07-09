@@ -681,7 +681,7 @@ async function startServer() {
 
       const response = await callAiWithRetry(() => 
         ai.models.generateContent({
-          model: "gemini-3.1-flash-tts-preview",
+          model: "gemini-2.5-flash-preview-tts",
           contents: [{ parts: [{ text: promptText }] }],
           config: {
             responseModalities: [Modality.AUDIO],
@@ -1734,12 +1734,10 @@ SCRIPT TO CONDENSE:
         else if (name.includes("warm energetic") || name.includes("warm male") || name.includes("puck")) geminiVoice = "Puck";
       }
 
-      const fullPrompt = `You are Sora, a warm, professional female real-estate assistant. \nSpeak the following text naturally in ${lang}, using the Kore voice. \nKeep tone consistent across all languages — same Sora identity, moderate \npace, welcoming but not saccharine. Do not add any words that aren't in \nthe source text. Do not translate. Speak the text exactly as provided.\n\nText to speak:\n${text}`;
-      
       const response = await callAiWithRetry(() => 
         ai.models.generateContent({
           model: "gemini-3.1-flash-tts-preview",
-          contents: [{ parts: [{ text: fullPrompt }] }],
+          contents: [{ parts: [{ text }] }],
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
@@ -3406,13 +3404,11 @@ Input Message:
             else if (name.includes("deep narrator") || name.includes("narrator") || name.includes("fenrir")) geminiVoice = "Fenrir";
           }
 
-          const fullPrompt = `You are Sora, a warm, professional female real-estate assistant. \nSpeak the following text naturally in ${locale}, using the Kore voice. \nKeep tone consistent across all languages — same Sora identity, moderate \npace, welcoming but not saccharine. Do not add any words that aren't in \nthe source text. Do not translate. Speak the text exactly as provided.\n\nText to speak:\n${text}`;
-
           console.log(`[Welcome Save] Synthesizing [${locale}] using voice character ${geminiVoice}...`);
           const response = await callAiWithRetry(() => 
             ai.models.generateContent({
               model: "gemini-3.1-flash-tts-preview",
-              contents: [{ parts: [{ text: fullPrompt }] }],
+              contents: [{ parts: [{ text }] }],
               config: {
                 responseModalities: [Modality.AUDIO],
                 speechConfig: {

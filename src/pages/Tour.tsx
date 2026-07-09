@@ -12,6 +12,7 @@ import {
   finishTourAndGetNotes,
 } from "@/lib/api";
 import TourGate from "@/components/TourGate";
+import { useAgentTierCapabilities } from "@/components/UpdatedFeatureController";
 import { trackEvent } from "@/lib/analytics";
 import { useLiveVoice } from "@/hooks/useLiveVoice";
 import { Type } from "@google/genai";
@@ -959,6 +960,9 @@ export default function Tour() {
   const [agent, setAgent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Load Agent Tier & Capabilities
+  const { capabilities, profile } = useAgentTierCapabilities(listing?.ownerId);
+
   // Dynamic 3D AI Video Avatar States
   const [activeAvatar, setActiveAvatar] = useState({
     id: "kore",
@@ -1594,6 +1598,10 @@ If you are missing information:
   };
   const systemDateStr = `System context: Today is ${new Date().toLocaleDateString("en-US", dateOptions)}.`;
 
+  const photoInteractionModeInstruction = capabilities.photoInteractionMode === "Manual Swipe Only"
+    ? "\n- CRITICAL ENFORCED LIMIT: You are operating in Free Solo mode. You are STRICTLY FORBIDDEN from attempting to change, show, or navigate photos or rooms. You do NOT have the show_property_feature tool registered. If the visitor asks you to show a different room, view, or photo, explain politely that they can swipe through the listing photos manually using the navigation arrows on the image slideshow at the top of the screen."
+    : "\n- PRO FEATURE ACTIVE: You have the 'show_property_feature' tool registered. You can automatically and dynamically navigate and change the photos on the visitor's screen to match the room or feature you are actively discussing (e.g., kitchen, bedroom, backyard, etc.). Use this tool whenever relevant to create an immersive contextual experience.";
+
   const systemInstruction = `${systemDateStr}
 
 ${promptTemplate}
@@ -1611,7 +1619,7 @@ Session context
 - Lead capture allowed: true
 - Brochure available: true
 - Floor plan available: false
-- Showing request enabled: true
+- Showing request enabled: true${photoInteractionModeInstruction}
 
 Listing context
 - Listing ID: ${listing?.id || "Unknown"}
@@ -1707,10 +1715,14 @@ Global rules
 - Do not provide legal, mortgage, or contract advice.
 - Meeting Date Validation: When a client requests a date to meet the agent, you must verify that the requested date is not in the past. Always reference the current system date (${new Date().toLocaleDateString("en-US", dateOptions)}). If the requested date is in the past, politely inform them that the date is invalid and ask them to suggest a new time (e.g., "It looks like that date has already passed! Could you suggest a time for today or later?"). If the requested date is today or in the future, accept the date and proceed with scheduling.`;
 
+  const liveVoiceTools = capabilities.photoInteractionMode === "Dynamic Contextual AI Photo Swaps"
+    ? [{ functionDeclarations: [show_property_feature, trigger_lead_capture, submit_ai_tour_lead] }]
+    : [{ functionDeclarations: [trigger_lead_capture, submit_ai_tour_lead] }];
+
   const { connected, connecting, error, startSession, stopSession } =
     useLiveVoice(
       systemInstruction,
-      [{ functionDeclarations: [show_property_feature, trigger_lead_capture, submit_ai_tour_lead] }],
+      liveVoiceTools,
       handleToolCall,
       getGeminiVoice(listing?.voiceName || "Professional Female Synthetic"),
     );
@@ -2321,6 +2333,8 @@ Global rules
                     fr: (listing as any)?.welcome_fr || "/audio/welcome_fr.mp3",
                   }}
                   listingId={listing.id}
+                  agentPlan={agent?.subscriptionPlan}
+                  agentId={listing?.ownerId}
                 />
               )}
 
@@ -2462,6 +2476,14 @@ Global rules
             )}
           </Button>
         </div>
+
+        {/* Powered By Badge (Gated by White-Label feature) */}
+        {!capabilities.allowedBrandingLayout.allowWhiteLabeling && (
+          <div className="text-center pt-2.5 text-[9px] text-slate-500 uppercase tracking-widest font-semibold flex items-center justify-center gap-1.5 opacity-60">
+            <span>Powered by</span>
+            <span className="text-blue-500 font-bold">AI Open House Connect</span>
+          </div>
+        )}
       </div>
 
       <Dialog open={showLeadForm} onOpenChange={setShowLeadForm}>

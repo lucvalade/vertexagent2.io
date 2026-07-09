@@ -330,6 +330,7 @@ export default function AiTours() {
       if (data.success) {
         setWelcomeOtherScript(data.translatedText);
         toast.success(`Successfully translated welcome script to ${targetLang}!`);
+        await initiateAutoSave(welcomeEn, welcomeFr, data.translatedText, targetLang);
       } else {
         toast.error(data.error || "Failed to translate script.");
       }
@@ -516,6 +517,30 @@ export default function AiTours() {
     setSignInPrompt(listing.qrDestination === "sign-in" ? "start" : "none");
   };
 
+  // Auto-Save helper for Sora Tour Workspace
+  const initiateAutoSave = async (
+    enVal = welcomeEn,
+    frVal = welcomeFr,
+    otherVal = welcomeOtherScript,
+    langVal = targetLang
+  ) => {
+    if (!selectedListing) return;
+    try {
+      await updateListing(selectedListing.id, {
+        welcome_en_script: enVal,
+        welcome_fr_script: frVal,
+        welcome_other_lang: langVal,
+        welcome_other_script: otherVal,
+        ...(selectedListing.welcome_en?.startsWith("data:audio") ? {} : { welcome_en: enVal }),
+        ...(selectedListing.welcome_fr?.startsWith("data:audio") ? {} : { welcome_fr: frVal }),
+        updatedAt: Date.now()
+      });
+      toast.success("Auto-save complete!", { duration: 1500 });
+    } catch (err) {
+      console.error("Auto-save failed", err);
+    }
+  };
+
   // AI (Sora) action: Generate Tour Intro
   const handleGenerateTourIntro = () => {
     if (!selectedListing) return;
@@ -527,6 +552,7 @@ export default function AiTours() {
       setWelcomeEn(generated);
       setSoraGenerating(false);
       toast.success("Sora generated a beautiful, professional tour introduction!");
+      initiateAutoSave(generated, welcomeFr, welcomeOtherScript, targetLang);
     }, 1200);
   };
 
@@ -540,6 +566,7 @@ export default function AiTours() {
       setWelcomeEn(rewritten);
       setSoraGenerating(false);
       toast.success("Sora rewrote the welcome script into ultra-premium luxury style.");
+      initiateAutoSave(rewritten, welcomeFr, welcomeOtherScript, targetLang);
     }, 1200);
   };
 
@@ -565,12 +592,38 @@ export default function AiTours() {
       if (data.success) {
         if (type === "en") {
           setWelcomeEn(data.shortenedText);
+          
+          toast.info("Translating shortened script to French...", { duration: 2000 });
+          try {
+            const translateResponse = await fetch("/api/translate-script", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: data.shortenedText, targetLanguage: "French" })
+            });
+            if (translateResponse.ok) {
+              const translateData = await translateResponse.json();
+              if (translateData.success) {
+                setWelcomeFr(translateData.translatedText);
+                toast.success("Shortened English script and automatically converted to French!");
+                await initiateAutoSave(data.shortenedText, translateData.translatedText, welcomeOtherScript, targetLang);
+              } else {
+                await initiateAutoSave(data.shortenedText, welcomeFr, welcomeOtherScript, targetLang);
+              }
+            } else {
+              await initiateAutoSave(data.shortenedText, welcomeFr, welcomeOtherScript, targetLang);
+            }
+          } catch (tErr) {
+            await initiateAutoSave(data.shortenedText, welcomeFr, welcomeOtherScript, targetLang);
+          }
         } else if (type === "fr") {
           setWelcomeFr(data.shortenedText);
+          toast.success("Script successfully condensed by Sora into a fast-speaking, premium concise format!");
+          await initiateAutoSave(welcomeEn, data.shortenedText, welcomeOtherScript, targetLang);
         } else {
           setWelcomeOtherScript(data.shortenedText);
+          toast.success("Script successfully condensed by Sora into a fast-speaking, premium concise format!");
+          await initiateAutoSave(welcomeEn, welcomeFr, data.shortenedText, targetLang);
         }
-        toast.success("Script successfully condensed by Sora into a fast-speaking, premium concise format!");
       } else {
         toast.error(data.error || "Failed to shorten script.");
       }
@@ -988,6 +1041,7 @@ export default function AiTours() {
                   <Textarea 
                     value={welcomeEn} 
                     onChange={(e) => setWelcomeEn(e.target.value)} 
+                    onBlur={() => initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang)}
                     rows={3} 
                     className="text-xs font-sans text-white focus-visible:ring-1 focus-visible:ring-amber-500 bg-[#192f72]"
                   />
@@ -1030,6 +1084,7 @@ export default function AiTours() {
                   <Textarea 
                     value={welcomeFr} 
                     onChange={(e) => setWelcomeFr(e.target.value)} 
+                    onBlur={() => initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang)}
                     rows={2} 
                     className="text-xs font-sans text-white focus-visible:ring-1 focus-visible:ring-amber-500 bg-[#192f72]"
                   />
@@ -1118,6 +1173,7 @@ export default function AiTours() {
                   <Textarea 
                     value={welcomeOtherScript} 
                     onChange={(e) => setWelcomeOtherScript(e.target.value)} 
+                    onBlur={() => initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang)}
                     rows={3} 
                     placeholder={`The computed ${targetLang} welcome script will display here once converted. You can also manually paste/edit translations.`}
                     className="text-xs font-sans text-stone-850 focus-visible:ring-1 focus-visible:ring-amber-500 bg-stone-50/50"

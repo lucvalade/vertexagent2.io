@@ -243,7 +243,51 @@ service cloud.firestore {
     match /auditLogs/{docId} {
       allow read, write: if isSignedIn();
     }
+
+    match /agent_pricing_branding_profiles/{profileId} {
+      allow get: if isSignedIn() && (request.auth.uid == profileId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() 
+        && isValidId(profileId) 
+        && (request.auth.uid == profileId || isAdmin())
+        && incoming().agent_id == profileId
+        && isValidAgentPricingAndBrandingProfileV2(incoming());
+      allow update: if isSignedIn() 
+        && isValidId(profileId) 
+        && (request.auth.uid == profileId || isAdmin())
+        && isValidAgentPricingAndBrandingProfileV2(incoming())
+        && incoming().agent_id == existing().agent_id;
+      allow delete: if isAdmin();
+    }
   }
+}
+
+function isValidAgentPricingAndBrandingProfileV2(data) {
+  return data.keys().hasAll(['agent_id', 'account_tier', 'sora_session_constraints', 'media_processing_rules', 'branding_configuration'])
+    && data.keys().size() == 5
+    && data.agent_id is string && data.agent_id.size() <= 128
+    && data.account_tier is string && (data.account_tier == 'Solo' || data.account_tier == 'Pro')
+    && data.sora_session_constraints is map
+    && data.sora_session_constraints.keys().hasAll(['turn_limit_per_session', 'monthly_session_cap'])
+    && data.sora_session_constraints.keys().size() == 2
+    && data.sora_session_constraints.turn_limit_per_session is number && (data.sora_session_constraints.turn_limit_per_session == 10 || data.sora_session_constraints.turn_limit_per_session == -1)
+    && data.sora_session_constraints.monthly_session_cap is number && (data.sora_session_constraints.monthly_session_cap == 50 || data.sora_session_constraints.monthly_session_cap == 500)
+    && data.media_processing_rules is map
+    && data.media_processing_rules.keys().hasAll(['ai_auto_metadata_tagging', 'dynamic_photo_swaps_enabled'])
+    && data.media_processing_rules.keys().size() == 2
+    && data.media_processing_rules.ai_auto_metadata_tagging is bool
+    && data.media_processing_rules.dynamic_photo_swaps_enabled is bool
+    && data.branding_configuration is map
+    && data.branding_configuration.keys().hasAll(['company_logo_url', 'agent_headshot_url', 'is_white_labeled', 'brokerage_theme_palette'])
+    && data.branding_configuration.keys().size() == 4
+    && data.branding_configuration.company_logo_url is string && data.branding_configuration.company_logo_url.size() <= 1000
+    && data.branding_configuration.agent_headshot_url is string && data.branding_configuration.agent_headshot_url.size() <= 1000
+    && data.branding_configuration.is_white_labeled is bool
+    && data.branding_configuration.brokerage_theme_palette is map
+    && data.branding_configuration.brokerage_theme_palette.keys().hasAll(['primary_accent_color', 'use_premium_glassmorphism'])
+    && data.branding_configuration.brokerage_theme_palette.keys().size() == 2
+    && data.branding_configuration.brokerage_theme_palette.primary_accent_color is string && data.branding_configuration.brokerage_theme_palette.primary_accent_color.size() <= 20
+    && data.branding_configuration.brokerage_theme_palette.use_premium_glassmorphism is bool;
 }
 
 function isValidVoiceNote(data) {

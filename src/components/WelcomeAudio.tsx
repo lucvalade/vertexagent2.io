@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Sparkles, Square, AlertCircle, Loader2 } from "lucide-react";
+import { useAgentTierCapabilities } from "./UpdatedFeatureController";
 
 /**
  * 15 welcome texts verbatim from the 15-language spreadsheet / migration config.
@@ -52,16 +53,22 @@ interface WelcomeAudioProps {
   onSpeakingChange?: (isSpeaking: boolean) => void;
   listingId?: string;
   autoHideAfterPlay?: boolean;
+  agentPlan?: string;
+  agentId?: string;
 }
 
 export default function WelcomeAudio({
-  language: languageProp,
   onSpeakingChange,
+  agentPlan,
+  agentId,
 }: WelcomeAudioProps) {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const activeUrlRef = useRef<string | null>(null);
 
-  const [language, setLanguage] = useState(languageProp || "en");
+  const { capabilities } = useAgentTierCapabilities(agentId);
+  const isPro = capabilities.maxConversationTurns > 10 || agentPlan === "pro" || agentPlan === "pro_agent" || agentPlan === "elite" || agentPlan === "team_pro";
+
+  const [language, setLanguage] = useState("en");
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "playing" | "error">("idle");
   const [speaking, setSpeaking] = useState(false);
@@ -86,18 +93,30 @@ export default function WelcomeAudio({
   // Force loading the audio element when blobUrl changes to avoid browser quirks
   useEffect(() => {
     const el = audioElementRef.current;
-    if (el && blobUrl) {
-      el.src = blobUrl;
-      el.load();
+    if (el) {
+      if (blobUrl) {
+        el.src = blobUrl;
+        el.load();
+      } else {
+        el.removeAttribute("src");
+        el.load();
+      }
     }
   }, [blobUrl]);
 
-  // Fetch welcome audio when the language prop changes or on mount
+  // Lock language to English if agent is on Solo tier
   useEffect(() => {
-    const targetLang = languageProp || "en";
-    setLanguage(targetLang);
-    generateAudioForLanguage(targetLang, false);
-  }, [languageProp]);
+    if (!isPro && language !== "en") {
+      setLanguage("en");
+      handleReset();
+    }
+  }, [agentPlan, isPro, language]);
+
+  // Preset language dropdown menu on mount to explicitly "English" ("en") without processing yet
+  useEffect(() => {
+    setLanguage("en");
+    setStatus("idle");
+  }, []);
 
   const generateAudioForLanguage = async (langCode: string, autoPlay: boolean = false) => {
     // Revoke previous URL if any
@@ -175,13 +194,22 @@ export default function WelcomeAudio({
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedLang = e.target.value;
+    if (!isPro && selectedLang !== "en") {
+      setLanguage("en");
+      return;
+    }
     setLanguage(selectedLang);
     generateAudioForLanguage(selectedLang, false);
   };
 
   const play = async () => {
     const el = audioElementRef.current;
-    if (!el || !blobUrl) return;
+    if (!el) return;
+
+    if (!blobUrl) {
+      await generateAudioForLanguage(language, true);
+      return;
+    }
 
     setError(null);
     try {
@@ -234,7 +262,6 @@ export default function WelcomeAudio({
     <div id="ai-guided-welcome-tour-card" className="flex flex-col w-full bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 backdrop-blur-sm shadow-lg mt-4 animate-in fade-in duration-300 text-left">
       <audio
         ref={audioElementRef}
-        src={blobUrl || undefined}
         onEnded={handleEnded}
         onError={handleAudioError}
         preload="auto"
@@ -260,21 +287,21 @@ export default function WelcomeAudio({
           disabled={status === "generating"}
           className="w-full bg-slate-800 border border-slate-700/80 text-slate-200 rounded-lg p-2.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <option value="ar">Arabic (العربية)</option>
-          <option value="zh-CN">Chinese (Simplified / 简体中文)</option>
-          <option value="zh-TW">Chinese (Traditional / 繁體中文)</option>
-          <option value="nl">Dutch (Nederlands)</option>
-          <option value="en">English</option>
-          <option value="fr">French (Français)</option>
-          <option value="de">German (Deutsch)</option>
-          <option value="hi">Hindi (हिन्दी)</option>
-          <option value="it">Italian (Italiano)</option>
-          <option value="ja">Japanese (日本語)</option>
-          <option value="ko">Korean (한국어)</option>
-          <option value="pt">Portuguese (Português)</option>
-          <option value="ru">Russian (Русский)</option>
-          <option value="es">Spanish (Español)</option>
-          <option value="vi">Vietnamese (Tiếng Việt)</option>
+          <option value="ar" disabled={!isPro}>Arabic (العربية) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="zh-CN" disabled={!isPro}>Chinese (Simplified / 简体中文) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="zh-TW" disabled={!isPro}>Chinese (Traditional / 繁體中文) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="nl" disabled={!isPro}>Dutch (Nederlands) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="en">English (English)</option>
+          <option value="fr" disabled={!isPro}>French (Français) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="de" disabled={!isPro}>German (Deutsch) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="hi" disabled={!isPro}>Hindi (हिन्दी) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="it" disabled={!isPro}>Italian (Italiano) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="ja" disabled={!isPro}>Japanese (日本語) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="ko" disabled={!isPro}>Korean (한국어) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="pt" disabled={!isPro}>Portuguese (Português) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="ru" disabled={!isPro}>Russian (Русский) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="es" disabled={!isPro}>Spanish (Español) {!isPro && "🔒 (Pro Upgrade)"}</option>
+          <option value="vi" disabled={!isPro}>Vietnamese (Tiếng Việt) {!isPro && "🔒 (Pro Upgrade)"}</option>
         </select>
       </div>
 
@@ -324,7 +351,7 @@ export default function WelcomeAudio({
           <button
             type="button"
             onClick={play}
-            disabled={status !== "ready"}
+            disabled={status !== "ready" && status !== "idle"}
             className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:active:scale-100 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-lg transition-all border border-blue-500/20 cursor-pointer disabled:bg-slate-800 disabled:text-slate-500 disabled:border-slate-800/80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Play className="h-3 w-3 fill-white text-white" />

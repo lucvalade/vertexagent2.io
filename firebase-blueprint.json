@@ -254,9 +254,56 @@
         "updated_at": { "type": "number" }
       },
       "required": ["session_id", "listing_id", "start_datetime", "end_datetime", "status", "created_by", "created_at", "updated_at"]
+    },
+    "AgentPricingAndBrandingProfileV2": {
+      "title": "AgentPricingAndBrandingProfileV2",
+      "description": "Agent pricing plan details, Sora usage limits, media upload rules, and brokerage branding configurations",
+      "type": "object",
+      "properties": {
+        "agent_id": { "type": "string" },
+        "account_tier": { "type": "string", "enum": ["Solo", "Pro"] },
+        "sora_session_constraints": {
+          "type": "object",
+          "properties": {
+            "turn_limit_per_session": { "type": "integer", "enum": [10, -1] },
+            "monthly_session_cap": { "type": "integer", "enum": [50, 500] }
+          },
+          "required": ["turn_limit_per_session", "monthly_session_cap"]
+        },
+        "media_processing_rules": {
+          "type": "object",
+          "properties": {
+            "ai_auto_metadata_tagging": { "type": "boolean", "default": true },
+            "dynamic_photo_swaps_enabled": { "type": "boolean", "default": false }
+          },
+          "required": ["ai_auto_metadata_tagging", "dynamic_photo_swaps_enabled"]
+        },
+        "branding_configuration": {
+          "type": "object",
+          "properties": {
+            "company_logo_url": { "type": "string", "format": "uri" },
+            "agent_headshot_url": { "type": "string", "format": "uri" },
+            "is_white_labeled": { "type": "boolean", "default": false },
+            "brokerage_theme_palette": {
+              "type": "object",
+              "properties": {
+                "primary_accent_color": { "type": "string", "default": "#155dfc" },
+                "use_premium_glassmorphism": { "type": "boolean", "default": false }
+              },
+              "required": ["primary_accent_color", "use_premium_glassmorphism"]
+            }
+          },
+          "required": ["company_logo_url", "agent_headshot_url", "is_white_labeled", "brokerage_theme_palette"]
+        }
+      },
+      "required": ["agent_id", "account_tier", "sora_session_constraints", "media_processing_rules", "branding_configuration"]
     }
   },
   "firestore": {
+    "agent_pricing_branding_profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/AgentPricingAndBrandingProfileV2" },
+      "description": "Agent pricing plan details, Sora usage limits, media upload rules, and brokerage branding configurations"
+    },
     "open_house_sessions/{sessionId}": {
       "schema": { "$ref": "#/entities/OpenHouseSession" },
       "description": "Scheduled and completed open house sessions for listings"

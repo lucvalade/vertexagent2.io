@@ -480,9 +480,38 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
         localStorage.setItem("open_house_events", JSON.stringify(allEvents));
       }
 
-      const todayStr = "2026-06-25";
-      const upcoming = allEvents.filter(evt => evt.eventDate >= todayStr);
-      const past = allEvents.filter(evt => evt.eventDate < todayStr);
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      const getStandardDateStr = (dateStr: string) => {
+        if (!dateStr) return "";
+        const matchMMDDYYYY = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+        if (matchMMDDYYYY) {
+          const [_, month, day, year] = matchMMDDYYYY;
+          return `${year}-${month}-${day}`;
+        }
+        const matchYYYYMMDD = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (matchYYYYMMDD) {
+          const [_, year, month, day] = matchYYYYMMDD;
+          return `${year}-${month}-${day}`;
+        }
+        try {
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, "0");
+            const dVal = String(d.getDate()).padStart(2, "0");
+            return `${y}-${m}-${dVal}`;
+          }
+        } catch (e) {}
+        return dateStr;
+      };
+
+      const upcoming = allEvents.filter(evt => getStandardDateStr(evt.eventDate) >= todayStr);
+      const past = allEvents.filter(evt => getStandardDateStr(evt.eventDate) < todayStr);
       setUpcomingEvents(upcoming.slice(0, 3));
       setPastEvents(past);
 
