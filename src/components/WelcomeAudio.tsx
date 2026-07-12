@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Sparkles, Square, AlertCircle, Loader2 } from "lucide-react";
+import { Play, Sparkles, Square, AlertCircle, Loader2, Star } from "lucide-react";
 import { useAgentTierCapabilities } from "./UpdatedFeatureController";
 import { getTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
 
@@ -35,6 +35,8 @@ interface WelcomeAudioProps {
   autoHideAfterPlay?: boolean;
   agentPlan?: string;
   agentId?: string;
+  startVoiceTourText?: string;
+  experienceGuideText?: string;
 }
 
 export default function WelcomeAudio({
@@ -42,6 +44,8 @@ export default function WelcomeAudio({
   agentPlan,
   agentId,
   listingId,
+  startVoiceTourText,
+  experienceGuideText,
 }: WelcomeAudioProps) {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const activeUrlRef = useRef<string | null>(null);
@@ -306,6 +310,19 @@ export default function WelcomeAudio({
         onError={handleAudioError}
         preload="auto"
       />
+
+      {/* Start Voice Tour */}
+      <div className="flex flex-col items-center justify-center text-center gap-1.5 mb-5 border-b border-slate-800 pb-4">
+        <div className="flex items-center gap-2 text-blue-400 justify-center">
+          <Star className="w-5 h-5 fill-blue-400 shrink-0" />
+          <h3 className="font-extrabold text-base sm:text-lg text-white uppercase tracking-wide">
+            {startVoiceTourText || "Start Voice Tour"}
+          </h3>
+        </div>
+        <p className="text-slate-400 text-xs font-medium">
+          {experienceGuideText || "Experience this property with an interactive AI guide"}
+        </p>
+      </div>
 
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">

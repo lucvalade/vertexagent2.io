@@ -49,6 +49,7 @@ import {
   Terminal,
   AlertCircle,
   RefreshCw,
+  Play,
 } from "lucide-react";
 import WelcomeAudio from "@/components/WelcomeAudio";
 import SocialShareBubble from "@/components/SocialShareBubble";
@@ -2053,31 +2054,20 @@ Global rules
           </div>
 
           <div className="text-center space-y-2 mb-4 w-full max-w-sm px-4">
-            <div className="flex flex-col items-center gap-1 mb-4">
-              <div className="flex items-center gap-2 text-blue-400">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                </svg>
-                <span className="font-bold text-sm tracking-wide text-white uppercase">Start Voice Tour</span>
-              </div>
-              <p className="text-slate-400 text-[10px] sm:text-xs">
-                Experience this property with an interactive AI guide
-              </p>
-            </div>
-            <h1 className="text-lg sm:text-[22px] font-extrabold tracking-tight text-white mb-2 leading-tight">
-              {connected
-                ? trans.listening
-                : isWelcomingSpeaking
-                  ? "Speaking Welcome"
-                  : trans.startVoiceTour}
-            </h1>
+            {(connected || isWelcomingSpeaking) && (
+              <h1 className="text-lg sm:text-[22px] font-extrabold tracking-tight text-white mb-2 leading-tight animate-in fade-in">
+                {connected
+                  ? trans.listening
+                  : "Speaking Welcome"}
+              </h1>
+            )}
 
             <div className="space-y-3">
-              <p className="text-slate-300 text-xs sm:text-sm leading-normal font-medium">
-                {connected
-                  ? getListeningInstruction(language)
-                  : trans.experienceGuide}
-              </p>
+              {connected && (
+                <p className="text-slate-300 text-xs sm:text-sm leading-normal font-medium">
+                  {getListeningInstruction(language)}
+                </p>
+              )}
 
               {!connected && (
                 <WelcomeAudio
@@ -2086,6 +2076,8 @@ Global rules
                   listingId={listing.id}
                   agentPlan={agent?.subscriptionPlan}
                   agentId={listing?.ownerId}
+                  startVoiceTourText={trans.startVoiceTour}
+                  experienceGuideText={trans.experienceGuide}
                 />
               )}
 
@@ -2100,9 +2092,9 @@ Global rules
 
           <div className="relative flex flex-col gap-4 items-center justify-center">
             <div className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
-                <p className="text-slate-400 font-black text-[10px] sm:text-xs mb-2 tracking-wider uppercase">
+                <h4 className="text-center font-bold text-white text-sm sm:text-base mb-3 uppercase tracking-wider">
                   {trans.askMeAbout}
-                </p>
+                </h4>
                 <div className="grid grid-cols-2 gap-2 w-full mx-auto text-left">
                   {listing.tourDescriptors && listing.tourDescriptors.length > 0 ? (
                     listing.tourDescriptors.map((desc, i) => (
@@ -2132,68 +2124,95 @@ Global rules
                 </div>
               </div>
 
-            {!(listing?.qrDestination === "sign-in" && !hasCheckedIn && !bypassSignIn) && (
-              <div className="relative flex items-center justify-center mt-4">
-                {/* Tooltip Popup */}
-                {showVoiceNoteTooltip && (
-                  <div className="absolute top-[48px] left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white text-[11px] font-semibold py-2 px-3 rounded-lg border border-blue-500/30 shadow-[0_4px_15px_rgba(59,130,246,0.35)] w-[200px] animate-bounce text-center">
-                    <p>🎙️ Tap to record private voice notes</p>
-                    <div className="absolute top-[-6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 border-l border-t border-blue-500/30 transform rotate-45" />
+            <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 mt-2 animate-in fade-in duration-700">
+              <div className="grid grid-cols-3 gap-3 items-start justify-items-center">
+                
+                {/* Column 1: Private Voice Notes */}
+                <div className="flex flex-col items-center justify-center text-center w-full">
+                  {!(listing?.qrDestination === "sign-in" && !hasCheckedIn && !bypassSignIn) ? (
+                    <div className="relative">
+                      {/* Tooltip Popup */}
+                      {showVoiceNoteTooltip && (
+                        <div className="absolute bottom-[64px] left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white text-[10px] font-semibold py-1.5 px-2.5 rounded-lg border border-blue-500/30 shadow-[0_4px_15px_rgba(59,130,246,0.35)] w-[160px] animate-bounce text-center">
+                          <p>🎙️ Tap to record private voice notes</p>
+                          <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-slate-900 border-r border-b border-blue-500/30 transform rotate-45" />
+                        </div>
+                      )}
+                      <button
+                        onClick={() => {
+                          setIsVoiceNoteOpen(true);
+                          setShowVoiceNoteTooltip(false);
+                        }}
+                        className="flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)] border border-blue-500/20 hover:scale-110 active:scale-95 transition-all cursor-pointer shrink-0"
+                        title="Record Private Voice Notes"
+                        id="visitor-voice-note-panel-btn"
+                      >
+                        <Mic className="h-5 w-5 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="flex items-center justify-center h-14 w-14 rounded-full bg-slate-800/40 border border-slate-700/30 text-slate-500 cursor-not-allowed"
+                      title="Please register first"
+                    >
+                      <Mic className="h-5 w-5 opacity-40" />
+                    </div>
+                  )}
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase mt-2.5 tracking-wider block">Voice Notes</span>
+                </div>
+
+                {/* Column 2: Interactive AI Tour Button */}
+                <div className="flex flex-col items-center justify-center text-center w-full">
+                  {!connected ? (
+                    <button
+                      className={`flex items-center justify-center h-14 w-14 rounded-full text-white shadow-[0_4px_15px_rgba(16,185,129,0.35)] border border-emerald-500/20 hover:scale-110 active:scale-95 transition-all cursor-pointer shrink-0 ${
+                        connecting 
+                          ? "bg-slate-800 border-slate-700" 
+                          : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
+                      }`}
+                      onClick={() => {
+                        if (listing?.qrDestination === "sign-in" && !hasCheckedIn && !bypassSignIn) {
+                          setAttemptedToStart(true);
+                          setShowLeadForm(true);
+                          toast.info(
+                            "Registration Required: Please complete the quick open house sign-in to activate your interactive AI guide!",
+                          );
+                        } else {
+                          startSession();
+                        }
+                      }}
+                      disabled={connecting}
+                      title="Start AI Voice Tour"
+                    >
+                      {connecting ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+                      ) : (
+                        <Play className="h-5 w-5 text-white fill-white ml-0.5 animate-pulse" />
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      className="flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-[0_4px_15px_rgba(239,68,68,0.35)] border border-red-500/20 hover:scale-110 active:scale-95 transition-all cursor-pointer shrink-0 animate-pulse"
+                      onClick={stopSession}
+                      title="Stop and end tour"
+                    >
+                      <Square className="h-4 w-4 fill-white text-white animate-pulse" />
+                    </button>
+                  )}
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase mt-2.5 tracking-wider block">
+                    {connecting ? trans.connecting : connected ? "Stop" : trans.tapToStart}
+                  </span>
+                </div>
+
+                {/* Column 3: Share Tour */}
+                <div className="flex flex-col items-center justify-center text-center w-full">
+                  <div className="h-14 w-14 flex items-center justify-center">
+                    <SocialShareBubble listing={listing} inline={true} />
                   </div>
-                )}
-                <button
-                  onClick={() => {
-                    setIsVoiceNoteOpen(true);
-                    setShowVoiceNoteTooltip(false);
-                  }}
-                  className="flex items-center justify-center h-[38px] w-[38px] rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)] border border-blue-500/20 hover:scale-105 active:scale-95 transition-transform cursor-pointer shrink-0"
-                  title="Record Voice Notes"
-                  id="visitor-voice-note-panel-btn"
-                >
-                  <Mic className="h-4 w-4 text-white animate-pulse" />
-                </button>
+                  <span className="text-[10px] text-slate-400 font-extrabold uppercase mt-2.5 tracking-wider block">Share</span>
+                </div>
+
               </div>
-            )}
-
-            {!connected ? (
-              <Button
-                size="sm"
-                className="rounded-lg h-[38px] px-5 text-xs bg-blue-600 hover:bg-blue-500 text-white shadow-md transition-all font-semibold flex items-center justify-center"
-                onClick={() => {
-                  if (listing?.qrDestination === "sign-in" && !hasCheckedIn && !bypassSignIn) {
-                    setAttemptedToStart(true);
-                    setShowLeadForm(true);
-                    toast.info(
-                      "Registration Required: Please complete the quick open house sign-in to activate your interactive AI guide!",
-                    );
-                  } else {
-                    startSession();
-                  }
-                }}
-                disabled={connecting}
-              >
-                {connecting ? (
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Mic className="mr-2 h-3.5 w-3.5" />
-                )}
-                {connecting ? trans.connecting : trans.tapToStart}
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="rounded-lg h-[38px] px-5 text-xs bg-red-600 hover:bg-red-500 text-white shadow-md transition-all font-semibold flex items-center justify-center"
-                onClick={stopSession}
-                title="Stop and end presentation"
-              >
-                <Square className="mr-2 h-3.5 w-3.5 fill-white text-white animate-pulse" />
-                <span className="text-white">Stop</span>
-              </Button>
-            )}
-
-            <div>
-              <SocialShareBubble listing={listing} inline={true} />
             </div>
           </div>
         </div>
@@ -2372,29 +2391,49 @@ Global rules
                   const domains = [
                     "gmail.com",
                     "sympatico.ca",
-                    "sympatico,ca",
                     "yahoo.ca",
                     "yahoo.com",
                     "outlook.com",
+                    "hotmail.com",
+                    "icloud.com",
+                    "aol.com",
+                    "live.com",
+                    "rogers.com"
                   ];
                   let corrected = email.trim();
                   if (corrected && !corrected.includes("@")) {
+                    // Try exact match of common domains first
+                    let matched = false;
                     for (const domain of domains) {
-                      if (
-                        corrected.toLowerCase().endsWith(domain.toLowerCase())
-                      ) {
-                        const index = corrected
-                          .toLowerCase()
-                          .lastIndexOf(domain.toLowerCase());
-                        if (index > 0) {
-                          const prefix = corrected.substring(0, index).trim();
-                          corrected = prefix + "@" + corrected.substring(index);
-                          corrected = corrected.replace(",ca", ".ca");
-                          setEmail(corrected);
+                      if (corrected.toLowerCase().endsWith(domain)) {
+                        const idx = corrected.toLowerCase().lastIndexOf(domain);
+                        if (idx > 0) {
+                          corrected = corrected.substring(0, idx) + "@" + corrected.substring(idx);
+                          matched = true;
                           break;
                         }
                       }
                     }
+
+                    // If not matched, check if there's a dot extension at the end (e.g. text.com or text.ca)
+                    if (!matched) {
+                      const suffixRegex = /([a-zA-Z0-9-]+)\.([a-zA-Z]{2,})$/;
+                      const match = corrected.match(suffixRegex);
+                      if (match && match.index && match.index > 0) {
+                        const idx = match.index;
+                        corrected = corrected.substring(0, idx) + "@" + corrected.substring(idx);
+                        matched = true;
+                      }
+                    }
+
+                    // If still no "@" (e.g. just user typed a name like "jane" or "jane.doe"), auto-append "@gmail.com"
+                    if (!corrected.includes("@")) {
+                      corrected = corrected + "@gmail.com";
+                    }
+
+                    // Clean any common typos
+                    corrected = corrected.replace(",ca", ".ca").replace(",com", ".com");
+                    setEmail(corrected);
                   }
 
                   const emailRegex =
