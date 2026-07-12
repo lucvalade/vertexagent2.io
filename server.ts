@@ -258,6 +258,17 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Enable CORS for API routes to allow external clients (e.g., Hostinger-hosted static sites) to connect
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Set up disk storage for uploads
   const uploadDir = path.join(process.cwd(), "public/audio");
   if (!fs.existsSync(uploadDir)) {
@@ -2786,7 +2797,8 @@ ${leadSummaryBriefing}
       clientFirstName, 
       clientLastName, 
       listingId,
-      propertyId
+      propertyId,
+      originUrl
     } = req.body;
 
     const fEmail = (friendEmail || recipientEmail || "").trim();
@@ -2865,9 +2877,22 @@ ${leadSummaryBriefing}
       const capRecipientLast = recipientLastName ? (recipientLastName.charAt(0).toUpperCase() + recipientLastName.slice(1)) : "";
 
       // Construct live tour URL
-      const reqHost = req.headers.host || "ais-dev-odlnfdziduv3enlxhjpgyj-108569774873.us-west1.run.app";
-      const protocol = req.secure ? "https" : "http";
-      const tourUrl = `${protocol}://${reqHost}/tour/${finalListingId}`;
+      let tourUrl = "";
+      if (originUrl) {
+        const cleanOrigin = originUrl.replace(/\/+$/, "");
+        tourUrl = `${cleanOrigin}/tour/${finalListingId}`;
+      } else {
+        const xForwardedHost = req.headers["x-forwarded-host"];
+        const xForwardedProto = req.headers["x-forwarded-proto"];
+        const reqHost = (Array.isArray(xForwardedHost) ? xForwardedHost[0] : xForwardedHost) || req.headers.host || "ais-dev-odlnfdziduv3enlxhjpgyj-108569774873.us-west1.run.app";
+        const protocol = (Array.isArray(xForwardedProto) ? xForwardedProto[0] : xForwardedProto) || (req.secure ? "https" : "http");
+        
+        if (reqHost.includes("localhost") || reqHost.includes("127.0.0.1") || reqHost.startsWith("10.") || reqHost.startsWith("192.168.")) {
+          tourUrl = `https://ais-pre-odlnfdziduv3enlxhjpgyj-108569774873.us-west1.run.app/tour/${finalListingId}`;
+        } else {
+          tourUrl = `${protocol}://${reqHost}/tour/${finalListingId}`;
+        }
+      }
 
       // 1. Primary Email Sent to the FRIEND
       const primarySubject = `${capClientFirst} shared an Ai property tour with you`;

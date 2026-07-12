@@ -4,6 +4,59 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from './App.tsx';
 import {ThemeProvider} from 'next-themes';
 import './index.css';
+
+// Global Fetch Interceptor for Redirecting API Calls on Custom (External) Domains
+try {
+  const originalFetch = window.fetch;
+  const customFetch = function (input: RequestInfo | URL, init?: RequestInit) {
+    let url = "";
+    if (typeof input === "string") {
+      url = input;
+    } else if (input instanceof URL) {
+      url = input.pathname + input.search;
+    } else if (input && typeof input === "object" && "url" in input) {
+      url = (input as Request).url;
+    }
+
+    // Intercept relative API routes and route to the primary Cloud Run deployment when running on Hostinger / other custom domains
+    if (url.startsWith("/api/")) {
+      const hostname = window.location.hostname;
+      const isStandardEnv =
+        hostname.includes("run.app") ||
+        hostname.includes("localhost") ||
+        hostname.includes("127.0.0.1") ||
+        hostname.includes("webcontainer") ||
+        hostname.includes("stackblitz") ||
+        hostname.includes("gitpod") ||
+        hostname.includes("github.dev");
+
+      if (!isStandardEnv) {
+        const backendUrl = "https://ais-pre-odlnfdziduv3enlxhjpgyj-108569774873.us-west1.run.app";
+        const rewrittenUrl = `${backendUrl}${url}`;
+        console.log(`[Global Fetch Interceptor] Redirecting custom host API call from ${hostname}: ${url} -> ${rewrittenUrl}`);
+        
+        if (typeof input === "string") {
+          return originalFetch(rewrittenUrl, init);
+        } else if (input instanceof URL) {
+          return originalFetch(new URL(rewrittenUrl), init);
+        } else {
+          const clonedRequest = new Request(rewrittenUrl, input as Request);
+          return originalFetch(clonedRequest, init);
+        }
+      }
+    }
+    return originalFetch(input, init);
+  };
+
+  Object.defineProperty(window, 'fetch', {
+    value: customFetch,
+    writable: true,
+    configurable: true
+  });
+} catch (error) {
+  console.error("[Global Fetch Interceptor] Failed to define custom fetch:", error);
+}
+
 import { AuthProvider } from './hooks/useAuth.tsx';
 import ProtectedLayout from './components/ProtectedLayout.tsx';
 import PublicSite from './pages/PublicSite.tsx';

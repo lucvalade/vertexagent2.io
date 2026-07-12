@@ -227,7 +227,8 @@ export default function SocialShareBubble({ listing, inline = false }: SocialSha
           recipientFirstName: rFirstTrimmed,
           recipientLastName: rLastTrimmed,
           listingId: listing.id,
-          propertyId: listing.id
+          propertyId: listing.id,
+          originUrl: window.location.origin
         })
       });
 
