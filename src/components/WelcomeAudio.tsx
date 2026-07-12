@@ -1,27 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Sparkles, Square, AlertCircle, Loader2 } from "lucide-react";
 import { useAgentTierCapabilities } from "./UpdatedFeatureController";
-
-/**
- * 15 welcome texts verbatim from the 15-language spreadsheet / migration config.
- */
-const WELCOME_TEXTS: Record<string, string> = {
-  ar: "أهلاً بك! أنا سورا، مساعدتك الذكية في مجال العقارات. شكراً لزيارتك هذا البيت المفتوح. لا تتردد في إلقاء نظرة حولك، واستكشاف الغرف، وطرح أي أسئلة عليّ بخصوص ميزات العقار أو Сعر أو الحي.",
-  "zh-CN": "欢迎！我是 Sora，您的房产人工智能助手。感谢您参观本次开放日。请随意看看，探索各个房间，并向我提问有关房产特征、价格或周边的任何问题。",
-  "zh-TW": "歡迎！我是 Sora，您的房地產人工智慧助手。感謝您參觀本次開放日。請隨意看看，探索各個房間，並向我提問有關房產特徵、價格或周邊的任何問題。",
-  nl: "Welkom! Ik ben Sora, uw vastgoed AI-assistent. Bedankt voor uw bezoek aan dit open huis. Voel u vrij om rond te kijken, de kamers te verkennen en mij vragen te stellen over de kenmerken van de woning, de prijs of de buurt.",
-  en: "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.",
-  fr: "Bonjour ! Je suis Sora, votre guide pour cette visite. Je suis ravie de vous accompagner. Avez-vous des questions sur cette propriété ?",
-  de: "Willkommen! Ich bin Sora, Ihre Immobilien-KI-Assistentin. Vielen Dank für Ihren Besuch bei diesem Tag der offenen Tür. Bitte schauen Sie sich ungezwungen um, erkunden Sie die Räume und stellen Sie mir Fragen zu den Eigenschaften der Immobilie, dem Preis oder der Nachbarschaft.",
-  hi: "स्वागत है! मैं सोरा हूँ, आपकी रियल एस्टेट एआई सहायक। इस ओपन हाउस में आने के लिए धन्यवाद। कृपया बेझिझक चारों ओर देखें, कमरों का अन्वेषण करें, और मुझसे संपत्ति की विशेषताओं, कीमत या पड़ोस के बारे में कोई भी प्रश्न पूछें।",
-  it: "Benvenuto! Sono Sora, la tua assistente AI immobiliare. Grazie per aver visitato questa casa aperta. Ti invitiamo a guardarti intorno, esplorare le stanze e farmi qualsiasi domanda sulle caratteristiche della proprietà, sul prezzo o sul quartiere.",
-  ja: "ようこそ！私は不動産AIアシスタントのSoraです。このオープンハウスにお越しいただきありがとうございます。どうぞご自由に周りを見渡し、お部屋を探索し、物件の特徴や価格、周辺環境について何でもご質問ください。",
-  ko: "환영합니다! 저는 귀하의 부동산 AI 어시스턴트인 Sora입니다. 이번 오픈 하우스에 방문해 주셔서 감사합니다. 자유롭게 둘러보시고, 방을 살펴보시며 매물의 특징, 가격 또는 주변 환경에 대해 궁금한 점이 있으시면 언제든지 질문해 주세요.",
-  pt: "Bem-vindo! Eu sou Sora, sua assistente de IA imobiliária. Obrigado por visitar esta casa aberta. Sinta-se à vontade para olhar ao redor, explorar os cômodos e me fazer qualquer pergunta sobre as características do imóvel, preço ou vizinhança.",
-  ru: "Добро пожаловать! Я Сора, ваш ИИ-помощник по недвижимости. Спасибо, что посетили этот день открытых дверей. Пожалуйста, не стесняйтесь осматриваться, изучать комнаты и задавать мне любые вопросы о характеристиках недвижимости, цене или районе.",
-  es: "¡Bienvenido! Soy Sora, su asistente de inteligencia artificial para bienes raíces. Gracias por visitar esta casa abierta. Por favor, siéntase libre de mirar a su alrededor, explorar las habitaciones y hacerme cualquier pregunta sobre las características de la propiedad, el precio o el vecindario.",
-  vi: "Chào mừng! Tôi là Sora, trợ lý AI bất động sản của bạn. Cảm ơn bạn đã ghé thăm buổi mở cửa xem nhà này. Xin vui lòng tự nhiên nhìn xung quanh, khám phá các phòng và hỏi tôi bất kỳ câu hỏi nào về các tính năng của bất động sản, giá cả hoặc khu lân cận."
-};
+import { getTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
 
 /**
  * Mapping language select codes to full language names for TTS parameters
@@ -61,6 +41,7 @@ export default function WelcomeAudio({
   onSpeakingChange,
   agentPlan,
   agentId,
+  listingId,
 }: WelcomeAudioProps) {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const activeUrlRef = useRef<string | null>(null);
@@ -73,6 +54,137 @@ export default function WelcomeAudio({
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "playing" | "error">("idle");
   const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Dynamic configurations loaded from Firestore tourConfig/main
+  const [welcomeTexts, setWelcomeTexts] = useState<Record<string, string>>(DEFAULT_WELCOME_TEXTS);
+  const [voiceId, setVoiceId] = useState("Kore");
+  const [ttsModel, setTtsModel] = useState("gemini-2.5-flash-preview-tts");
+
+  const generateAudioForLanguageWithParams = async (
+    langCode: string,
+    texts: Record<string, string>,
+    voice: string,
+    model: string,
+    autoPlay: boolean = false
+  ) => {
+    // Revoke previous URL if any
+    if (activeUrlRef.current) {
+      URL.revokeObjectURL(activeUrlRef.current);
+      activeUrlRef.current = null;
+      setBlobUrl(null);
+    }
+
+    setStatus("generating");
+    setError(null);
+    setSpeaking(false);
+
+    const textToSpeak = texts[langCode] || texts["en"] || DEFAULT_WELCOME_TEXTS[langCode] || DEFAULT_WELCOME_TEXTS["en"];
+    const langName = LANGUAGE_NAMES[langCode] || "English";
+
+    try {
+      const response = await fetch("/api/tts-simple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textToSpeak,
+          lang: langName,
+          voiceName: voice,
+          model: model
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to contact Gemini TTS servers.");
+      }
+
+      const data = await response.json();
+      if (data.success && data.base64Audio) {
+        const mimeType = data.mimeType || "audio/wav";
+        const binary = atob(data.base64Audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        
+        activeUrlRef.current = url;
+        setBlobUrl(url);
+        
+        if (autoPlay) {
+          const el = audioElementRef.current;
+          if (el) {
+            el.src = url;
+            el.load();
+            setError(null);
+            try {
+              el.currentTime = 0;
+              await el.play();
+              setSpeaking(true);
+              setStatus("playing");
+            } catch (err: any) {
+              console.error("[WelcomeAudio] autoPlay failed, falling back to ready state:", err);
+              // Fallback to "ready" state so they can click the button to trigger 100% synchronous direct play
+              setStatus("ready");
+              setSpeaking(false);
+            }
+          }
+        } else {
+          setStatus("ready");
+        }
+      } else {
+        throw new Error(data.error || "No audio returned from Gemini.");
+      }
+    } catch (err: any) {
+      console.error("[WelcomeAudio] Error generating audio:", err);
+      setError(err.message || "Could not generate welcome audio.");
+      setStatus("error");
+    }
+  };
+
+  const generateAudioForLanguage = async (langCode: string, autoPlay: boolean = false) => {
+    return generateAudioForLanguageWithParams(langCode, welcomeTexts, voiceId, ttsModel, autoPlay);
+  };
+
+  // Load tourConfig from Firestore on mount or when listingId changes
+  useEffect(() => {
+    const fetchTourConfig = async () => {
+      try {
+        let activeLang = "en";
+        let activeTexts = DEFAULT_WELCOME_TEXTS;
+        let activeVoice = "Kore";
+        let activeModel = "gemini-2.5-flash-preview-tts";
+
+        if (listingId) {
+          const config = await getTourConfig(listingId);
+          if (config) {
+            if (config.welcomeTexts) {
+              setWelcomeTexts(config.welcomeTexts);
+              activeTexts = config.welcomeTexts;
+            }
+            if (config.voiceId) {
+              setVoiceId(config.voiceId);
+              activeVoice = config.voiceId;
+            }
+            if (config.ttsModel) {
+              setTtsModel(config.ttsModel);
+              activeModel = config.ttsModel;
+            }
+            if (config.defaultLanguage) {
+              setLanguage(config.defaultLanguage);
+              activeLang = config.defaultLanguage;
+            }
+          }
+        }
+        // Pre-generate audio with the correct loaded configurations
+        await generateAudioForLanguageWithParams(activeLang, activeTexts, activeVoice, activeModel, false);
+      } catch (err) {
+        console.error("[WelcomeAudio] Error loading Firestore tourConfig:", err);
+        await generateAudioForLanguageWithParams("en", DEFAULT_WELCOME_TEXTS, "Kore", "gemini-2.5-flash-preview-tts", false);
+      }
+    };
+    fetchTourConfig();
+  }, [listingId]);
 
   // Sync speaking change status with parent component
   useEffect(() => {
@@ -112,85 +224,13 @@ export default function WelcomeAudio({
     }
   }, [agentPlan, isPro, language]);
 
-  // Preset language dropdown menu on mount to explicitly "English" ("en") without processing yet
+  // Preset language dropdown menu on mount to explicitly "English" ("en")
   useEffect(() => {
     setLanguage("en");
-    setStatus("idle");
+    if (!listingId) {
+      generateAudioForLanguageWithParams("en", DEFAULT_WELCOME_TEXTS, "Kore", "gemini-2.5-flash-preview-tts", false);
+    }
   }, []);
-
-  const generateAudioForLanguage = async (langCode: string, autoPlay: boolean = false) => {
-    // Revoke previous URL if any
-    if (activeUrlRef.current) {
-      URL.revokeObjectURL(activeUrlRef.current);
-      activeUrlRef.current = null;
-      setBlobUrl(null);
-    }
-
-    setStatus("generating");
-    setError(null);
-    setSpeaking(false);
-
-    const textToSpeak = WELCOME_TEXTS[langCode] || WELCOME_TEXTS["en"];
-    const langName = LANGUAGE_NAMES[langCode] || "English";
-
-    try {
-      const response = await fetch("/api/tts-simple", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: textToSpeak,
-          lang: langName,
-          voiceName: "sora" // server will map this to 'Kore'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to contact Gemini TTS servers.");
-      }
-
-      const data = await response.json();
-      if (data.success && data.base64Audio) {
-        const mimeType = data.mimeType || "audio/wav";
-        const binary = atob(data.base64Audio);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        
-        activeUrlRef.current = url;
-        setBlobUrl(url);
-        
-        if (autoPlay) {
-          const el = audioElementRef.current;
-          if (el) {
-            el.src = url;
-            el.load();
-            setError(null);
-            try {
-              el.currentTime = 0;
-              await el.play();
-              setSpeaking(true);
-              setStatus("playing");
-            } catch (err: any) {
-              console.error("[WelcomeAudio] autoPlay failed:", err);
-              setError("Could not play the welcome message.");
-              setStatus("error");
-            }
-          }
-        } else {
-          setStatus("ready");
-        }
-      } else {
-        throw new Error(data.error || "No audio returned from Gemini.");
-      }
-    } catch (err: any) {
-      console.error("[WelcomeAudio] Error generating audio:", err);
-      setError(err.message || "Could not generate welcome audio.");
-      setStatus("error");
-    }
-  };
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedLang = e.target.value;
@@ -206,7 +246,7 @@ export default function WelcomeAudio({
     const el = audioElementRef.current;
     if (!el) return;
 
-    if (!blobUrl) {
+    if (!blobUrl || status === "error") {
       await generateAudioForLanguage(language, true);
       return;
     }
@@ -316,7 +356,7 @@ export default function WelcomeAudio({
         {status === "ready" && (
           <div className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
             <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span>Ready</span>
+            <span>● Ready</span>
           </div>
         )}
         {status === "playing" && (
@@ -351,11 +391,11 @@ export default function WelcomeAudio({
           <button
             type="button"
             onClick={play}
-            disabled={status !== "ready" && status !== "idle"}
+            disabled={status !== "ready"}
             className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:active:scale-100 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-lg transition-all border border-blue-500/20 cursor-pointer disabled:bg-slate-800 disabled:text-slate-500 disabled:border-slate-800/80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Play className="h-3 w-3 fill-white text-white" />
-            Start Welcome Tour
+            Start
           </button>
         )}
       </div>

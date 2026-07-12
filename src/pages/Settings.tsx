@@ -8,6 +8,7 @@ import { db, handleFirestoreError, OperationType, storage } from "@/lib/firebase
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useNavigate, useLocation } from "react-router-dom";
 import WelcomeMessageDefaultsEmbed from "./WelcomeMessageDefaultsEmbed";
+import Billing from "./Billing";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -198,13 +199,13 @@ export default function Settings() {
 
   // Tab State
   const viewMode = location.pathname.startsWith('/app/admin') ? 'ADMIN' : 'CLIENT';
-  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications" | "welcome_defaults" | "avatars" | "admin">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications" | "welcome_defaults" | "avatars" | "billing" | "admin">("profile");
   const [adminSubTab, setAdminSubTab] = useState<"overview" | "company" | "plans" | "stripe">("overview");
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab");
-    if (tab && ["profile", "branding", "compliance", "notifications", "welcome_defaults", "avatars", "admin"].includes(tab)) {
+    if (tab && ["profile", "branding", "compliance", "notifications", "welcome_defaults", "avatars", "billing", "admin"].includes(tab)) {
       setActiveTab(tab as any);
     }
   }, [location.search]);
@@ -455,18 +456,18 @@ export default function Settings() {
       const data: any = await getAgent(user!.id);
       if (data?.brokerageProfile) {
         const bp = data.brokerageProfile;
-        setLegalName(bp.legalName || "VertexAgent HQ");
+        setLegalName(bp.legalName || "AI Open House Connect HQ");
         setRecoId(bp.recoId || "B-481923");
         setBrokerOfRecord(bp.brokerOfRecord || "Luc Valade");
         setOfficePhone(bp.officePhone || "(289) 659-5170");
-        setOfficeEmail(bp.officeEmail || "ops@vertexagent.ca");
+        setOfficeEmail(bp.officeEmail || "ops@aiopenhouseconnect.com");
       } else {
         // Defaults if none exist
-        setLegalName("VertexAgent HQ");
+        setLegalName("AI Open House Connect HQ");
         setRecoId("B-481923");
         setBrokerOfRecord("Luc Valade");
         setOfficePhone("(289) 659-5170");
-        setOfficeEmail("ops@vertexagent.ca");
+        setOfficeEmail("ops@aiopenhouseconnect.com");
       }
 
       if (data?.branding) {
@@ -759,7 +760,7 @@ export default function Settings() {
 
     if (user?.role === 'ADMIN' && activeTab === 'admin' && adminSubTab === 'company') {
       if (!brokerageName || !brokerageAddress || !brokerageCity || !brokerageCountry || !brokerageProvince || !brokeragePostalCode || !brokeragePhone || !brokerageEmail || !adminEmail) {
-        toast.error("Please fill in all mandatory fields in the VertexAgent File");
+        toast.error("Please fill in all mandatory fields in the AI Open House Connect File");
         return;
       }
     }
@@ -953,15 +954,26 @@ export default function Settings() {
 
       <div className="grid md:grid-cols-4 gap-6">
         <div className="md:col-span-1 space-y-1">
-          <button 
-            onClick={() => setActiveTab("profile")}
-            className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'profile' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
-          >
-            <Building2 className="h-4 w-4" /> {viewMode === 'ADMIN' ? 'My Profile' : 'Account Profile'}
-          </button>
-          
-          {viewMode !== 'ADMIN' && (
+          {viewMode !== 'ADMIN' ? (
             <>
+              <button 
+                onClick={() => setActiveTab("avatars")}
+                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'avatars' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <Video className="h-4 w-4" /> AI Video Avatars
+              </button>
+              <button 
+                onClick={() => setActiveTab("profile")}
+                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'profile' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <Building2 className="h-4 w-4" /> Account Profile
+              </button>
+              <button 
+                onClick={() => setActiveTab("billing")}
+                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'billing' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <CreditCard className="h-4 w-4" /> Billings & Plans
+              </button>
               <button 
                 onClick={() => setActiveTab("branding")}
                 className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'branding' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
@@ -986,13 +998,14 @@ export default function Settings() {
               >
                 <Mic2 className="h-4 w-4" /> Sora Welcome Defaults
               </button>
-              <button 
-                onClick={() => setActiveTab("avatars")}
-                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'avatars' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
-              >
-                <Video className="h-4 w-4" /> AI Video Avatars
-              </button>
             </>
+          ) : (
+            <button 
+              onClick={() => setActiveTab("profile")}
+              className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'profile' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+            >
+              <Building2 className="h-4 w-4" /> My Profile
+            </button>
           )}
           
           {user?.role === 'ADMIN' && viewMode === 'ADMIN' && (
@@ -1037,7 +1050,7 @@ export default function Settings() {
                         setLegalName(formatted);
                       }}
                       onBlur={(e) => handleBlur("legalName", e.target.value)}
-                      placeholder="e.g., VertexAgent HQ"
+                      placeholder="e.g., AI Open House Connect HQ"
                     />
                     {errors.legalName && <p className="text-xs text-red-500 font-medium">{errors.legalName}</p>}
                   </div>
@@ -1109,7 +1122,7 @@ export default function Settings() {
                       value={officeEmail}
                       onChange={(e) => setOfficeEmail(e.target.value)}
                       onBlur={(e) => handleBlur("officeEmail", e.target.value)}
-                      placeholder="ops@vertexagent.ca"
+                      placeholder="ops@aiopenhouseconnect.com"
                     />
                     {errors.officeEmail && <p className="text-xs text-red-500 font-medium">{errors.officeEmail}</p>}
                   </div>
@@ -1637,7 +1650,7 @@ export default function Settings() {
                     <div>
                       <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                         <Video className="h-5 w-5 text-blue-600 animate-pulse" />
-                        Sora AI Video Avatar (3D Extension)
+                        Sora AI Video Avatar (3D Extension) <span className="text-black font-black text-[10px] bg-stone-150 px-2 py-0.5 rounded tracking-widest uppercase ml-2">COMING SOON</span>
                       </h2>
                       <p className="text-xs text-slate-500 mt-1">
                         Deploy an interactive digital avatar layer to guide clients through physical tours, or interface with your Agent Voice Control.
@@ -1658,52 +1671,35 @@ export default function Settings() {
                         Interactive 3D Video Avatars are billed as a premium add-on or included in Elite/Brokerage subscription tiers.
                       </p>
                       <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700 bg-white/80 px-2 py-1 rounded border border-slate-100 w-fit mt-2">
-                        {avatarAddonPaid ? (
-                          <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Premium Active</>
-                        ) : (
-                          <><AlertCircle className="h-3.5 w-3.5 text-amber-500" /> Premium Add-on (Locked)</>
-                        )}
+                        <><AlertCircle className="h-3.5 w-3.5 text-amber-500" /> Premium Add-on (Locked)</>
                       </div>
                     </div>
 
-                    {!avatarAddonPaid ? (
+                    <div className="flex flex-col items-end">
+                      <span className="text-black font-black text-xs tracking-widest uppercase mb-1.5">COMING SOON</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          setAvatarAddonPaid(true);
-                          toast.success("Subscribed to Sora 3D AI Avatar Extension! ($20/mo added to plan)");
-                        }}
-                        className="bg-blue-600 text-white font-bold text-xs px-4 py-2 rounded-lg hover:bg-blue-700 shadow-sm transition-all whitespace-nowrap flex items-center gap-1.5"
+                        disabled
+                        className="bg-stone-300 text-stone-500 font-bold text-xs px-4 py-2 rounded-lg shadow-sm transition-all whitespace-nowrap flex items-center gap-1.5 opacity-50 cursor-not-allowed pointer-events-none"
                       >
                         <CreditCard className="h-4 w-4" />
                         Unlock 3D Avatar ($20/mo)
                       </button>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-100 px-3 py-1.5 rounded-lg text-xs font-semibold">
-                        <Check className="h-4 w-4 text-emerald-600 animate-bounce" />
-                        Premium Active
-                      </div>
-                    )}
+                    </div>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 border border-slate-150 rounded-xl flex items-center justify-between bg-slate-50/50">
+                    <div className="p-4 border border-slate-150 rounded-xl flex items-center justify-between bg-stone-50/50 opacity-40 select-none pointer-events-none">
                       <div>
-                        <h4 className="text-xs font-bold text-slate-800">Client-Facing AI Tours</h4>
+                        <h4 className="text-xs font-bold text-slate-500">Client-Facing AI Tours</h4>
                         <p className="text-[11px] text-slate-500 mt-1">Overlays the 3D avatar on public listing walk-throughs.</p>
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!avatarAddonPaid) {
-                            toast.error("Requires the Sora 3D AI Avatar Extension add-on to be unlocked first.");
-                            return;
-                          }
-                          setEnableClientAvatar(!enableClientAvatar);
-                        }}
-                        className={`h-6 w-11 rounded-full transition-colors relative shrink-0 cursor-pointer ${enableClientAvatar ? 'bg-blue-600' : 'bg-red-500'}`}
+                        disabled
+                        className="h-6 w-11 rounded-full bg-stone-300 relative shrink-0 cursor-not-allowed"
                       >
-                        <div className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${enableClientAvatar ? 'left-6' : 'left-1'}`} />
+                        <div className="absolute top-1 h-4 w-4 rounded-full bg-stone-150 left-1" />
                       </button>
                     </div>
 
@@ -2300,6 +2296,12 @@ export default function Settings() {
             </div>
           )}
 
+          {activeTab === "billing" && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+              <Billing />
+            </div>
+          )}
+
           {activeTab === "admin" && user?.role === 'ADMIN' && (
             <div className="bg-white border border-red-100 rounded-xl p-6 shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="flex items-center justify-between mb-6">
@@ -2381,7 +2383,7 @@ export default function Settings() {
                 {adminSubTab === "company" && (
                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                      <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase tracking-widest">VertexAgent File</h3>
+                      <h3 className="text-sm font-bold text-slate-800 mb-4 uppercase tracking-widest">AI Open House Connect File</h3>
                       <div className="grid md:grid-cols-2 gap-4">
                         <div className="space-y-1.5 col-span-2">
                           <label className="text-xs font-bold text-slate-600 uppercase tracking-tight">Company Name</label>
@@ -2391,7 +2393,7 @@ export default function Settings() {
                             maxLength={100}
                             required
                             onChange={(e) => setBrokerageName(toTitleCase(e.target.value))}
-                            placeholder="VertexAgent HQ"
+                            placeholder="AI Open House Connect HQ"
                           />
                         </div>
                         <div className="space-y-1.5 col-span-2">

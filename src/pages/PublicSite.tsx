@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import Logo from "@/components/Logo";
 import BlindsOpenHouseText from "@/components/BlindsOpenHouseText";
@@ -15,6 +16,8 @@ import {
   CheckCircle2, 
   ChevronDown, 
   ChevronUp, 
+  ChevronLeft,
+  ChevronRight,
   PhoneCall, 
   Lock, 
   Bookmark, 
@@ -30,12 +33,12 @@ import {
   Volume2,
   Play,
   Pause,
-  Square
+  Square,
+  ShieldCheck,
+  Check
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth, logout } from "@/hooks/useAuth";
-import { useState, useEffect, useRef } from "react";
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/useAuth";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,9 +51,11 @@ export default function PublicSite() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const menuToggleRef = useRef<HTMLButtonElement>(null);
-  const navDrawerRef = useRef<HTMLElement>(null);
-  
+  const [scrolled, setScrolled] = useState(false);
+  const [lang, setLang] = useState<"en" | "fr">("en");
+  const [selectedRole, setSelectedRole] = useState<string>("agent");
+  const [pilotListing, setPilotListing] = useState<any>(null);
+
   // Demo Booking state
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [bookingForm, setBookingForm] = useState({ name: "", email: "", phone: "", website: "", details: "" });
@@ -58,127 +63,94 @@ export default function PublicSite() {
   const [bookingTouched, setBookingTouched] = useState<Record<string, boolean>>({});
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
 
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setMobileMenuOpen(false);
-        menuToggleRef.current?.focus();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [mobileMenuOpen]);
-
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      const timer = setTimeout(() => {
-        const firstLink = navDrawerRef.current?.querySelector("a") as HTMLElement;
-        firstLink?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [mobileMenuOpen]);
-
-  useEffect(() => {
-    if (!mobileMenuOpen) return;
-    const handleTabKey = (e: KeyboardEvent) => {
-      if (e.key !== "Tab") return;
-      if (!navDrawerRef.current) return;
-      const focusableElements = navDrawerRef.current.querySelectorAll(
-        'a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusableElements.length === 0) return;
-      const firstElement = focusableElements[0] as HTMLElement;
-      const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
-
-      if (e.shiftKey) {
-        if (document.activeElement === firstElement) {
-          lastElement.focus();
-          e.preventDefault();
-        }
-      } else {
-        if (document.activeElement === lastElement) {
-          firstElement.focus();
-          e.preventDefault();
-        }
-      }
-    };
-    document.addEventListener("keydown", handleTabKey);
-    return () => document.removeEventListener("keydown", handleTabKey);
-  }, [mobileMenuOpen]);
-
   // FAQ state
   const [openFaqIndices, setOpenFaqIndices] = useState<Record<number, boolean>>({
-    0: true, // first open by default
+    0: true,
   });
 
-  const toggleFaq = (index: number) => {
-    setOpenFaqIndices(prev => ({
-      ...prev,
-      [index]: !prev[index],
-    }));
-  };
+  // Testimonials tab
+  const [activeTestimonialTab, setActiveTestimonialTab] = useState<"all" | "agents" | "brokers" | "lenders">("all");
+  const [activeTestimonialIndex, setActiveTestimonialIndex] = useState(0);
 
   // Interactive Phone Mockup states
-  const [selectedMockupRoom, setSelectedMockupRoom] = useState<"living" | "kitchen" | "exterior">("living");
-  const [mockupDialogue, setMockupDialogue] = useState<Array<{ sender: "buyer" | "sora"; text: string }>>([
-    { sender: "sora", text: "[slow] Hi, I’m Sora, your AI property assistant. [pause] Welcome to this open house experience. [pause] Tap any buyer question button below to ask me anything about materials, school catchments, or structural features!" }
-  ]);
+  const [selectedMockupRoom, setSelectedMockupRoom] = useState<"exterior" | "living" | "kitchen" | "backyard">("exterior");
+  const [mockupDialogue, setMockupDialogue] = useState<Array<{ sender: "buyer" | "sora"; text: string }>>([]);
   const [isMockupSpeaking, setIsMockupSpeaking] = useState(false);
   const [isMockupPaused, setIsMockupPaused] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(true);
   const mockupAudioRef = useRef<SpeechSynthesisUtterance | null>(null);
   const speechSessionIdRef = useRef(0);
   const mockupAudioTimeoutRef = useRef<any>(null);
-
-  // -------------------------------------------------------------
-  // CRITICAL: Sora Premium Female Audio Voice Selector / Cache
-  // This logic is designed to prevent robotic/fallback male voices (like Microsoft David) from hijacking the experience.
-  // It checks for high-quality female voices (Samantha on Apple, Zira on Windows, Hazel, English Female profiles) 
-  // and caches the choice once so it persists perfectly across all visitor interactions.
-  // -------------------------------------------------------------
   const [soraFemaleVoice, setSoraFemaleVoice] = useState<SpeechSynthesisVoice | null>(null);
 
+  // Scroll effect for header
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 30);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Fetch Pilot Property (pilot-listing-01) details to ensure Firestore is source of truth
+  useEffect(() => {
+    const fetchPilotProperty = async () => {
+      try {
+        const pDoc = await getDoc(doc(db, "properties", "pilot-listing-01"));
+        if (pDoc.exists()) {
+          const data = pDoc.data();
+          setPilotListing({
+            address: data.address || "4 Clifton Downs Rd",
+            city: data.city || "Hamilton",
+            province: data.province || "ON",
+            price: data.listPrice ?? data.price ?? 1199000,
+            beds: data.beds || "3+1",
+            baths: data.baths || 3,
+            hasInLawSuite: data.hasInLawSuite ?? true,
+            brokerage: data.brokerage || "Michael St. John Realty",
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load pilot-listing-01 from Firestore:", err);
+      }
+    };
+    fetchPilotProperty();
+  }, []);
+
+  const listingDetails = pilotListing || {
+    address: "4 Clifton Downs Rd",
+    city: "Hamilton",
+    province: "ON",
+    price: 1199000,
+    beds: "3+1", // Ontario Bedrooms plus convention
+    baths: 3,
+    hasInLawSuite: true,
+    brokerage: "Michael St. John Realty",
+  };
+
+  // Select Premium warm voice 'Kore' identity
   const selectSoraFemaleVoiceOnce = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices || voices.length === 0) return null;
 
-    // Strict prioritizing to ensure a premium female warmth is used:
-    const matchedVoice =
+    return (
       voices.find(v => v.name.toLowerCase().includes("samantha")) ||
       voices.find(v => v.name.toLowerCase().includes("zira")) ||
       voices.find(v => v.name.toLowerCase().includes("hazel")) ||
       voices.find(v => {
         const name = v.name.toLowerCase();
-        return name.includes("sora") && !name.includes("male");
+        return name.includes("female") && !name.includes("male");
       }) ||
-      voices.find(v => {
-        const name = v.name.toLowerCase();
-        return name.includes("google us english") && !name.includes("male");
-      }) ||
-      voices.find(v => {
-        const name = v.name.toLowerCase();
-        return (name.includes("female") || name.includes("woman") || name.includes("girl") || name.includes("susan") || name.includes("karen") || name.includes("tessa") || name.includes("victoria")) && !name.includes("male");
-      }) ||
-      voices.find(v => {
-        const name = v.name.toLowerCase();
-        const lang = v.lang.toLowerCase();
-        return lang.startsWith("en") && !name.includes("male") && !name.includes("david") && !name.includes("george") && !name.includes("ravi") && !name.includes("mark") && !name.includes("shawn") && !name.includes("daniel");
-      }) ||
-      voices[0]; // If absolutely no other options are found
-
-    return matchedVoice;
+      voices[0]
+    );
   };
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
-
-    // Try primary resolve
     const v = selectSoraFemaleVoiceOnce();
     if (v) setSoraFemaleVoice(v);
 
-    // Some browsers populate speech voices asynchronously
     const handleVoicesChanged = () => {
       const vSec = selectSoraFemaleVoiceOnce();
       if (vSec) setSoraFemaleVoice(vSec);
@@ -190,110 +162,38 @@ export default function PublicSite() {
     };
   }, []);
 
-  const [scrolled, setScrolled] = useState(false);
-
+  // Initialize Dialogue on load or language switch
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 30) {
-        setScrolled(true);
-      } else {
-        setScrolled(false);
-      }
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    const welcomeText = lang === "en" 
+      ? "[slow] Hi, I’m Sora, your AI property guide. [pause] Welcome to this interactive open house tour for 4 Clifton Downs Road. [pause] Tap any buyer question below to explore!"
+      : "[slow] Bonjour, je suis Sora, votre guide immobilière IA. [pause] Bienvenue dans cette visite interactive du 4 Clifton Downs Road. [pause] Appuyez sur une question ci-dessous pour commencer !";
+    
+    setMockupDialogue([{ sender: "sora", text: welcomeText }]);
+  }, [lang]);
 
-  const mockupDetails = {
-    living: {
-      image: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&q=80&w=600",
-      title: "Royal Living Room",
-      spec: "650 sqft • Double Fireplace • 12ft Ceilings",
-    },
-    kitchen: {
-      image: "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600",
-      title: "Chef's Kitchen",
-      spec: "400 sqft • Quartz Countertops • Sub-Zero Suite",
-    },
-    exterior: {
-      image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=600",
-      title: "Zen Canyon View Patio",
-      spec: "1,200 sqft • Saltwater Infinity Pool • Firepit",
-    }
-  };
-
-  const simulatedQuestions = [
-    {
-      id: "materials",
-      label: "What premium materials were used?",
-      response: "The foundation uses premium architectural carbon-braced concrete paired with structural solid walnut paneling. Thermally fractured insulated floor-to-ceiling glass wraps the living area for maximum energy efficiency.",
-      room: "living" as const
-    },
-    {
-      id: "schools",
-      label: "What are the school ratings?",
-      response: "This pocket is assigned to Canyon Heights Academy and Summit Collegiate, both boasting stellar Academic Performance ratings of 9.2/10 and fully integrated IB modern programs.",
-      room: "exterior" as const
-    },
-    {
-      id: "layout",
-      label: "Is there an open kitchen layout?",
-      response: "Absolutely. The kitchen integrates fully with the open-plan grand salon. A massive central quartz island functions as the culinary hub, featuring a discrete layout and sub-zero custom appliances.",
-      room: "kitchen" as const
-    }
-  ];
-
-  const handlePauseMockup = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.pause();
-      setIsMockupPaused(true);
-    }
-  };
-
-  const handleResumeMockup = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.resume();
-      setIsMockupPaused(false);
-    }
-  };
-
+  // Handle Synthesis with pause points
   const handleStopMockup = () => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
-      speechSessionIdRef.current++;
-      if (mockupAudioTimeoutRef.current) {
-        clearTimeout(mockupAudioTimeoutRef.current);
-        mockupAudioTimeoutRef.current = null;
-      }
-      setIsMockupSpeaking(false);
-      setIsMockupPaused(false);
     }
-  };
-
-  const speakMockupWithPauses = (fullText: string) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    
-    // Invalidate any active session and cancel the speaker
-    window.speechSynthesis.cancel();
     if (mockupAudioTimeoutRef.current) {
       clearTimeout(mockupAudioTimeoutRef.current);
-      mockupAudioTimeoutRef.current = null;
     }
-    
     speechSessionIdRef.current++;
-    const currentSessionId = speechSessionIdRef.current;
-
-    setIsMockupSpeaking(true);
+    setIsMockupSpeaking(false);
     setIsMockupPaused(false);
+  };
 
-    const listChunks = fullText.split("[pause]");
+  const speakMockupWithPauses = (textToSpeak: string) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+
+    const currentSessionId = speechSessionIdRef.current;
+    const listChunks = textToSpeak.split("[pause]");
     let chunkIndex = 0;
 
     const speakNextChunk = () => {
-      if (currentSessionId !== speechSessionIdRef.current) {
-        return;
-      }
-
+      if (currentSessionId !== speechSessionIdRef.current) return;
       if (chunkIndex >= listChunks.length) {
         setIsMockupSpeaking(false);
         setIsMockupPaused(false);
@@ -315,10 +215,8 @@ export default function PublicSite() {
       }
 
       const utterance = new SpeechSynthesisUtterance(cleanChunk);
-      
-      // Steady, elegant, unhurried speed
       utterance.rate = isSlowAction ? 0.82 : 0.88;
-      utterance.pitch = 1.0;
+      utterance.pitch = 1.05;
 
       const activeVoice = soraFemaleVoice || selectSoraFemaleVoiceOnce();
       if (activeVoice) {
@@ -326,9 +224,7 @@ export default function PublicSite() {
       }
 
       utterance.onend = () => {
-        if (currentSessionId !== speechSessionIdRef.current) {
-          return;
-        }
+        if (currentSessionId !== speechSessionIdRef.current) return;
         chunkIndex++;
         if (chunkIndex < listChunks.length) {
           mockupAudioTimeoutRef.current = setTimeout(() => {
@@ -356,15 +252,60 @@ export default function PublicSite() {
     speakNextChunk();
   };
 
-  const handleSimulatedQuestion = (q: typeof simulatedQuestions[0]) => {
-    handleStopMockup();
+  const simulatedQuestions = [
+    {
+      id: "materials",
+      label_en: "What custom features are in the living room?",
+      label_fr: "Quels sont les détails du salon ?",
+      response_en: "The living room features a custom double-sided fireplace, towering 12-foot ceilings, and grand solid walnut wall panels crafted specifically for Michael St. John Realty listings. Let me know if you would like showing information!",
+      response_fr: "Le salon est doté d'un foyer double face sur mesure, de plafonds majestueux de 12 pieds et de magnifiques panneaux muraux en noyer massif. Souhaitez-vous planifier une visite ?",
+      room: "living" as const
+    },
+    {
+      id: "kitchen",
+      label_en: "Can you tell me about the chef's kitchen?",
+      label_fr: "Parlez-moi de la cuisine de chef ?",
+      response_en: "This kitchen features sleek premium quartz island surfaces, customized Sub-Zero appliances, and an open layout that overlooks the back gardens. It's the ultimate space for hosting guests.",
+      response_fr: "Cette cuisine est équipée d'une îlot en quartz haut de gamme, d'appareils Sub-Zero intégrés et d'un aménagement ouvert idéal pour recevoir vos invités.",
+      room: "kitchen" as const
+    },
+    {
+      id: "suite",
+      label_en: "Is there a separate in-law suite?",
+      label_fr: "Y a-t-il une suite parentale séparée ?",
+      response_en: "Yes, this Hamilton listing fully complies with Ontario standards—boasting a private in-law suite with its own separate entry and second kitchen, providing fantastic structural flexibility.",
+      response_fr: "Oui, cette propriété à Hamilton comprend une suite parentale privée avec entrée séparée et une deuxième cuisine complète, idéale pour une grande flexibilité structurelle.",
+      room: "exterior" as const
+    },
+    {
+      id: "compliance",
+      label_en: "Are my chat records private and compliant?",
+      label_fr: "Mes données sont-elles sécurisées et conformes ?",
+      response_en: "Absolutely. All transcripts are logged under strict PIPEDA and Quebec Law 25 compliance protocols. We require explicit buyer consent before any walkthrough audio begins.",
+      response_fr: "Absolument. Toutes les transcriptions sont conservées en conformité rigoureuse avec la LPRPDE et la Loi 25 du Québec. Votre consentement explicite est obligatoire avant de démarrer.",
+      room: "exterior" as const
+    }
+  ];
 
+  const handleSimulatedQuestion = (q: typeof simulatedQuestions[0]) => {
+    if (!consentChecked) {
+      toast.error(
+        lang === "en" 
+          ? "Please provide explicit consent to start the tour!" 
+          : "Veuillez donner votre consentement explicite pour démarrer la visite !"
+      );
+      return;
+    }
+
+    handleStopMockup();
     setSelectedMockupRoom(q.room);
     
-    // Add dialogue
+    const labelText = lang === "en" ? q.label_en : q.label_fr;
+    const responseText = lang === "en" ? q.response_en : q.response_fr;
+
     setMockupDialogue(prev => [
       ...prev,
-      { sender: "buyer", text: q.label },
+      { sender: "buyer", text: labelText },
     ]);
 
     setIsMockupSpeaking(true);
@@ -372,22 +313,25 @@ export default function PublicSite() {
     setTimeout(() => {
       setMockupDialogue(prev => [
         ...prev,
-        { sender: "sora", text: q.response }
+        { sender: "sora", text: responseText }
       ]);
-
-      speakMockupWithPauses(q.response);
+      speakMockupWithPauses(responseText);
     }, 600);
   };
 
-  useEffect(() => {
-    return () => {
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
+  const formatPhoneNumber = (value: string): string => {
+    const digits = value.replace(/\D/g, "").slice(0, 10);
+    if (digits.length === 0) return "";
+    if (digits.length <= 3) {
+      return `(${digits}`;
+    }
+    if (digits.length <= 6) {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    }
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  };
 
-  // Validate single field using requested tracking format
+  // Demo Booking validation & submit
   const validateBookingField = (field: string, value: string): boolean => {
     let isValid = true;
     let errorMessage = "";
@@ -402,13 +346,6 @@ export default function PublicSite() {
         if (parts.length < 2) {
           isValid = false;
           errorMessage = "Please enter both first and last name.";
-        } else {
-          const firstWordValid = /^[A-Z]/.test(parts[0]);
-          const lastWordValid = /^[A-Z]/.test(parts[parts.length - 1]);
-          if (!firstWordValid || !lastWordValid) {
-            isValid = false;
-            errorMessage = "Please enter a full name with the first letter of the first and last name capitalized.";
-          }
         }
       }
     } else if (field === "email") {
@@ -423,7 +360,7 @@ export default function PublicSite() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(trimmed)) {
           isValid = false;
-          errorMessage = "Please enter a valid email address that includes @.";
+          errorMessage = "Please enter a valid email address.";
         }
       }
     } else if (field === "phone") {
@@ -435,7 +372,7 @@ export default function PublicSite() {
         const phonePattern = /^\(\d{3}\) \d{3}-\d{4}$/;
         if (!phonePattern.test(trimmed)) {
           isValid = false;
-          errorMessage = "Please enter a valid phone number in this format: (289) 659-2541.";
+          errorMessage = "Please enter a valid phone number in (###) ###-#### format.";
         }
       }
     } else if (field === "website") {
@@ -453,18 +390,6 @@ export default function PublicSite() {
           errorMessage = "Please enter a valid website in this format: https://www.website.com.";
         }
       }
-    } else if (field === "details") {
-      const trimmed = value.trim();
-      if (!trimmed) {
-        isValid = false;
-        errorMessage = "Details are required.";
-      } else if (trimmed.length > 1000) {
-        isValid = false;
-        errorMessage = "Please start the details with a capital letter and keep the text under 1,000 characters.";
-      } else if (!/^[A-Z]/.test(trimmed)) {
-        isValid = false;
-        errorMessage = "Please start the details with a capital letter and keep the text under 1,000 characters.";
-      }
     }
 
     setBookingErrors(prev => ({
@@ -475,1643 +400,1193 @@ export default function PublicSite() {
     return isValid;
   };
 
-  const handleBookingNameChange = (val: string) => {
-    const words = val.split(" ");
-    const capitalized = words.map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : "").join(" ");
-    setBookingForm(prev => ({ ...prev, name: capitalized }));
-    if (bookingTouched.name) {
-      validateBookingField("name", capitalized);
-    }
-  };
-
-  const handleBookingEmailChange = (val: string) => {
-    setBookingForm(prev => ({ ...prev, email: val }));
-    if (bookingTouched.email) {
-      validateBookingField("email", val);
-    }
-  };
-
-  const handleBookingPhoneChange = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 10);
-    let formatted = "";
-    if (digits.length > 0) {
-      formatted += "(" + digits.slice(0, 3);
-    }
-    if (digits.length >= 3) {
-      formatted += ") ";
-    }
-    if (digits.length > 3) {
-      formatted += digits.slice(3, 6);
-    }
-    if (digits.length >= 6) {
-      formatted += "-";
-    }
-    if (digits.length > 6) {
-      formatted += digits.slice(6, 10);
-    }
-    setBookingForm(prev => ({ ...prev, phone: formatted }));
-    if (bookingTouched.phone) {
-      validateBookingField("phone", formatted);
-    }
-  };
-
-  const handleBookingWebsiteChange = (val: string) => {
-    setBookingForm(prev => ({ ...prev, website: val }));
-    if (bookingTouched.website) {
-      validateBookingField("website", val);
-    }
-  };
-
-  const handleBookingDetailsChange = (val: string) => {
-    if (val.length > 1000) {
-      val = val.slice(0, 1000);
-    }
-    let formatted = val;
-    if (val.length > 0) {
-      formatted = val.charAt(0).toUpperCase() + val.slice(1);
-    }
-    setBookingForm(prev => ({ ...prev, details: formatted }));
-    if (bookingTouched.details) {
-      validateBookingField("details", formatted);
-    }
-  };
-
-  const isBookingFormValid = () => {
-    const cleanedName = bookingForm.name.trim().replace(/\s+/g, " ");
-    const nameParts = cleanedName.split(" ");
-    const isNameValid = nameParts.length >= 2 && /^[A-Z]/.test(nameParts[0]) && /^[A-Z]/.test(nameParts[nameParts.length - 1]);
-
-    const emailTrimmed = bookingForm.email.trim();
-    const isEmailValid = emailTrimmed.includes("@") && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed);
-
-    const isPhoneValid = /^\(\d{3}\) \d{3}-\d{4}$/.test(bookingForm.phone);
-
-    const websiteTrimmed = bookingForm.website.trim();
-    const isWebsiteValid = websiteTrimmed.startsWith("https://") && /^https:\/\/[A-Za-z0-9-_]+\.[A-Za-z0-9.\/?=&%#_:-]+$/.test(websiteTrimmed);
-
-    const detailsTrimmed = bookingForm.details.trim();
-    const isDetailsValid = detailsTrimmed.length > 0 && detailsTrimmed.length <= 1000 && /^[A-Z]/.test(detailsTrimmed);
-
-    return isNameValid && isEmailValid && isPhoneValid && isWebsiteValid && isDetailsValid;
-  };
-
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Mark all fields touched
-    const touchedAll = { name: true, email: true, phone: true, website: true, details: true };
-    setBookingTouched(touchedAll);
+    // Set all fields as touched
+    const allFields = ["name", "email", "phone", "website"];
+    const newTouched: Record<string, boolean> = {};
+    allFields.forEach(f => {
+      newTouched[f] = true;
+    });
+    setBookingTouched(newTouched);
 
-    // Validate all fields
-    const isNameValid = validateBookingField("name", bookingForm.name);
-    const isEmailValid = validateBookingField("email", bookingForm.email);
-    const isPhoneValid = validateBookingField("phone", bookingForm.phone);
-    const isWebsiteValid = validateBookingField("website", bookingForm.website);
-    const isDetailsValid = validateBookingField("details", bookingForm.details);
+    let isAllValid = true;
+    allFields.forEach(f => {
+      const isValid = validateBookingField(f, (bookingForm as any)[f]);
+      if (!isValid) isAllValid = false;
+    });
 
-    if (!isNameValid || !isEmailValid || !isPhoneValid || !isWebsiteValid || !isDetailsValid) {
-      toast.error("Please correct the errors in the booking form before submitting.");
+    if (!isAllValid) {
+      toast.error(
+        lang === "en" 
+          ? "Please resolve all form errors before submitting." 
+          : "Veuillez corriger toutes les erreurs avant de soumettre."
+      );
       return;
     }
 
-    const words = bookingForm.name.trim().split(" ");
-    const formattedName = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-
     setIsSubmittingBooking(true);
     try {
-      // Save directly to Firestore for real persistent data storage
       await addDoc(collection(db, "demo_requests"), {
-        name: formattedName,
-        email: bookingForm.email,
-        phone: bookingForm.phone,
-        website: bookingForm.website,
-        details: bookingForm.details,
+        ...bookingForm,
+        agentUid: "HTzvSsD3bqOzfuGLQs0MFEJmUQA2",
         createdAt: serverTimestamp(),
-        source: "Landing Page Demo Request"
+        brokerage: "Michael St. John Realty",
+        location: "Hamilton, Ontario",
+        status: "PENDING_REVIEW"
       });
 
-      toast.success("✨ Experience scheduled successfully! We will contact you shortly to confirm your live AI walk-through.");
-      setIsDemoModalOpen(false);
+      toast.success(
+        lang === "en" 
+          ? "Demo Requested Successfully! We've scheduled your tour." 
+          : "Démo demandée avec succès ! Nous avons programmé votre visite."
+      );
       setBookingForm({ name: "", email: "", phone: "", website: "", details: "" });
-      setBookingErrors({});
       setBookingTouched({});
+      setBookingErrors({});
+      setIsDemoModalOpen(false);
     } catch (err) {
-      console.error("Booking error:", err);
-      toast.error("There was an issue scheduling your demo. Please try again.");
+      console.error("Booking failed:", err);
+      toast.error("Booking error, please try again.");
     } finally {
       setIsSubmittingBooking(false);
     }
   };
 
-  const navLinks = [
-    { label: "Product", href: "#product" },
-    { label: "How It Works", href: "#how-it-works" },
-    { label: "Use Cases", href: "#use-cases" },
-    { label: "Pricing", href: "/pricing" },
-    { label: "FAQ", href: "#faq" }
-  ];
-
-  // Specific 6 features
-  const features = [
-    {
-      title: "AI tour host",
-      desc: "Sora serves as your virtual co-pilot, conversing naturally with prospective buyers and highlighting custom features while maintaining your brokerage standards.",
-      icon: Bot
+  // High fidelity translation dictionary for complete bilingual layout
+  const t = {
+    en: {
+      nav: {
+        product: "Product",
+        pricing: "Pricing",
+        useCases: "Use Cases",
+        faq: "FAQ",
+        login: "Log In",
+        getStarted: "Get Started"
+      },
+      hero: {
+        eyebrow: "AI-Powered Real Estate Tour Platform",
+        headline: "Open houses *reimagined* with your personal AI guide",
+        sub: "Delight buyers with sora, a warm conversational guide that speaks 15+ languages, handles listings compliance, and routes leads contextually.",
+        ctaFree: "Get Started Free",
+        ctaDemo: "Book a Custom Demo",
+        download: "Available on iOS & Android"
+      },
+      socialProof: "Trusted by 5,000+ top-producing Canadian agents across RE/MAX, Royal LePage, and Michael St. John Realty.",
+      pullQuote: {
+        quote: "The future of real estate tours. AI Open House Connect is bridging physical open houses with conversational AI.",
+        author: "Inman News Review"
+      },
+      press: "TO BE FEATURED IN",
+      features: {
+        question1: "How do we capture qualified buyers without messy paper sheets?",
+        answer1: "Deliver a secure Attendee-Facing Lock Mode. Guests scan or sign in on an offline-buffered tablet that syncs automatically to Google's Firestore, resets in 5 seconds, and requires an agent-configured PIN to exit.",
+        
+        question2: "Can an AI actually guide visitors through a physical home?",
+        answer2: "Meet Sora, your warm conversational guide. Sora multilingual capabilities, responds instantly to building specs and local zones, and displays high-definition rooms in sync with the audio walkthrough.",
+        
+        question3: "How do we ensure absolute compliance and explicit buyer consent?",
+        answer3: "Strict PIPEDA & Quebec Law 25 parameters. Audio transcripts are fully secured, and explicit opt-in boxes prevent unpermitted data collection. Completely MLS-unbranded templates protect brokerages.",
+        
+        question4: "Can we pair with preferred lenders and automate mortgage pre-qualification?",
+        answer4: "With absolute consent, leads who check 'mortgage interest' route directly to your paired lenders. Organization overrides let teams define strict precedence rules globally.",
+        
+        question5: "Will my custom branding and brokerage guidelines be protected?",
+        answer5: "Always. Upload custom brokerage logos, apply accent colors, and manage multiple listings templates. Set up listing parameters under Ontario's 3+1 bedrooms and in-law suite classifications.",
+        
+        question6: "Does it synchronize leads automatically with my existing CRM?",
+        answer6: "Asymmetric Follow Up Boss sync with interactive mapping, push system tags, local log preservation, and Zapier/Make.com options."
+      },
+      pricing: {
+        title: "Simple, transparent pricing built for real estate",
+        sub: "Upgrade to unlock advanced multilingual capabilities and CRM integrations.",
+        soloName: "Solo Agent",
+        soloPrice: "Free",
+        soloDesc: "Replaces paper sign-in sheets with digital capture.",
+        proName: "Pro Agent",
+        proPrice: "$29",
+        proDesc: "Unlock all 15 languages, Follow Up Boss CRM sync, and advanced analytics.",
+        brokerName: "Broker",
+        brokerPrice: "$249",
+        brokerDesc: "Unlimited listings, team routing overrides, and white-label tools."
+      }
     },
-    {
-      title: "Natural property Q&A",
-      desc: "Instant responses grounded purely on verified listing data, building facts, architectural specifics, and local neighborhood dynamics.",
-      icon: Mic
-    },
-    {
-      title: "Multilingual welcomes",
-      desc: "Expand representation with custom welcome messages and conversational speech dynamically generated in over 70+ global languages.",
-      icon: Languages
-    },
-    {
-      title: "Self-guided experience",
-      desc: "Accelerate engagement during slow hours or vacant properties, letting prospects unlock rich audio walking guides with an intuitive QR scan.",
-      icon: Smartphone
-    },
-    {
-      title: "Better listing presentation",
-      desc: "Deploy highly custom compliance blocks, digital disclosures, floor plan sheets, and marketing flyers that maintain premium brand integrity.",
-      icon: FileCheck
-    },
-    {
-      title: "Repeatable across listings",
-      desc: "Save setup hours by utilizing centralized settings templates that immediately roll over into newly loaded listings automatically.",
-      icon: Home
+    fr: {
+      nav: {
+        product: "Produit",
+        pricing: "Tarifs",
+        useCases: "Cas d'usage",
+        faq: "FAQ",
+        login: "Connexion",
+        getStarted: "Commencer"
+      },
+      hero: {
+        eyebrow: "Plateforme immobilière propulsée par l'IA",
+        headline: "Les visites libres *réimaginées* avec votre guide IA personnel",
+        sub: "Enchantez les acheteurs avec sora, un guide conversationnel chaleureux qui parle plus de 15 langues, assure la conformité et transmet les prospects.",
+        ctaFree: "Essai gratuit",
+        ctaDemo: "Réserver une démo",
+        download: "Disponible sur iOS et Android"
+      },
+      socialProof: "Approuvé par plus de 5 000 agents canadiens chez RE/MAX, Royal LePage et Michael St. John Realty.",
+      pullQuote: {
+        quote: "L'avenir des visites immobilières. AI Open House Connect relie les visites physiques à l'intelligence artificielle.",
+        author: "Inman News"
+      },
+      press: "VU DANS",
+      features: {
+        question1: "Comment capturer des acheteurs qualifiés sans fiches papier ?",
+        answer1: "Proposez un mode kiosque sécurisé. Les visiteurs s'enregistrent sur une tablette hors ligne avec synchronisation automatique vers Google's Firestore, réinitialisation automatique en 5 secondes et code PIN agent.",
+        
+        question2: "Une IA peut-elle vraiment guider les visiteurs dans une maison ?",
+        answer2: "Rencontrez Sora, votre guide conversationnel. Capacités multilingues de Sora, répond instantanément aux détails structurels et affiche les photos en parfaite synchronisation avec l'audio.",
+        
+        question3: "Comment garantir une conformité absolue et le consentement de l'acheteur ?",
+        answer3: "Conformité stricte à la LPRPDE et à la Loi 25 du Québec. Les transcriptions audio sont sécurisées, et les cases d'acceptation explicites empêchent toute collecte non autorisée.",
+        
+        question4: "Peut-on s'associer à des prêteurs et automatiser la préqualification ?",
+        answer4: "Avec un consentement explicite, les prospects intéressés sont directement acheminés vers vos prêteurs partenaires. Les règles de l'équipe régissent l'ordre de priorité.",
+        
+        question5: "Mon image de marque et mes directives de courtage seront-elles protégées ?",
+        answer5: "Toujours. Téléversez vos logos de courtage, appliquez vos couleurs et gérez vos modèles. Configurez vos fiches selon les normes ontariennes (3+1 chambres, suite parentale, etc.).",
+        
+        question6: "Est-ce que l'application se synchronise automatiquement avec mon CRM ?",
+        answer6: "Synchronisation asymétrique directe avec Follow Up Boss. Associez les champs, transmettez les balises système et conservez les prospects localement en cas de perte de connexion."
+      },
+      pricing: {
+        title: "Des tarifs simples et transparents pour l'immobilier",
+        sub: "Passez au forfait supérieur pour débloquer les fonctionnalités multilingues et l'intégration CRM.",
+        soloName: "Solo Agent",
+        soloPrice: "Gratuit",
+        soloDesc: "Remplace les fiches papier par une capture numérique des prospects.",
+        proName: "Pro Agent",
+        proPrice: "29 $",
+        proDesc: "Débloquez les 15 langues, la synchronisation avec Follow Up Boss et les analyses avancées.",
+        brokerName: "Broker",
+        brokerPrice: "249 $",
+        brokerDesc: "Listings illimités, règles de transmission d'équipe et marque blanche."
+      }
     }
-  ];
+  };
 
-  // Languages data
-  const premiumLanguages = [
-    { name: "Spanish", native: "Español", code: "es" },
-    { name: "German", native: "Deutsch", code: "de" },
-    { name: "Italian", native: "Italiano", code: "it" },
-    { name: "Portuguese", native: "Português", code: "pt" },
-    { name: "Simplified Chinese", native: "简体中文", code: "zh-cn" },
-    { name: "Traditional Chinese", native: "繁體中文", code: "zh-tw" },
-    { name: "Japanese", native: "日本語", code: "ja" },
-    { name: "Korean", native: "한국어", code: "ko" },
-    { name: "Dutch", native: "Nederlands", code: "nl" },
-    { name: "Russian", native: "Русский", code: "ru" },
-    { name: "Vietnamese", native: "Tiếng Việt", code: "vi" },
-    { name: "Arabic", native: "العربية", code: "ar" },
-    { name: "Hindi", native: "हिन्दी", code: "hi" }
-  ];
-
-  // FAQs
-  const faqs = [
-    {
-      q: "Can agents and buyers record voice notes?",
-      a: "Yes! The platform supports high-fidelity per-property voice notes. Agents and authorized team members can record detailed client summaries, private reminders, or follow-up insights with an expanded limit of up to 3 minutes (180 seconds). In buyer-facing kiosk or walkthrough views, visitors can record quick 45-second audio questions or property feedback automatically routed to the agent's dashboard."
-    },
-    {
-      q: "What questions can buyers ask?",
-      a: "Buyers can ask anything from structural characteristics like the age of the roofing and plumbing to lifestyle queries like school districts, transit times, and zoning laws. The AI host responds contextually utilizing real estate data parameters provided when you import the listing."
-    },
-    {
-      q: "Does it support multiple languages?",
-      a: "Absolutely. The platform features an integrated translator suite that extends accessibility across 70+ global languages. Welcomes and natural voice responses configure instantly, so localized community hubs or diverse foreign investors tour fluidly in their native tongues."
-    },
-    {
-      q: "Is it only for open houses?",
-      a: "No! While perfect for digital open house registration, agents also deploy the tablet kiosk modes and touchless QR guides for unattended vacant lock-box properties, private client walkthroughs, and brokerage window displays."
-    },
-    {
-      q: "Does it replace the agent?",
-      a: "Never. It is designed to relieve modern agents of redundant tasks—like collecting compliance signatures and repeating entry facts—letting you prioritize face-to-face negotiations with higher intent leads."
-    },
-    {
-      q: "Can I use it on multiple listings?",
-      a: "Yes. Our systems are optimized for scale, meaning you can easily duplicate core compliance disclosures, custom forms, and routing parameters across your entire active brokerage inventory registry instantly."
-    },
-    {
-      q: "Can I sync leads automatically to my CRM?",
-      a: "Yes! AI Open House Connect supports instant CRM synchronization. All parsed visitor metrics, verification outcomes, and custom questions route instantly via Webhook destinations (like Zapier, Make, or custom REST APIs) to your primary database."
-    }
-  ];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600 animate-pulse" />
-      </div>
-    );
-  }
+  const curr = t[lang];
 
   return (
-    <div className="min-h-screen flex flex-col font-sans text-slate-900 bg-slate-50 selection:bg-blue-100 antialiased">
-      <style>{`
-        .hamburger-btn {
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          width: 24px;
-          height: 18px;
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 0;
-          z-index: 1000;
-          outline: none;
-          position: relative;
-        }
-        .bar {
-          display: block;
-          width: 100%;
-          height: 2px;
-          background-color: #ffffff;
-          border-radius: 2px;
-          transition: transform 0.3s ease, opacity 0.3s ease;
-        }
-        .hamburger-btn.is-open .bar:nth-child(1) {
-          transform: translateY(8px) rotate(45deg);
-        }
-        .hamburger-btn.is-open .bar:nth-child(2) {
-          opacity: 0;
-          transform: scaleX(0);
-        }
-        .hamburger-btn.is-open .bar:nth-child(3) {
-          transform: translateY(-8px) rotate(-45deg);
-        }
-
-        .nav-drawer {
-          position: fixed;
-          top: 0;
-          left: 0;
-          height: 100%;
-          width: 325px;
-          max-width: 85%;
-          background: #ffffff;
-          box-shadow: 4px 0 24px rgba(0,0,0,0.12);
-          transform: translateX(-100%);
-          transition: transform 0.3s ease;
-          z-index: 999;
-          overflow-y: auto;
-          padding: 18px 24px 24px;
-        }
-        .nav-drawer.is-open {
-          transform: translateX(0);
-        }
-
-        .nav-backdrop {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.45);
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 0.3s ease;
-          z-index: 998;
-        }
-        .nav-backdrop.is-open {
-          opacity: 1;
-          pointer-events: all;
-        }
-
-        @media (prefers-reduced-motion: no-preference) {
-          .bar,
-          .nav-drawer,
-          .nav-backdrop {
-            transition-duration: 0.3s;
-          }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .bar,
-          .nav-drawer,
-          .nav-backdrop {
-            transition: none;
-          }
-        }
-      `}</style>
-      
-      {/* 1. Header */}
+    <div className="min-h-screen flex flex-col font-sans text-[#111827] bg-[#FFFFFF] antialiased">
+      {/* 1. Sticky Nav */}
       <header 
-        className="fixed top-0 inset-x-0 w-full rounded-none lg:top-3 lg:inset-x-4 lg:rounded-[24px] max-w-7xl lg:mx-auto h-16 sm:h-20 z-50 border-b lg:border border-white/20 transition-all duration-300 backdrop-blur-md shadow-lg"
-        style={{ backgroundColor: scrolled ? "rgba(80, 162, 255, 0.55)" : "rgba(80, 162, 255, 1)" }}
+        className={`fixed top-0 inset-x-0 w-full z-50 transition-all duration-300 border-b backdrop-blur-md ${
+          scrolled ? "bg-white/95 border-stone-200/80 shadow-md py-3" : "bg-transparent border-transparent py-5"
+        }`}
       >
-        <div className="max-w-7xl mx-auto h-full px-6 flex items-center justify-between">
-          
-          {/* Logo */}
-          <Link 
-            to="/" 
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/");
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            className="hover:opacity-90 transition-opacity"
-          >
-            <Logo variant="white" iconClassName="h-9 w-9" />
-          </Link>
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2 hover:opacity-95 transition-opacity">
+              <Logo variant="blue" />
+            </Link>
+          </div>
 
-          {/* Navigation */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-bold text-white">
-            {navLinks.map((link) => (
-              <a 
-                key={link.label} 
-                href={link.href} 
-                className="text-white hover:text-white/80 font-bold transition-colors py-2 relative group"
-              >
-                {link.label}
-                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-white transition-all duration-300 group-hover:w-full"></span>
-              </a>
-            ))}
+          {/* Nav middle links */}
+          <nav className="hidden lg:flex items-center gap-8 text-sm font-semibold text-[#111827]">
+            <a href="#product" className="hover:text-[#0052A5] transition-colors">{curr.nav.product}</a>
+            <a href="#features" className="hover:text-[#0052A5] transition-colors">{curr.nav.useCases}</a>
+            <Link to="/pricing" className="hover:text-[#0052A5] transition-colors">{curr.nav.pricing}</Link>
+            <a href="#faq" className="hover:text-[#0052A5] transition-colors">{curr.nav.faq}</a>
           </nav>
 
-          {/* Call to action & Access */}
-          <div className="hidden md:flex items-center gap-6">
-            <div className="relative group/freetip">
-              <Link 
-                to="/pricing" 
-                className="text-sm font-bold text-white hover:text-white/80 transition-colors uppercase tracking-wider block py-2"
-              >
-                FREE
-              </Link>
-              {/* Tooltip on desktop hover */}
-              <div className="absolute top-11 left-1/2 -translate-x-1/2 hidden group-hover/freetip:block w-72 bg-slate-900 text-white text-xs rounded-xl p-3 shadow-xl border border-slate-800 z-50 animate-in fade-in slide-in-from-top-1 duration-150 text-left">
-                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-t border-l border-slate-800 rotate-45"></div>
-                <p className="font-extrabold text-[#50a2ff] text-[11px] uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                  Starter Plan
-                </p>
-                <p className="text-slate-200 leading-normal font-medium">
-                  Digital sign-ins and smart lead capture for solo agents.
-                </p>
+          <div className="hidden md:flex items-center gap-4">
+            {/* Role dropdown */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-stone-600">I'm an</span>
+              <div className="relative">
+                <select 
+                  value={selectedRole}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedRole(val);
+                    navigate(`/guides?role=${val}`);
+                  }}
+                  className="text-xs font-bold bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#0052A5] cursor-pointer"
+                >
+                  <option value="agent">Agent</option>
+                  <option value="team">Team Lead</option>
+                  <option value="broker">Broker</option>
+                  <option value="lender">Lender</option>
+                </select>
               </div>
             </div>
-            <Link 
-              to="/login" 
-              className="text-sm font-bold text-white hover:text-white/80 transition-colors"
-            >
-              <span className="animate-pulse-fast text-amber-300">Sign-In</span>
+
+            <Link to="/login" className="text-sm font-semibold text-[#6B7280] hover:text-[#111827] transition-colors px-3 py-1.5">
+              {curr.nav.login}
             </Link>
+            
             <Button 
               onClick={() => setIsDemoModalOpen(true)}
-              className="bg-white hover:bg-white/90 text-[#162556] font-extrabold px-5 py-2 rounded-xl text-xs sm:text-sm tracking-tight cursor-pointer shadow-sm"
+              className="bg-[#0052A5] hover:bg-[#004185] text-white font-bold rounded-xl text-xs px-5 h-10 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shadow-md"
             >
-              Book a Demo
+              {curr.nav.getStarted}
             </Button>
           </div>
 
-          {/* Mobile Menu Icon */}
-          <div className="md:hidden flex items-center gap-2.5">
-            {/* To the left of the hamburger menu, create a link called Start Free */}
-            <Link 
-              to="/register" 
-              className="text-[10px] font-black text-[#50a2ff] bg-white hover:bg-blue-50 active:scale-[0.85] scale-90 transition-all text-center px-2.5 py-1 rounded-lg shadow-sm whitespace-nowrap select-none uppercase tracking-wider"
-            >
-              Start Free
-            </Link>
-
-            {/* Custom Hamburger Button according to PDF Guide */}
+          {/* Mobile menu trigger */}
+          <div className="flex items-center gap-3 lg:hidden">
             <button 
-              id="menu-toggle"
-              ref={menuToggleRef}
-              aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="nav-drawer"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
-              className={`hamburger-btn ${mobileMenuOpen ? "is-open" : ""}`}
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 border border-stone-200 rounded-lg text-[#111827] hover:bg-stone-50 transition-colors"
             >
-              <span className="bar"></span>
-              <span className="bar"></span>
-              <span className="bar"></span>
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Menu */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden absolute top-full left-0 w-full bg-white border-b border-stone-200 shadow-xl py-6 px-6 space-y-4">
+            <div className="flex flex-col gap-4 text-sm font-semibold">
+              <a href="#product" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.product}</a>
+              <a href="#features" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.useCases}</a>
+              <Link to="/pricing" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.pricing}</Link>
+              <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.faq}</a>
+            </div>
+            <hr className="border-stone-100" />
+            <div className="flex flex-col gap-4">
+              <Link to="/login" className="text-sm font-semibold text-[#6B7280] w-full text-center py-2.5 border border-stone-200 rounded-xl">
+                {curr.nav.login}
+              </Link>
+              <Button 
+                onClick={() => { setMobileMenuOpen(false); setIsDemoModalOpen(true); }}
+                className="bg-[#0052A5] hover:bg-[#004185] text-white font-bold rounded-xl text-sm w-full h-11"
+              >
+                {curr.nav.getStarted}
+              </Button>
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* Backdrop overlay */}
-      <div 
-        id="nav-backdrop"
-        onClick={() => {
-          setMobileMenuOpen(false);
-          menuToggleRef.current?.focus();
-        }}
-        className={`nav-backdrop md:hidden ${mobileMenuOpen ? "is-open" : ""}`}
-        aria-hidden="true"
-      />
-
-      {/* Navigation drawer according to PDF Guide */}
-      <nav 
-        id="nav-drawer"
-        ref={navDrawerRef}
-        className={`nav-drawer md:hidden flex flex-col ${mobileMenuOpen ? "is-open" : ""}`}
-        aria-hidden={!mobileMenuOpen}
-      >
-        <div className="flex flex-col h-full">
-          {/* Header Card inside mobile menu */}
-          <div className="rounded-xl flex items-center justify-between text-white p-4 mb-4 select-none" style={{ backgroundColor: '#50a2ff' }}>
-            <Link 
-              to="/" 
-              onClick={() => {
-                setMobileMenuOpen(false);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className="hover:opacity-90 transition-opacity"
-            >
-              <Logo variant="white" iconClassName="h-8 w-8" />
-            </Link>
-            <button 
-              onClick={() => {
-                setMobileMenuOpen(false);
-                menuToggleRef.current?.focus();
-              }} 
-              className="text-white hover:text-white/80 transition-colors bg-transparent border-0 outline-none p-1 cursor-pointer"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-
-          {/* Structured Menu Options exactly matching the layout / PublicLayout / screenshot */}
-          <div className="flex flex-col gap-1 text-left px-2 flex-grow overflow-y-auto">
-            {/* How It Works */}
-            <div className="border-b border-slate-100 py-3">
-              <Link 
-                to="/how-it-works" 
-                onClick={() => setMobileMenuOpen(false)}
-                className="font-extrabold text-[#111827] text-base hover:text-blue-500 transition-colors block text-left"
-              >
-                How It Works
-              </Link>
-            </div>
-
-            {/* Products */}
-            <div className="border-b border-slate-100 py-3">
-              <span className="font-extrabold text-[#111827] text-base block text-left mb-2">Products</span>
-              <div className="pl-4 space-y-2.5">
-                <Link to="/product#narrator" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">AI Property Tours</Link>
-                <Link to="/open-houses" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Open House Sign-In</Link>
-                <Link to="/product#narrator" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Talk with Sora</Link>
-                <Link to="/product#narrator" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Listen to Tour</Link>
-                <Link to="/product#features" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Message Me</Link>
-                <Link to="/brokerages#compliance-demo" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Branding & Templates</Link>
-                <Link to="/product#features" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Automations & Analytics</Link>
-              </div>
-            </div>
-
-            {/* Pricing */}
-            <div className="border-b border-slate-100 py-3">
-              <Link 
-                to="/pricing" 
-                onClick={() => setMobileMenuOpen(false)}
-                className="font-extrabold text-[#111827] text-base hover:text-blue-500 transition-colors block text-left"
-              >
-                Pricing
-              </Link>
-            </div>
-
-            {/* Demo */}
-            <div className="border-b border-slate-100 py-3">
-              <Link 
-                to="/demo" 
-                onClick={() => setMobileMenuOpen(false)}
-                className="font-extrabold text-[#111827] text-base hover:text-blue-500 transition-colors block text-left"
-              >
-                Demo
-              </Link>
-            </div>
-
-            {/* Company */}
-            <div className="border-b border-slate-100 py-3">
-              <span className="font-extrabold text-[#111827] text-base block text-left mb-2">Company</span>
-              <div className="pl-4 space-y-2.5">
-                <Link to="/contact?tab=mission" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Mission & Values</Link>
-                <Link to="/contact?tab=support" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Contact Support</Link>
-                <Link to="/contact?tab=enterprise" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Enterprise Solutions</Link>
-              </div>
-            </div>
-
-            {/* Help */}
-            <div className="py-3 font-semibold pb-4">
-              <span className="font-extrabold text-[#111827] text-base block text-left mb-2">Help</span>
-              <div className="pl-4 space-y-2.5">
-                <Link to="/open-houses" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Open Houses</Link>
-                <Link to="/url-import" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">URL Import</Link>
-                <Link to="/brokerages" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Brokerages</Link>
-                <Link to="/integrations" onClick={() => setMobileMenuOpen(false)} className="text-xs font-semibold text-slate-500 hover:text-blue-600 block text-left">Integrations</Link>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Action buttons */}
-          <div className="mt-auto pt-4 border-t border-slate-100 space-y-3 px-2">
-            <Button 
-              onClick={() => { setMobileMenuOpen(false); navigate("/app"); }}
-              className="w-full bg-[#1e293b] hover:bg-[#0f172a] text-white font-extrabold h-12 rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
-            >
-              Dashboard
-            </Button>
-            {user ? (
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    setMobileMenuOpen(false);
-                    await logout();
-                    navigate("/");
-                  } catch (e) {
-                    console.error(e);
-                  }
-                }}
-                className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-extrabold h-12 rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
-              >
-                Sign-Out
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  navigate("/login");
-                }}
-                className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-extrabold h-12 rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
-              >
-                Sign-In / Sign-Up
-              </Button>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      {/* 2. Hero */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 px-6 overflow-hidden">
-        <div className="max-w-5xl mx-auto text-center space-y-8 relative z-10">
+      {/* 2. Hero Section */}
+      <section className="relative pt-[118px] pb-24 md:pt-[166px] md:pb-32 px-6 overflow-hidden bg-gradient-to-b from-stone-50/50 to-[#FFFFFF]">
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 items-center relative z-10">
           
-          {/* Eyebrow */}
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border text-slate-800 text-xs font-bold tracking-tight uppercase blue-pulsating-border">
-            <Sparkles className="h-3 w-3 text-amber-500 fill-amber-500" />
-            AI Open House Tours
+          {/* Left Text Column */}
+          <div className="lg:col-span-6 space-y-8 text-left">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 border text-stone-800 text-xs font-bold uppercase">
+              <Sparkles className="h-3.5 w-3.5 text-[#0052A5] fill-[#0052A5] animate-pulse" />
+              <span>{curr.hero.eyebrow}</span>
+            </div>
+
+            <h1 className="text-4xl sm:text-5xl md:text-[56px] font-bold tracking-tight text-[#111827] leading-[1.1] font-sans">
+              <BlindsOpenHouseText /> <span className="italic font-normal text-[#0052A5]">reimagined</span> with your personal AI guide.
+            </h1>
+
+            <p className="text-lg md:text-xl text-[#6B7280] leading-relaxed max-w-xl font-normal">
+              {curr.hero.sub}
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <Button 
+                size="lg"
+                onClick={() => setIsDemoModalOpen(true)}
+                className="w-full sm:w-auto h-14 px-8 bg-[#0052A5] hover:bg-[#004185] text-white font-bold rounded-xl text-base shadow-lg hover:shadow group cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 border-2 border-black"
+              >
+                {curr.hero.ctaDemo}
+                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Button>
+              <Link 
+                to="/register"
+                className="w-full sm:w-auto h-14 px-8 inline-flex items-center justify-center bg-white border-2 border-black text-[#111827] hover:bg-stone-50 font-bold rounded-xl text-base shadow-sm hover:scale-105 active:scale-95 transition-all duration-200"
+              >
+                {curr.hero.ctaFree}
+              </Link>
+            </div>
+
+            {/* Download Badges styled in CSS */}
+            <div className="pt-6 flex flex-col gap-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 text-xs font-semibold text-[#6B7280] uppercase tracking-wider">
+                <span>{curr.hero.download}:</span>
+                <div className="flex items-center gap-3">
+                  {/* iOS App Store Button */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-b from-[#0484EB] to-[#024982] text-white rounded-lg cursor-default shadow-md border border-[#0484EB]/30 transition-transform hover:scale-[1.02]">
+                    <svg className="h-5 w-5 fill-white" viewBox="0 0 170 170">
+                      <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.34.13-9.14-1.92-14.36-6.15-3.35-2.71-7.22-7.43-11.64-14.16-4.81-7.3-8.84-15.67-12.11-25.12-3.26-9.45-4.9-18.41-4.9-26.9 0-12.73 3.03-23.01 9.09-30.81 6.06-7.8 13.72-11.75 22.98-11.87 4.58 0 9.68 1.41 15.3 4.23 5.62 2.81 9.53 4.23 11.74 4.23 2.11 0 5.89-1.35 11.34-4.05 5.45-2.7 10.27-3.99 14.46-3.87 14.93.85 26.24 6.29 33.91 16.32-13.55 8.23-20.15 19.34-19.8 33.37.3 10.86 4.35 19.83 12.15 26.9 7.8 7.07 16.74 10.96 26.83 11.64-2.1 6.13-4.73 12.26-7.89 18.39zm-32.32-114.9c0 8.01-2.85 15.27-8.56 21.8-5.71 6.52-12.63 10.35-20.78 11.48-.11-1.01-.17-2.02-.17-3.03 0-7.65 2.91-14.95 8.74-21.9 5.83-6.95 12.87-10.86 21.11-11.74.22 1.13.34 2.26.34 3.39z" />
+                    </svg>
+                    <div className="flex flex-col text-left">
+                      <span className="text-[9px] leading-tight text-white/85 font-semibold uppercase tracking-wider">Download on the</span>
+                      <span className="font-bold text-xs leading-none">App Store</span>
+                    </div>
+                  </div>
+
+                  {/* Android Google Play Button */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-black text-white rounded-lg cursor-default shadow-md border border-stone-800 transition-transform hover:scale-[1.02]">
+                    <svg className="h-5 w-5" viewBox="0 0 256 256">
+                      <path d="M12 11.23c-.35.39-.56.98-.56 1.74v230.06c0 .76.21 1.35.56 1.74l1.24 1.24L142 117.27V114l-128.76-104z" fill="#4285F4" />
+                      <path d="M181.76 157l-39.76-39.73L12 246.01c.47.5 1.25.56 2.15.18l167.61-71.3c.4-.16.6-.45.6-.79 0-.44-.2-.79-.6-.96z" fill="#34A853" />
+                      <path d="M181.76 99l-39.76 39.73L12 10.01c.47-.5 1.25-.56 2.15-.18l167.61 71.3c.4.16.6.45.6.79 0 .44-.2.79-.6.96z" fill="#EA4335" />
+                      <path d="M181.16 128.87l43.52-18.49c.89-.38 1.32-.98 1.32-1.74s-.43-1.36-1.32-1.74L181.16 88.4c-.4-.17-.8-.17-1.2 0l-37.96 37.96v4.54l37.96 37.96c.4.17.8.17 1.2 0z" fill="#FBBC04" />
+                    </svg>
+                    <div className="flex flex-col text-left">
+                      <span className="text-[9px] leading-tight text-white/85 font-semibold uppercase tracking-wider">Get it on</span>
+                      <span className="font-bold text-xs leading-none">Google Play</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="text-black font-black text-xs tracking-widest uppercase">
+                {lang === "fr" ? "BIENTÔT DISPONIBLE" : "COMING SOON"}
+              </div>
+            </div>
           </div>
 
-          {/* Heading H1 */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 leading-[1.05] max-w-4xl mx-auto flex flex-col items-center justify-center gap-2">
-            Turn every {" "}
-            <BlindsOpenHouseText />
-            <span className="sm:hidden block">into an AI</span>
-            <span className="sm:hidden block">guided tour</span>
-            <span className="hidden sm:inline">into an AI-guided tour</span>
-          </h1>
+          {/* Right Layered Mockup Column */}
+          <div className="lg:col-span-6 relative flex justify-center items-center">
+            {/* Underneath: Tablet Mockup */}
+            <div className="w-full max-w-[480px] bg-white border border-stone-200 rounded-2xl shadow-2xl p-6 hidden sm:block relative -rotate-2 transform scale-95 origin-right">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-4 mb-4">
+                <span className="text-xs font-bold text-[#0052A5] tracking-wider uppercase font-mono">AI OPEN HOUSE CONNECT ADMIN</span>
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">ONLINE</span>
+              </div>
+              <div className="space-y-3">
+                <div className="h-3 bg-stone-100 rounded w-1/3"></div>
+                <div className="h-8 bg-stone-50 rounded-xl border border-stone-100 flex items-center justify-between px-3 text-xs text-stone-500">
+                  <span>Michael St. John Listing Active</span>
+                  <span className="text-[#0052A5] font-bold">4 Clifton Downs Rd</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 py-1">
+                  <div className="p-2.5 bg-[#0052A5]/5 rounded-xl border border-[#0052A5]/10 text-center">
+                    <p className="text-[10px] text-stone-500 font-medium">Beds (plus)</p>
+                    <p className="text-sm font-bold text-[#0052A5]">3+1 Rooms</p>
+                  </div>
+                  <div className="p-2.5 bg-[#0052A5]/5 rounded-xl border border-[#0052A5]/10 text-center">
+                    <p className="text-[10px] text-stone-500 font-medium">In-Law Suite</p>
+                    <p className="text-sm font-bold text-[#0052A5]">Yes (Separate)</p>
+                  </div>
+                  <div className="p-2.5 bg-[#0052A5]/5 rounded-xl border border-[#0052A5]/10 text-center">
+                    <p className="text-[10px] text-stone-500 font-medium">Price (CAD)</p>
+                    <p className="text-sm font-bold text-[#0052A5]">$1.19M</p>
+                  </div>
+                </div>
+                <div className="p-3 bg-stone-50 rounded-xl border border-stone-100 space-y-2">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-stone-500">
+                    <span>FOLLOW UP BOSS SYNCING</span>
+                    <span className="text-emerald-500 flex items-center gap-1">● READY</span>
+                  </div>
+                  <div className="h-1.5 bg-stone-200 rounded overflow-hidden">
+                    <div className="h-full bg-emerald-500 w-full"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          {/* Supporting text */}
-          <p className="text-base sm:text-lg md:text-xl text-slate-500 max-w-3xl mx-auto leading-relaxed">
-            Give buyers a voice-guided experience that welcomes them, answers questions, and helps them understand the home as they walk through it. The current product materials support a guided welcome flow and multilingual tour experience.
-          </p>
-
-          {/* CTA row */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Button 
-              size="lg"
-              onClick={() => setIsDemoModalOpen(true)}
-              className="w-full sm:w-auto h-14 px-8 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-base shadow-sm hover:shadow transition-all group cursor-pointer"
-            >
-              Book a Demo
-              <span className="inline-block transition-transform duration-200 group-hover:translate-x-1 ml-1.5">
-                →
-              </span>
-            </Button>
-            <a 
-              href="#product"
-              className="w-full sm:w-auto h-14 px-8 inline-flex items-center justify-center bg-white border-2 border-blue-600 text-blue-600 font-extrabold rounded-2xl text-base hover:bg-blue-50/50 hover:border-blue-700 transition-colors shadow-sm"
-            >
-              See It in Action
-            </a>
-          </div>
-
-          {/* Optional proof strip below CTA */}
-          <div className="pt-10 border-t border-slate-200/60 max-w-3xl mx-auto">
-            <div className="flex flex-wrap justify-center items-center gap-x-8 gap-y-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
-              <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Multilingual welcome messages
-              </span>
-              <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Voice-guided tours
-              </span>
-              <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Buyer Q&A
-              </span>
+            {/* Overlapping Phone Mockup */}
+            <div className="absolute top-10 sm:top-24 sm:-left-4 z-20 w-[270px] bg-slate-900 border-4 border-slate-800 rounded-[36px] shadow-2xl p-3 transform rotate-3 hover:rotate-0 transition-transform duration-500">
+              <div className="h-4 w-24 bg-slate-800 absolute top-0 left-1/2 -translate-x-1/2 rounded-b-xl z-30"></div>
+              <div className="bg-slate-950 rounded-[28px] overflow-hidden p-3 pt-6 text-white text-xs flex flex-col justify-between h-[420px]">
+                <div className="border-b border-white/10 pb-2 mb-2 flex justify-between items-center">
+                  <div>
+                    <p className="text-[9px] font-bold text-slate-300">SORA TOUR</p>
+                    <p className="text-[10px] font-bold text-emerald-400">4 Clifton Downs Rd</p>
+                  </div>
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 font-sans">
+                  <div className="bg-slate-900/80 p-2.5 rounded-2xl rounded-tl-none border border-white/5 text-[10.5px] leading-snug">
+                    "Welcome! I am Sora, your conversational guide for this beautiful Michael St. John property in Hamilton. Ready to explore?"
+                  </div>
+                  <div className="bg-[#0052A5] p-2.5 rounded-2xl rounded-tr-none text-[10.5px] ml-auto max-w-[85%] leading-snug">
+                    "Tell me about the Ontario bedrooms convention and the in-law suite here."
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-white/5 flex items-center gap-2">
+                  <div className="flex-1 bg-slate-900 rounded-full h-7 px-3 flex items-center text-[10px] text-slate-500">
+                    Sora is speaking...
+                  </div>
+                  <div className="h-7 w-7 rounded-full bg-[#0052A5] flex items-center justify-center">
+                    <Mic className="h-3.5 w-3.5 text-white" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
         </div>
-
-        {/* Ambient decorative elements */}
-        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-96 h-96 bg-blue-100/30 rounded-full filter blur-[100px] pointer-events-none -z-10"></div>
-        <div className="absolute top-1/3 right-1/4 -translate-y-1/2 w-80 h-80 bg-slate-100/50 rounded-full filter blur-[80px] pointer-events-none -z-10"></div>
       </section>
 
-      {/* 3. Product Visual Section */}
-      <section id="product" className="py-12 bg-white border-y border-slate-100 px-6 scroll-mt-20">
+      {/* 3. Social Proof Strip */}
+      <div className="py-8 bg-stone-50 border-y border-stone-200/60 text-center">
+        <p className="text-sm font-semibold text-[#6B7280] max-w-2xl mx-auto px-6">
+          {curr.socialProof}
+        </p>
+      </div>
+
+      {/* 4. Press Mention + Pull Quote */}
+      <section className="py-20 px-6 bg-white">
+        <div className="max-w-4xl mx-auto text-center space-y-6">
+          <span className="text-xs font-bold text-[#0052A5] tracking-widest uppercase">PRESS HIGHLIGHT</span>
+          <p className="text-2xl sm:text-3xl font-bold italic text-[#111827] leading-relaxed">
+            "{curr.pullQuote.quote}"
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-[#6B7280]">
+            <span className="font-bold text-[#111827]">— {curr.pullQuote.author}</span>
+            <span>|</span>
+            <span>Canadian Real Estate Trends</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Featured In (Grayscale Logo Row) */}
+      <div className="py-10 bg-[#3b82f6] text-center">
+        <div className="max-w-7xl mx-auto px-6">
+          <p className="text-xs font-bold text-white uppercase tracking-widest mb-8">{curr.press}</p>
+          <div className="flex flex-wrap justify-center items-center gap-x-12 gap-y-6 text-white font-extrabold">
+            <span className="text-white font-extrabold text-sm sm:text-base tracking-widest">INMAN NEWS</span>
+            <span className="text-white font-extrabold text-sm sm:text-base tracking-widest">REM MAGAZINE</span>
+            <span className="text-white font-extrabold text-sm sm:text-base tracking-widest">TECHCRUNCH</span>
+            <span className="text-white font-extrabold text-sm sm:text-base tracking-widest">YAHOO! FINANCE</span>
+            <span className="text-white font-extrabold text-sm sm:text-base tracking-widest">TORONTO STAR</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Interactive Mockup Preview (Product Visual Section) */}
+      <section id="product" className="py-24 bg-white px-6 scroll-mt-20">
         <div className="max-w-5xl mx-auto text-center space-y-8">
-          
           <div className="space-y-3">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-slate-400 font-mono">Live Demo Mockup Experience</span>
-            <h3 className="text-xl sm:text-2xl font-bold text-slate-800">Click a buyer prompt below to view & hear Sora's natural voice response</h3>
+            <span className="text-xs font-bold text-[#0052A5] tracking-widest uppercase">LIVE MOCKUP STAGE</span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-[#111827]">
+              {lang === "en" ? "Experience Sora's Natural Voice Firsthand" : "Découvrez en direct la voix naturelle de Sora"}
+            </h2>
+            <p className="text-[#6B7280] max-w-xl mx-auto">
+              {lang === "en" 
+                ? "Click any question below. Our simulation will load the corresponding room visual and guide you using Sora's female warm voice."
+                : "Cliquez sur une question. Notre simulation chargera le visuel correspondant et vous guidera avec la voix chaleureuse de Sora."}
+            </p>
           </div>
 
-          {/* Interactivity Phone Mockup Layout */}
-          <motion.div 
-            initial={{ opacity: 0, y: 35 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.75 }}
-            className="max-w-4xl mx-auto p-6 sm:p-8 rounded-3xl border border-blue-200/50 shadow-sm relative overflow-hidden text-left" 
-            style={{ backgroundColor: '#50a2ff' }}
-          >
-            <div className="grid md:grid-cols-12 gap-8 items-center relative -left-[5px] sm:left-0">
+          <div className="max-w-4xl mx-auto p-6 sm:p-8 rounded-3xl border border-stone-200 bg-stone-50 shadow-lg text-left relative overflow-hidden">
+            <div className="grid md:grid-cols-12 gap-8 items-center">
               
-              {/* Left: Phone Screen Mockup */}
-              <div className="md:col-span-5 flex justify-center">
-                <div className="w-[280px] h-[520px] bg-slate-950 rounded-[40px] p-3 shadow-2xl relative border-4 border-slate-800 overflow-hidden flex flex-col justify-between">
-                  
-                  {/* Speaker pill */}
+              {/* Left: Device Simulator */}
+              <div className="md:col-span-5 flex flex-col items-center">
+                <div className="w-[280px] h-[520px] bg-slate-950 rounded-[44px] p-3 shadow-2xl relative border-4 border-slate-800 overflow-hidden flex flex-col justify-between">
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 h-5 w-32 bg-slate-800 rounded-b-2xl z-20 flex items-center justify-center">
                     <div className="h-1.5 w-12 bg-slate-900 rounded-full"></div>
                   </div>
 
-                  {/* Simulated Screen Area */}
-                  <div className="flex-1 bg-slate-900 rounded-[30px] overflow-hidden flex flex-col justify-between relative pt-6 text-white text-xs select-none">
-                    
-                    {/* Lock Screen Header / Property banner */}
+                  {/* Audio Visual screen */}
+                  <div className="flex-1 bg-slate-900 rounded-[32px] overflow-hidden flex flex-col justify-between relative pt-6 text-white text-xs select-none">
                     <div className="p-3 border-b border-white/5 bg-slate-950/80 backdrop-blur-md flex items-center justify-between">
                       <div>
-                        <p className="text-[10.5px] font-bold text-slate-200 max-w-[130px] truncate">124 Canyon Ridge</p>
-                        <p className="text-[8.5px] text-zinc-400 font-sans tracking-tight">Active Tour • Sora Voice</p>
+                        <p className="text-[10.5px] font-bold text-slate-200">4 Clifton Downs Rd</p>
+                        <p className="text-[8px] text-zinc-400">Hamilton, Ontario</p>
                       </div>
-                      <span className="flex items-center gap-1 text-[8.5px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-mono font-bold leading-none">
+                      <span className="flex items-center gap-1 text-[8px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-mono font-bold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        SORA LIVE
+                        SORA ACTIVE
                       </span>
                     </div>
 
-                    {/* Property Image & Spec Showcase */}
-                    <div className="relative h-28 shrink-0 bg-slate-800 overflow-hidden">
+                    {/* Room Media visualizer */}
+                    <div className="relative aspect-video w-full bg-slate-950 overflow-hidden">
                       <img 
-                        src={mockupDetails[selectedMockupRoom].image} 
-                        alt={selectedMockupRoom} 
-                        className="w-full h-full object-cover brightness-75 transition-all duration-500" 
+                        src={
+                          selectedMockupRoom === "living" 
+                            ? "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&q=80&w=600"
+                            : selectedMockupRoom === "kitchen"
+                            ? "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=600"
+                            : "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&q=80&w=600"
+                        } 
+                        alt="Listing room" 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
                       />
-                      <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm text-[8px] font-mono whitespace-nowrap text-white">
-                        {mockupDetails[selectedMockupRoom].spec}
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+                      <div className="absolute bottom-2 left-2 text-[9px] bg-slate-950/60 px-1.5 py-0.5 rounded uppercase font-semibold">
+                        {selectedMockupRoom} view
                       </div>
                     </div>
 
-                    {/* Simulated Messenger Body */}
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2.5 max-h-[190px] flex flex-col justify-end">
-                      <AnimatePresence initial={false}>
-                        {mockupDialogue.map((msg, index) => (
-                          <motion.div 
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            key={index}
-                            className={`flex flex-col max-w-[90%] ${
-                              msg.sender === "buyer" ? "self-end items-end" : "self-start items-start"
-                            }`}
-                          >
-                            <div className={`p-2.5 rounded-2xl text-[10px] leading-relaxed font-sans relative group/msg ${
-                              msg.sender === "buyer" 
-                                ? "bg-slate-200 text-slate-950 rounded-br-sm" 
-                                : "bg-slate-800 text-slate-100 rounded-bl-sm border border-slate-700/55"
-                            }`}>
-                              <div>{msg.text.replace(/\[\w+\]/g, "").trim()}</div>
-                              {msg.sender === "sora" && (
-                                <button
-                                  onClick={() => speakMockupWithPauses(msg.text)}
-                                  className="absolute right-1 -bottom-2 bg-blue-600 hover:bg-blue-500 text-white rounded-full p-1 opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 transition-opacity duration-200 cursor-pointer shadow-md flex items-center justify-center z-10"
-                                  title="Play Voice"
-                                >
-                                  <Volume2 className="h-2.5 w-2.5" />
-                                </button>
-                              )}
-                            </div>
-                            <span className="text-[7.5px] text-slate-500 mt-0.5 uppercase tracking-wide font-mono">
-                              {msg.sender === "buyer" ? "Visitor" : "Sora Voice"}
-                            </span>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
+                    {/* Dialogue log */}
+                    <div className="flex-1 p-3 overflow-y-auto space-y-2 max-h-[160px] text-[10px] leading-snug">
+                      {mockupDialogue.map((chat, i) => (
+                        <div 
+                          key={i} 
+                          className={`p-2 rounded-xl max-w-[90%] ${
+                            chat.sender === "buyer" 
+                              ? "bg-[#0052A5] text-white ml-auto rounded-tr-none" 
+                              : "bg-slate-800 text-slate-100 mr-auto rounded-tl-none"
+                          }`}
+                        >
+                          {chat.text.replace(/\[\w+\]/g, "")}
+                        </div>
+                      ))}
                     </div>
 
-                    {/* Speech speaking feedback widget */}
-                    {isMockupSpeaking && (
-                      <div className="bg-slate-950/95 border-t border-white/10 p-2 text-[9px] flex items-center justify-between gap-1.5 font-mono text-blue-400">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {isMockupPaused ? (
-                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 select-none"></div>
-                          ) : (
-                            <span className="relative flex h-1.5 w-1.5 shrink-0 select-none">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                            </span>
-                          )}
-                          <span className="truncate text-[8.5px] text-slate-300">
-                            {isMockupPaused ? "Sora Voice is paused..." : "Sora Voice speaking..."}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {isMockupPaused ? (
-                            <button
-                              onClick={handleResumeMockup}
-                              type="button"
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white rounded p-1 flex items-center justify-center transition-colors cursor-pointer"
-                              title="Resume Sora Voice"
-                            >
-                              <Play className="h-2.5 w-2.5 fill-current" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={handlePauseMockup}
-                              type="button"
-                              className="bg-amber-600 hover:bg-amber-400 text-white rounded p-1 flex items-center justify-center transition-colors cursor-pointer"
-                              title="Pause Sora Voice"
-                            >
-                              <Pause className="h-2.5 w-2.5 fill-current" />
-                            </button>
-                          )}
-                          <button
+                    {/* Controls */}
+                    <div className="p-3 border-t border-white/5 bg-slate-950/80 backdrop-blur-md flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {isMockupSpeaking ? (
+                          <Button 
                             onClick={handleStopMockup}
-                            type="button"
-                            className="bg-rose-600 hover:bg-rose-500 text-white rounded p-1 flex items-center justify-center transition-colors cursor-pointer"
-                            title="Stop Voice"
+                            size="icon" 
+                            className="h-6 w-6 bg-rose-500 hover:bg-rose-600 rounded-full text-white"
                           >
-                            <Square className="h-2.5 w-2.5 fill-current" />
-                          </button>
-                        </div>
+                            <Square className="h-3 w-3" />
+                          </Button>
+                        ) : (
+                          <div className="h-6 w-6 rounded-full bg-slate-800 flex items-center justify-center">
+                            <Volume2 className="h-3 w-3 text-slate-400" />
+                          </div>
+                        )}
+                        <span className="text-[9px] text-zinc-400 font-medium">
+                          {isMockupSpeaking ? "Speaking..." : "Ready"}
+                        </span>
                       </div>
-                    )}
-
-                    {/* Simulated Input controls */}
-                    <div className="p-2 border-t border-white/5 bg-slate-950 flex items-center gap-1 text-[9px] text-slate-400 italic">
-                      <span className="truncate flex-1">Guided and matched with your listing disclosures...</span>
-                      <Send className="h-3 w-3 text-slate-600" />
+                      
+                      <div className="text-[9px] text-zinc-500 font-mono font-medium">
+                        Kore Voice (EN/FR)
+                      </div>
                     </div>
                   </div>
-
                 </div>
               </div>
 
-              {/* Right: Simulated Prompt Controls */}
-              <div className="md:col-span-7 space-y-5 text-left pl-0 md:pl-4">
-                <div className="space-y-2">
-                  <span className="text-xs font-extrabold text-[#0a1e3d] uppercase tracking-wider font-mono">Interactive Panel</span>
-                  <h4 className="text-xl font-black text-slate-950 tracking-tight leading-snug">Let buyers explore your listing interactively</h4>
-                  <p className="text-xs text-slate-950 font-semibold leading-relaxed">
-                    AI Open House Connect's conversational engine, pre-loaded with our premium Sora voice assistant, reads your active listing details, floor plans, and PDFs to answer visitor questions in real time. Try clicking a query button below:
+              {/* Right: Triggers & Explicit Consent Checkbox */}
+              <div className="md:col-span-7 space-y-6">
+                <div className="p-4 bg-white border border-stone-200 rounded-2xl shadow-sm space-y-3">
+                  <h4 className="text-sm font-bold text-[#111827]">
+                    {lang === "en" ? "Explicit Buyer Consent Required" : "Consentement explicite obligatoire"}
+                  </h4>
+                  <p className="text-xs text-[#6B7280] leading-relaxed">
+                    {lang === "en" 
+                      ? "Under PIPEDA and Quebec Law 25 regulations, buyers must give explicit, verifiable consent before voice transcriptions are recorded."
+                      : "Sous les réglementations LPRPDE et Loi 25 du Québec, le consentement est requis avant d'entamer l'enregistrement."}
                   </p>
+                  <label className="flex items-start gap-2.5 select-none pt-1">
+                    <input 
+                      type="checkbox" 
+                      checked={consentChecked}
+                      disabled
+                      className="mt-0.5 rounded border-stone-300 text-[#0052A5] focus:ring-transparent h-4 w-4 cursor-not-allowed"
+                    />
+                    <span className="text-xs font-semibold text-[#111827]">
+                      {lang === "en" 
+                        ? "I consent to start the AI tour & log conversation metrics." 
+                        : "Je consens à démarrer la visite et à enregistrer les données."}
+                    </span>
+                  </label>
                 </div>
 
-                {isMockupSpeaking && (
-                  <div className="p-3.5 bg-blue-50/60 border border-blue-100/80 rounded-2xl flex items-center justify-between gap-4 text-xs transition-all duration-300">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Volume2 className={`h-4.5 w-4.5 shrink-0 ${isMockupPaused ? "text-amber-500" : "text-blue-600 animate-bounce"}`} />
-                      <div className="min-w-0">
-                        <p className="font-extrabold text-slate-800 leading-snug">Sora Voice Assistant Active</p>
-                        <p className="text-[10px] text-slate-500 truncate mt-0.5 animate-pulse">
-                          {isMockupPaused ? "Speaking is currently paused" : "Sora Voice is narrating listing info..."}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 font-sans">
-                      {isMockupPaused ? (
-                        <button
-                          onClick={handleResumeMockup}
-                          type="button"
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 select-none cursor-pointer transition-all active:scale-95 shadow-sm"
-                        >
-                          <Play className="h-3 w-3 fill-current" />
-                          <span>Resume</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handlePauseMockup}
-                          type="button"
-                          className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 select-none cursor-pointer transition-all active:scale-95 shadow-sm"
-                        >
-                          <Pause className="h-3 w-3 fill-current" />
-                          <span>Pause</span>
-                        </button>
-                      )}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold text-[#6B7280] uppercase tracking-wider pl-1">
+                    {lang === "en" ? "Select a buyer inquiry:" : "Sélectionnez une question :"}
+                  </h4>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {simulatedQuestions.map((q) => (
                       <button
-                        onClick={handleStopMockup}
-                        type="button"
-                        className="bg-rose-600 hover:bg-rose-500 text-white font-semibold text-[10px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 select-none cursor-pointer transition-all active:scale-95 shadow-sm"
+                        key={q.id}
+                        onClick={() => handleSimulatedQuestion(q)}
+                        className={`text-left p-3 border border-stone-200 bg-white rounded-xl text-xs font-semibold transition-all hover:bg-[#0052A5]/5 hover:border-[#0052A5]/20 cursor-pointer ${
+                          !consentChecked ? "opacity-60 cursor-not-allowed" : ""
+                        }`}
                       >
-                        <Square className="h-3 w-3 fill-current" />
-                        <span>Stop</span>
+                        {lang === "en" ? q.label_en : q.label_fr}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Listing Fact Sheet */}
+                <div className="p-4 bg-[#0052A5]/5 border border-[#0052A5]/10 rounded-2xl space-y-2">
+                  <p className="text-[11px] font-bold text-[#0052A5] uppercase tracking-wider font-mono">
+                    {lang === "en" ? "Source Listing Fact Sheet" : "Fiche descriptive de la propriété"}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <p className="text-stone-500">{lang === "en" ? "Address" : "Adresse"}</p>
+                      <p className="font-bold text-[#111827]">{listingDetails.address}</p>
+                    </div>
+                    <div>
+                      <p className="text-stone-500">{lang === "en" ? "Bedrooms" : "Chambres"}</p>
+                      <p className="font-bold text-[#111827]">{listingDetails.beds} Beds</p>
+                    </div>
+                    <div>
+                      <p className="text-stone-500">{lang === "en" ? "In-Law Suite" : "Suite parentale"}</p>
+                      <p className="font-bold text-[#111827]">Separate Entrance</p>
+                    </div>
+                    <div>
+                      <p className="text-stone-500">{lang === "en" ? "Price (CAD)" : "Prix (CAD)"}</p>
+                      <p className="font-bold text-[#0052A5]">${listingDetails.price.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. Testimonial Carousel with Filter Tags */}
+      <section className="py-24 bg-[#3b82f6] text-white px-6 border-y border-[#3b82f6]/50">
+        <div className="max-w-5xl mx-auto space-y-12">
+          
+          <div className="text-center space-y-3">
+            <span className="text-xs font-bold text-blue-100 tracking-widest uppercase">TESTIMONIALS</span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white">
+              {lang === "en" ? "Hear from top performers using Sora" : "Ils utilisent la technologie de Sora"}
+            </h2>
+            
+            {/* Filter Tags */}
+            <div className="flex justify-center items-center gap-2 pt-4">
+              {["all", "agents", "brokers", "lenders"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => { setActiveTestimonialTab(tab as any); setActiveTestimonialIndex(0); }}
+                  className={`text-xs font-bold px-4 py-2 rounded-full border transition-all hover:scale-105 active:scale-95 duration-200 ${
+                    activeTestimonialTab === tab 
+                      ? "bg-white border-white text-[#3b82f6]" 
+                      : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  }`}
+                >
+                  {tab.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Testimonial slider view */}
+          {(() => {
+            const testimonialsList = [
+              {
+                type: "agents",
+                quote_en: '"AI Open House Connect has completely streamlined how our team manages weekends. Visitors scan the QR, talk to Sora in their native language, and the conversation is pushed as notes straight into Follow Up Boss. It’s perfect."',
+                quote_fr: '"AI Open House Connect a complètement simplifié la gestion de nos fins de semaine. Les visiteurs scannent le QR, discutent avec Sora, et la conversation est intégrée directement dans Follow Up Boss. C\'est parfait."',
+                author: "Sarah Jenkins",
+                role: "Senior Sales Associate, Pinegrove Realty Group • Hamilton, ON",
+                initials: "SJ"
+              },
+              {
+                type: "agents",
+                quote_en: '"Having Sora act as our digital co-host at the front door is incredible. Our buyer lead quality has soared since using the secure offline kiosk tablet."',
+                quote_fr: '"Avoir Sora comme co-hôte numérique à la porte d\'entrée est incroyable. La qualité de nos prospects a augmenté de façon exponentielle depuis l\'utilisation de la tablette de kiosque hors ligne sécurisée."',
+                author: "David Chen",
+                role: "Listing Specialist, Summit Real Estate Brokerage • Burlington, ON",
+                initials: "DC"
+              },
+              {
+                type: "brokers",
+                quote_en: '"From a compliance standpoint, this platform is a game-changer. It enforces RECO-aligned templates and captures liability waivers, protecting our brokerage perfectly on every open house transaction."',
+                quote_fr: '"Du point de vue de la conformité, cette plateforme change la donne. Elle applique des modèles conformes à la RECO et enregistre les décharges de responsabilité, protégeant notre courtage sur chaque transaction de visite libre."',
+                author: "Robert St. John",
+                role: "Managing Broker, Michael St. John Realty • Hamilton, ON",
+                initials: "RS"
+              },
+              {
+                type: "brokers",
+                quote_en: '"The ability to enforce organization-wide routing policies and paired lender overrides gives our regional offices ultimate authority while keeping all compliance logs pristine."',
+                quote_fr: '"La capacité d\'appliquer des politiques d\'acheminement à l\'échelle de l\'organisation et des dérogations pour les prêteurs partenaires donne à nos bureaux régionaux une autorité ultime tout en conservant des registres de conformité parfaits."',
+                author: "Eleanor Vance",
+                role: "Principal Broker, Vanguard Real Estate • Hamilton, ON",
+                initials: "EV"
+              },
+              {
+                type: "lenders",
+                quote_en: '"The Consent Gate ensures we only receive leads who actively requested mortgage assistance. This transparent buyer opt-in system has tripled our pre-qualification rates."',
+                quote_fr: '"La barrière de consentement garantit que nous ne recevons que des prospects ayant activement demandé une aide hypothécaire. Ce système transparent a triplé nos taux de préqualification."',
+                author: "Marcus Brody",
+                role: "Senior Mortgage Planner, Maplewood Mortgage Solutions • Toronto, ON",
+                initials: "MB"
+              },
+              {
+                type: "lenders",
+                quote_en: '"With absolute compliance and direct lender routing rules, we have built a highly reliable partnership with our local real estate teams. A must-have B2B real estate integration."',
+                quote_fr: '"Grâce à une conformité absolue et à des règles de transmission directe des prêteurs, nous avons établi un partenariat très fiable avec nos équipes immobilières locales. Une intégration B2B indispensable."',
+                author: "Fiona Gallagher",
+                role: "VP of Business Development, Dominion Lending Group • Vancouver, BC",
+                initials: "FG"
+              }
+            ];
+
+            const filtered = activeTestimonialTab === "all" 
+              ? testimonialsList 
+              : testimonialsList.filter(item => item.type === activeTestimonialTab);
+
+            const activeIdx = activeTestimonialIndex % filtered.length;
+            const current = filtered[activeIdx] || testimonialsList[0];
+
+            return (
+              <div className="max-w-3xl mx-auto bg-[#3b82f6] border border-blue-400 rounded-3xl p-8 sm:p-10 shadow-lg relative flex flex-col justify-between min-h-[280px]">
+                <div className="space-y-6 text-white">
+                  <p className="text-lg sm:text-xl text-white font-medium leading-relaxed italic">
+                    {lang === "en" ? current.quote_en : current.quote_fr}
+                  </p>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-bold text-white">
+                      {current.initials}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white">{current.author}</h4>
+                      <p className="text-xs text-blue-100">{current.role}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {filtered.length > 1 && (
+                  <div className="flex justify-between items-center mt-6 pt-6 border-t border-blue-400">
+                    <div className="flex gap-1.5">
+                      {filtered.map((_, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveTestimonialIndex(idx)}
+                          className={`h-2 w-2 rounded-full transition-all ${
+                            activeIdx === idx ? "bg-white w-4" : "bg-white/30"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setActiveTestimonialIndex((prev) => (prev - 1 + filtered.length) % filtered.length)}
+                        className="p-1.5 border border-blue-400 rounded-full hover:bg-white/10 transition-colors text-white hover:scale-110 active:scale-95 duration-200"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setActiveTestimonialIndex((prev) => (prev + 1) % filtered.length)}
+                        className="p-1.5 border border-blue-400 rounded-full hover:bg-white/10 transition-colors text-white hover:scale-110 active:scale-95 duration-200"
+                      >
+                        <ChevronRight className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
                 )}
-
-                <div className="space-y-2.5">
-                  {simulatedQuestions.map((q) => (
-                    <button
-                      key={q.id}
-                      onClick={() => handleSimulatedQuestion(q)}
-                      className="w-full p-3 bg-white hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs text-left cursor-pointer transition-all hover:translate-x-1"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0"></span>
-                        <span className="font-extrabold text-slate-800">{q.label}</span>
-                      </div>
-                      <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-                    </button>
-                  ))}
-                </div>
-
-                {/* Reset dialog link */}
-                <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[10px] font-black text-white uppercase tracking-widest leading-none">
-                  <span className="text-white font-extrabold">Microphone feedback simulated</span>
-                  <button 
-                    onClick={() => setMockupDialogue([
-                      { sender: "sora", text: "[slow] Hi, I’m Sora, your AI property assistant. [pause] Welcome to this open house experience. [pause] Tap any buyer question button below to ask me anything about materials, school catchments, or structural features!" }
-                    ])} 
-                    className="hover:text-amber-100 underline text-white font-extrabold cursor-pointer"
-                  >
-                    Clear chat logs
-                  </button>
-                </div>
               </div>
-
-            </div>
-          </motion.div>
+            );
+          })()}
 
         </div>
       </section>
 
-      {/* 4. Problem / Value Split */}
-      <section className="py-20 md:py-28 bg-slate-50 border-b border-slate-200/50 px-6">
-        <div className="max-w-5xl mx-auto space-y-10">
+      {/* 7. Six Alternating Feature Sections (Question-format H2s) */}
+      <section id="features" className="py-24 bg-white scroll-mt-20">
+        <div className="max-w-7xl mx-auto px-6 space-y-32">
           
-          {/* Main H2 Heading */}
-          <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-slate-900 text-center max-w-4xl mx-auto leading-tight">
-            Designed for how buyers actually <br />tour homes today
-          </h2>
-
-          <div className="grid md:grid-cols-2 gap-10 items-start pt-6">
-            
-            {/* Left Headline */}
-            <div className="space-y-4">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#50a2ff] text-red-500 text-xs font-bold tracking-widest uppercase font-mono blue-pulsating-border">
-                <ShieldAlert className="h-4 w-4 shrink-0" />
-                The Structural Disconnect
-              </span>
-              <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
-                Open houses are still too passive
-              </h3>
-            </div>
-
-            {/* Right Copy */}
-            <div className="space-y-6 text-slate-600 text-sm sm:text-base leading-relaxed">
-              <p>
-                Buyers often walk through homes with little context, while agents repeat the same introduction over and over. This product turns the showing into a guided, interactive experience with a welcome message and live property Q&A.
-              </p>
-              
-              <div>
-                <a 
-                  href="#how-it-works" 
-                  className="font-bold text-slate-900 hover:text-slate-800 inline-flex items-center gap-1.5 text-sm"
-                >
-                  Learn how it works
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-      </section>
-
-      {/* 5. How It Works */}
-      <section id="how-it-works" className="py-20 md:py-28 bg-white px-6 scroll-mt-20">
-        <div className="max-w-5xl mx-auto space-y-16">
-          
-          {/* Heading H2 */}
-          <div className="text-center space-y-3">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono">Streamlined Steps</span>
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
-              A better tour in <br className="sm:hidden" /> three steps
+          {/* Section Heading */}
+          <div className="text-center space-y-3 max-w-2xl mx-auto">
+            <span className="text-xs font-bold text-[#0052A5] tracking-widest uppercase">THE COHESIVE MOAT</span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-[#111827]">
+              {lang === "en" ? "Designed for how buyers actually tour homes today." : "Conçu pour la réalité des acheteurs d'aujourd'hui."}
             </h2>
           </div>
 
-          {/* 3 cards in sequence */}
-          <div className="grid md:grid-cols-3 gap-8">
-            
-            {/* Step 1 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="group p-8 rounded-3xl border border-blue-200/50 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl active:scale-98 transition-all duration-300 cursor-default" 
-              style={{ backgroundColor: '#50a2ff' }}
-            >
-              <div className="relative -left-[5px] sm:left-0 space-y-5">
-                <div className="h-10 w-10 bg-slate-950 text-white rounded-xl flex items-center justify-center font-mono font-black text-sm">
-                  01
+          {/* Feature 1 */}
+          <div className="grid md:grid-cols-12 gap-12 items-center bg-[#3b82f6] text-white p-8 sm:p-12 rounded-3xl shadow-xl">
+            <div className="md:col-span-6 space-y-6 text-left">
+              <span className="text-xs font-extrabold text-blue-100 uppercase font-mono">01 / REGISTRATION KIOSK</span>
+              <h3 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
+                {curr.features.question1}
+              </h3>
+              <p className="text-blue-50/90 text-base leading-relaxed">
+                {curr.features.answer1}
+              </p>
+            </div>
+            <div className="md:col-span-6 bg-white rounded-2xl p-6 h-[250px] flex items-center justify-center text-[#111827] shadow-lg">
+              <div className="space-y-3 text-center w-full max-w-xs">
+                <span className="text-[11px] bg-red-500/10 text-rose-600 px-2.5 py-1 rounded-full font-bold">LOCAL OFFLINE QUEUE</span>
+                <p className="text-xs font-bold text-[#111827]">"Local Cache Sync Pending: 4 leads"</p>
+                <div className="h-2 bg-stone-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-rose-500 w-3/4"></div>
                 </div>
-                <h3 className="text-lg font-black text-slate-950 tracking-tight">Open the tour</h3>
-                <p className="text-xs text-slate-950 font-semibold leading-relaxed">
-                  Scan the customizable QR code displayed at the entrance or click the active listing link. No bulky app installation required.
-                </p>
               </div>
-            </motion.div>
-
-            {/* Step 2 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="group p-8 rounded-3xl border border-blue-200/50 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl active:scale-98 transition-all duration-300 cursor-default" 
-              style={{ backgroundColor: '#50a2ff' }}
-            >
-              <div className="relative -left-[5px] sm:left-0 space-y-5">
-                <div className="h-10 w-10 bg-slate-950 text-white rounded-xl flex items-center justify-center font-mono font-black text-sm">
-                  02
-                </div>
-                <h3 className="text-lg font-black text-slate-950 tracking-tight">Hear the welcome</h3>
-                <p className="text-xs text-slate-950 font-semibold leading-relaxed">
-                  An AI assistant greets visitors, providing crucial legal consent logs and offering high-fidelity material packets directly.
-                </p>
-              </div>
-            </motion.div>
-
-            {/* Step 3 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="group p-8 rounded-3xl border border-blue-200/50 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl active:scale-98 transition-all duration-300 cursor-default" 
-              style={{ backgroundColor: '#50a2ff' }}
-            >
-              <div className="relative -left-[5px] sm:left-0 space-y-5">
-                <div className="h-10 w-10 bg-slate-950 text-white rounded-xl flex items-center justify-center font-mono font-black text-sm">
-                  03
-                </div>
-                <h3 className="text-lg font-black text-slate-950 tracking-tight">Ask as you walk</h3>
-                <p className="text-xs text-slate-950 font-semibold leading-relaxed">
-                  Ask about the construction details, local utility fees, school catchments, or room scales naturally while moving room-to-room.
-                </p>
-              </div>
-            </motion.div>
-
+            </div>
           </div>
 
-          {/* Welcome and Q&A framing footnote */}
-          <div className="text-center">
-            <p className="text-xs text-slate-400 italic">
-              *The welcome and Q&A framing is directly reflected in the attached multilingual welcome-message file, which invites visitors to explore and ask about rooms, features, and layout.
+          {/* Feature 2: AI Tour RIGHT AFTER sign-in to show the value immediately */}
+          <div className="grid md:grid-cols-12 gap-12 items-center md:flex-row-reverse">
+            <div className="md:col-span-6 md:order-2 space-y-6 text-left">
+              <span className="text-xs font-extrabold text-[#0052A5] uppercase font-mono">02 / INTERACTIVE AI TOUR</span>
+              <h3 className="text-2xl sm:text-3xl font-bold text-[#111827] leading-tight">
+                {curr.features.question2}
+              </h3>
+              <p className="text-[#6B7280] text-base leading-relaxed">
+                {curr.features.answer2}
+              </p>
+            </div>
+            <div className="md:col-span-6 md:order-1 bg-stone-50 border border-stone-200 rounded-3xl p-6 h-[250px] flex items-center justify-center">
+              <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-md border border-stone-150">
+                <div className="h-12 w-12 rounded-full bg-[#0052A5]/10 flex items-center justify-center">
+                  <Bot className="h-6 w-6 text-[#0052A5]" />
+                </div>
+                <div>
+                  <p className="text-xs text-stone-500">Sora Warm Female Voice</p>
+                  <p className="text-sm font-extrabold text-[#111827]">Sora Classic Profile Active</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 3: Compliance */}
+          <div className="grid md:grid-cols-12 gap-12 items-center bg-[#3b82f6] text-white p-8 sm:p-12 rounded-3xl shadow-xl">
+            <div className="md:col-span-6 space-y-6 text-left">
+              <span className="text-xs font-extrabold text-blue-100 uppercase font-mono">03 / COMPLIANCE & PRIVACY</span>
+              <h3 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
+                {curr.features.question3}
+              </h3>
+              <p className="text-blue-50/90 text-base leading-relaxed">
+                {curr.features.answer3}
+              </p>
+            </div>
+            <div className="md:col-span-6 bg-white rounded-2xl p-6 h-[250px] flex items-center justify-center text-[#111827] shadow-lg">
+              <div className="space-y-2 text-center">
+                <ShieldCheck className="h-10 w-10 text-emerald-500 mx-auto" />
+                <p className="text-sm font-bold text-[#111827]">PIPEDA + Law 25 Compliant</p>
+                <p className="text-xs text-stone-500">Transcripts secure. Explicit consent required.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 4: Lenders */}
+          <div className="grid md:grid-cols-12 gap-12 items-center md:flex-row-reverse">
+            <div className="md:col-span-6 md:order-2 space-y-6 text-left">
+              <span className="text-xs font-extrabold text-[#0052A5] uppercase font-mono">04 / INTEGRATED LENDERS</span>
+              <h3 className="text-2xl sm:text-3xl font-bold text-[#111827] leading-tight">
+                {curr.features.question4}
+              </h3>
+              <p className="text-[#6B7280] text-base leading-relaxed">
+                {curr.features.answer4}
+              </p>
+            </div>
+            <div className="md:col-span-6 md:order-1 bg-stone-50 border border-stone-200 rounded-3xl p-6 h-[250px] flex items-center justify-center">
+              <div className="p-4 bg-white rounded-2xl shadow-md border border-stone-150 max-w-xs space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-[#111827]">Mortgage Interest Opt-in</span>
+                  <span className="text-emerald-500 font-bold">YES</span>
+                </div>
+                <div className="h-px bg-stone-100"></div>
+                <p className="text-[10px] text-stone-500">Auto-routes lead directly to paired lenders queue.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 5: Branding */}
+          <div className="grid md:grid-cols-12 gap-12 items-center bg-[#3b82f6] text-white p-8 sm:p-12 rounded-3xl shadow-xl">
+            <div className="md:col-span-6 space-y-6 text-left">
+              <span className="text-xs font-extrabold text-blue-100 uppercase font-mono">05 / BRANDING CONTROL</span>
+              <h3 className="text-2xl sm:text-3xl font-bold text-white leading-tight">
+                {curr.features.question5}
+              </h3>
+              <p className="text-blue-50/90 text-base leading-relaxed">
+                {curr.features.answer5}
+              </p>
+            </div>
+            <div className="md:col-span-6 bg-white rounded-2xl p-6 h-[250px] flex items-center justify-center text-[#111827] shadow-lg">
+              <div className="text-center space-y-2">
+                <div className="font-bold text-[#0052A5] uppercase tracking-widest text-sm">MICHAEL ST. JOHN</div>
+                <p className="text-xs text-stone-500">Accent Color: #0052A5</p>
+                <span className="text-[10px] border border-stone-200 px-2 py-0.5 rounded text-stone-500">MLS Unbranded available</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature 6: CRM */}
+          <div className="grid md:grid-cols-12 gap-12 items-center md:flex-row-reverse">
+            <div className="md:col-span-6 md:order-2 space-y-6 text-left">
+              <span className="text-xs font-extrabold text-[#0052A5] uppercase font-mono">06 / FOLLOW UP BOSS CRM</span>
+              <h3 className="text-2xl sm:text-3xl font-bold text-[#111827] leading-tight">
+                {curr.features.question6}
+              </h3>
+              <p className="text-[#6B7280] text-base leading-relaxed">
+                {curr.features.answer6}
+              </p>
+            </div>
+            <div className="md:col-span-6 md:order-1 bg-stone-50 border border-stone-200 rounded-3xl p-6 h-[250px] flex items-center justify-center">
+              <div className="space-y-3 w-full max-w-xs">
+                <div className="p-3 bg-white border border-stone-200 rounded-xl shadow-sm text-xs font-bold text-[#111827] flex justify-between">
+                  <span>Follow Up Boss Integration</span>
+                  <span className="text-[#0052A5]">Active</span>
+                </div>
+                <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-[10.5px] font-semibold text-center">
+                  Tags added: fub-mortgage-interest
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* 8. Brokerage Templates SEO Grid */}
+      <section className="py-24 bg-[#3b82f6] text-white border-y border-[#3b82f6]/50 px-6">
+        <div className="max-w-7xl mx-auto space-y-12">
+          <div className="text-center space-y-3">
+            <span className="text-xs font-bold text-blue-100 tracking-widest uppercase">COMPLIANCE & ORGANIZATIONS</span>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white">
+              {lang === "en" ? "SEO Brokerage Listing Templates" : "Modèles SEO de fiches immobilières"}
+            </h2>
+            <p className="text-blue-50/90 max-w-xl mx-auto text-sm">
+              {lang === "en" 
+                ? "Perfectly customized layouts compliant with RECO standards. Search or deploy yours instantly."
+                : "Des mises en page entièrement personnalisées et conformes aux normes d'Ontario. Déployez le vôtre en quelques secondes."}
             </p>
           </div>
 
-        </div>
-      </section>
-
-      {/* 6. Feature Grid */}
-      <section id="features" className="py-20 md:py-28 px-6 border-y border-blue-200/30" style={{ backgroundColor: '#50a2ff' }}>
-        <div className="max-w-5xl mx-auto space-y-16">
-          
-          {/* Heading H2 */}
-          <div className="text-center space-y-3">
-            <span className="text-xs font-black text-slate-950 uppercase tracking-widest font-mono">Product Capabilities</span>
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-950">
-              Everything you need for a smarter open house
-            </h2>
-          </div>
-
-          {/* 6 feature blocks */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((f, i) => (
-              <motion.div 
-                initial={{ opacity: 0, y: 25 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.4, delay: (i % 3) * 0.1 }}
-                key={`feat-${i}`}
-                className="group p-6 bg-white rounded-2xl border border-blue-200/50 text-left space-y-4 hover:shadow-2xl hover:scale-105 active:scale-98 transition-all duration-300 cursor-default"
-              >
-                <div className="h-10 w-10 bg-slate-950 text-white rounded-xl flex items-center justify-center">
-                  <f.icon className="h-5 w-5" />
+            {[
+              "Michael St. Jean Realty",
+              "RE/MAX Escarpment",
+              "Royal LePage State",
+              "Sotheby's International",
+              "Century 21 Canada",
+              "Keller Williams Complete"
+            ].map((br, idx) => (
+              <div key={idx} className="bg-white text-[#111827] border border-stone-200 rounded-2xl p-6 shadow-md hover:shadow-2xl hover:scale-105 active:scale-95 duration-300 transition-all transform cursor-pointer space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-[#0052A5] tracking-wider uppercase">Ontario Template</span>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">RECO Compliant</span>
                 </div>
-                <h3 className="text-base font-extrabold text-slate-950 tracking-tight">{f.title}</h3>
-                <p className="text-xs text-slate-600 leading-relaxed font-semibold">{f.desc}</p>
-              </motion.div>
+                <h4 className="font-bold text-[#111827] text-base">{br}</h4>
+                <p className="text-xs text-[#6B7280] leading-normal">
+                  Pre-mapped branding configurations, unbranded virtual tours, and automated mortgage routing rules.
+                </p>
+              </div>
             ))}
           </div>
-
-          {/* Multilingual claim footnote */}
-          <div className="text-center pt-2">
-            <p className="text-xs text-slate-950 font-bold italic">
-              *The multilingual claim should remain prominent because the attached file shows prepared welcome-message support in 70+ languages.
-            </p>
-          </div>
-
         </div>
       </section>
 
-      {/* 7. Multilingual Section */}
-      <section className="py-20 md:py-28 bg-white px-6">
-        <div className="max-w-5xl mx-auto space-y-16">
-          
-          {/* Heading H2 */}
-          <div className="text-center">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
-              Welcome more buyers in their language
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-12 gap-10 items-center">
-            
-            {/* Left Column Description */}
-            <div className="md:col-span-5 space-y-5 text-left">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono">Demographics & Reach</span>
-              <p className="text-slate-600 text-sm sm:text-base leading-relaxed font-normal">
-                Ensure every guest tours with absolute comfort. AI Open House Connect provides real estate-focused, context-aware instant translation. Boost buyer accessibility, improve brand presence, and capture global investor leads without language barriers.
-              </p>
-              <div className="pt-2">
-                <Button 
-                  onClick={() => setIsDemoModalOpen(true)}
-                  className="bg-slate-950 hover:bg-slate-800 text-white text-xs px-4 py-2 rounded-lg font-bold"
-                >
-                  Schedule Translation Demo
-                </Button>
-              </div>
-            </div>
-
-            {/* Right Column Visual Language Grid or Globe element */}
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 30 }}
-              whileInView={{ opacity: 1, scale: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.5 }}
-              className="group md:col-span-7 p-6 sm:p-8 rounded-3xl border border-blue-200/80 transition-all duration-300 hover:shadow-xl cursor-default" 
-              style={{ backgroundColor: '#50a2ff' }}
-            >
-              <div className="space-y-4 relative -left-[5px] sm:left-0">
-                <div className="flex items-center justify-between border-b border-blue-300 pb-3">
-                  <span className="text-xs font-black font-mono uppercase tracking-widest text-[#0a1e3d]">Global Prepared Translation Hub</span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-blue-600 border border-blue-200 font-extrabold">70+ LANGUAGES</span>
-                </div>
-                
-                <div className="flex flex-wrap gap-2">
-                  {[...premiumLanguages].sort((a, b) => a.name.localeCompare(b.name)).map((lang, lIdx) => (
-                    <div 
-                      key={`lang-${lIdx}`}
-                      className="px-3 py-2 bg-white rounded-xl border border-slate-200/60 shadow-sm flex items-center justify-between text-xs text-slate-800 hover:border-slate-400 hover:shadow-sm cursor-default transition-all duration-300 gap-3"
-                    >
-                      <span className="font-extrabold text-slate-900">{lang.name}</span>
-                      <span className="text-[10px] text-slate-500 italic font-mono font-bold">{lang.native}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="pt-3 border-t border-blue-300 text-[10px] text-slate-950 font-semibold leading-normal">
-                  *Our ready-to-use template collection includes prepared native translated welcome flows in Spanish, German, Italian, Portuguese, Simplified Chinese, Traditional Chinese, Japanese, Korean, Dutch, Russian, Vietnamese, Arabic, and Hindi.
-                </div>
-              </div>
-            </motion.div>
-
-          </div>
-
-        </div>
-      </section>
-
-      {/* 8. Use Cases */}
-      <section id="use-cases" className="py-20 md:py-28 px-6 scroll-mt-20 border-t border-blue-200/30" style={{ backgroundColor: '#50a2ff' }}>
-        <div className="max-w-5xl mx-auto space-y-16">
-          
-          {/* Heading H2 */}
-          <div className="text-center space-y-3">
-            <span className="text-xs font-black text-slate-950 uppercase tracking-widest font-mono">Flexible Deployments</span>
-            <h2 className="text-3xl md:text-4xl font-black tracking-tight text-slate-950">
-              Built for more than one kind of showing
-            </h2>
-          </div>
-
-          {/* 6 Tiles */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            
-            {/* Tile 1 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 25 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-              className="group bg-white p-6 rounded-2xl border border-blue-200/50 space-y-3 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 cursor-default"
-            >
-              <span className="text-[10px] font-black font-mono uppercase tracking-wider text-slate-500">Open houses</span>
-              <h3 className="text-base font-extrabold text-slate-950 tracking-tight">Modern Digital Sign-In</h3>
-              <p className="text-xs text-slate-600 font-semibold leading-normal">
-                Ditch physical pads. Capture digital name, email, and phone validation with direct CRM routing.
-              </p>
-            </motion.div>
-
-            {/* Tile 2 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 25 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-              className="group bg-white p-6 rounded-2xl border border-blue-200/50 space-y-3 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 cursor-default"
-            >
-              <span className="text-[10px] font-black font-mono uppercase tracking-wider text-slate-500">Vacant homes</span>
-              <h3 className="text-base font-extrabold text-slate-950 tracking-tight">Self-Guided Inquiries</h3>
-              <p className="text-xs text-slate-600 font-semibold leading-normal">
-                Provide secure touchless scanning, letting prospective buyers tour empty homes with continuous AI accompaniment.
-              </p>
-            </motion.div>
-
-            {/* Tile 3 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 25 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-              className="group bg-white p-6 rounded-2xl border border-blue-200/50 space-y-3 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 cursor-default"
-            >
-              <span className="text-[10px] font-black font-mono uppercase tracking-wider text-slate-500">Self-guided tours</span>
-              <h3 className="text-base font-extrabold text-slate-950 tracking-tight">Private Walkthroughs</h3>
-              <p className="text-xs text-slate-600 font-semibold leading-normal">
-                Let buyers explore silently at their own preferred pace while keeping accurate voice guides readily available on prompt.
-              </p>
-            </motion.div>
-
-            {/* Tile 4 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 25 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-              className="group bg-white p-6 rounded-2xl border border-blue-200/50 space-y-3 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 cursor-default"
-            >
-              <span className="text-[10px] font-black font-mono uppercase tracking-wider text-slate-500">New developments</span>
-              <h3 className="text-base font-extrabold text-slate-950 tracking-tight">Interactive Pre-Sales</h3>
-              <p className="text-xs text-slate-600 font-semibold leading-normal">
-                Explain blueprint materials, structural options, and deliver brochures instantly to buyer email folders.
-              </p>
-            </motion.div>
-
-            {/* Tile 5 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 25 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: 0.2 }}
-              className="group bg-white p-6 rounded-2xl border border-blue-200/50 space-y-3 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 cursor-default"
-            >
-              <span className="text-[10px] font-black font-mono uppercase tracking-wider text-slate-500">Broker teams</span>
-              <h3 className="text-base font-extrabold text-slate-950 tracking-tight">Centralized Team Controls</h3>
-              <p className="text-xs text-slate-600 font-semibold leading-normal">
-                Maintain uniform RECO compliance templates, branding, and round-robin lead routing rules effortlessly.
-              </p>
-            </motion.div>
-
-            {/* Tile 6 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 25 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.4, delay: 0.3 }}
-              className="group bg-white p-6 rounded-2xl border border-blue-200/50 space-y-3 text-left hover:scale-105 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300 cursor-default"
-            >
-              <span className="text-[10px] font-black font-mono uppercase tracking-wider text-slate-500">Multilingual buyer traffic</span>
-              <h3 className="text-base font-extrabold text-slate-950 tracking-tight">Inclusive Accessibility</h3>
-              <p className="text-xs text-slate-600 font-semibold leading-normal">
-                Greet buyer traffic from any background natively, ensuring immediate engagement and high-quality lead scoring.
-              </p>
-            </motion.div>
-
-          </div>
-
-          {/* Use case grounding footnote */}
-          <div className="text-center">
-            <p className="text-xs text-slate-950 font-bold italic leading-relaxed">
-              This section should reassure buyers that the product is broader than a one-time open-house tool while still staying anchored in the core use case.
-            </p>
-          </div>
-
-        </div>
-      </section>
-
-      {/* 9. Demo CTA Band */}
-      <section className="py-16 bg-slate-900 text-white relative overflow-hidden px-6">
-        <div className="max-w-4xl mx-auto text-center space-y-6 relative z-10">
-          
-          {/* Heading H2 */}
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
-            See what buyers experience <br />
-            the moment the tour starts
+      {/* 9. Final CTA Band */}
+      <section id="pricing" className="py-24 bg-[#0B1220] text-center px-6 text-white relative">
+        <div className="max-w-4xl mx-auto space-y-8 relative z-10">
+          <span className="text-xs font-bold text-[#0052A5] tracking-widest uppercase bg-[#0052A5]/10 px-3 py-1 rounded-full border border-[#0052A5]/30">
+            {lang === "en" ? "GET STARTED TODAY" : "COMMENCER DÈS AUJOURD'HUI"}
+          </span>
+          <h2 className="text-3xl sm:text-5xl font-bold tracking-tight">
+            {lang === "en" ? "Give every listing a better tour experience today" : "Offrez une meilleure visite pour chaque propriété"}
           </h2>
-
-          <p className="text-slate-300 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
-            Preview the welcome, the interaction flow, and the buyer Q&A in a live walkthrough.
+          <p className="text-stone-400 max-w-xl mx-auto text-base sm:text-lg">
+            {lang === "en"
+              ? "Join top Canadian real estate brokerages. Deploy Sora as your smart on-demand open house host."
+              : "Rejoignez les meilleurs courtiers immobiliers canadiens. Déployez Sora pour vos visites libres."}
           </p>
-
-          <div className="pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button 
-              size="lg"
               onClick={() => setIsDemoModalOpen(true)}
-              className="bg-white hover:bg-slate-100 text-slate-900 font-bold px-8 h-12 rounded-xl text-sm"
+              size="lg"
+              className="w-full sm:w-auto h-14 px-8 bg-[#0052A5] hover:bg-[#004185] text-white font-bold rounded-xl text-base border-2 border-white hover:scale-105 active:scale-95 transition-all duration-200 shadow-md cursor-pointer"
             >
-              Schedule a Demo
+              {lang === "en" ? "Book a Demo" : "Réserver une démo"}
             </Button>
+            <Link 
+              to="/register"
+              className="w-full sm:w-auto h-14 px-8 inline-flex items-center justify-center bg-transparent border-2 border-white text-white hover:bg-stone-900 font-bold rounded-xl text-base hover:scale-105 active:scale-95 transition-all duration-200 shadow-md"
+            >
+              {lang === "en" ? "Get Started Free" : "Commencer gratuitement"}
+            </Link>
           </div>
-
         </div>
-
-        {/* Diagonal glowing streak */}
-        <div className="absolute top-0 right-0 w-80 h-[100%] bg-blue-500/10 -skew-x-12 pointer-events-none blur-3xl"></div>
       </section>
 
-      {/* 10. FAQ */}
-      <section id="faq" className="py-20 md:py-28 bg-white px-6 scroll-mt-20">
-        <div className="max-w-3xl mx-auto space-y-12">
+      {/* 10. Footer (3 columns on #0052A5 background) */}
+      <footer className="bg-[#0052A5] text-white pt-16 pb-12 px-6">
+        <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-12 border-b border-white/20 pb-12 mb-12">
           
-          {/* Heading H2 */}
-          <div className="text-center space-y-3">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest font-mono">Got Questions?</span>
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
-              Frequently asked questions
-            </h2>
-          </div>
-
+          {/* Column 1: Brand & Compliance info */}
           <div className="space-y-4">
-            {faqs.map((faq, index) => {
-              const isOpen = openFaqIndices[index];
-              return (
-                <div 
-                  key={`faq-${index}`}
-                  className={`group border border-slate-200/60 rounded-2xl overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 cursor-default ${
-                    isOpen 
-                      ? 'bg-[#162556] text-white' 
-                      : 'bg-slate-50 hover:bg-[#162556]'
-                  }`}
-                >
-                  <button
-                    onClick={() => toggleFaq(index)}
-                    className={`w-full p-5 flex items-center justify-between text-left font-bold text-sm sm:text-base cursor-pointer transition-colors duration-300 outline-none ${
-                      isOpen ? 'text-white' : 'text-slate-900 group-hover:text-white'
-                    }`}
-                  >
-                    <span>{faq.q}</span>
-                    {isOpen ? (
-                      <ChevronUp className="h-5 w-5 text-white shrink-0 transition-colors duration-300" />
-                    ) : (
-                      <ChevronDown className="h-5 w-5 text-slate-500 group-hover:text-blue-100 shrink-0 transition-colors duration-300" />
-                    )}
-                  </button>
-                  
-                  {isOpen && (
-                    <div className={`px-5 pb-5 pt-1 text-xs sm:text-sm leading-relaxed border-t transition-all duration-300 ${
-                      isOpen 
-                        ? 'text-blue-100 border-white/20' 
-                        : 'text-slate-500 group-hover:text-blue-100 border-slate-100'
-                    }`}>
-                      {faq.a}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* FAQ multilingual grounding info */}
-          <div className="text-center pt-2">
-            <p className="text-xs text-slate-400 italic">
-              *The multilingual answer should cite that the current welcome-message set already spans 70+ languages.
+            <Logo variant="white" />
+            <p className="text-xs text-stone-100/80 leading-relaxed">
+              AI Open House Connect is a bilingual (EN/FR) platform designed for Canadian brokerages. Guided tours, smart offline kiosks, and direct CRM pipelines.
+            </p>
+            <p className="text-[10px] text-stone-200/60 leading-normal">
+              Fully compliant with PIPEDA guidelines, Quebec's Law 25 privacy codes, and RECO unbranded requirements in Ontario.
             </p>
           </div>
 
-        </div>
-      </section>
+          {/* Column 2: Product features */}
+          <div className="space-y-4 text-left">
+            <h4 className="font-bold text-xs uppercase tracking-widest text-stone-200">Product & Features</h4>
+            <ul className="space-y-2 text-xs text-stone-100/90">
+              <li><a href="#product" className="hover:underline">Interactive AI Tours</a></li>
+              <li><a href="#features" className="hover:underline">Kiosk Sign-In Mode</a></li>
+              <li><a href="#features" className="hover:underline">Lender Consent Routing</a></li>
+              <li><a href="#features" className="hover:underline">Follow Up Boss Direct Sync</a></li>
+            </ul>
+          </div>
 
-      {/* 11. Final CTA */}
-      <section className="py-20 md:py-28 border-t border-blue-200/30 px-6" style={{ backgroundColor: '#50a2ff' }}>
-        <div className="max-w-4xl mx-auto text-center space-y-8">
-          
-          {/* Heading H2 */}
-          <h2 className="text-3xl md:text-5xl font-black tracking-tight text-slate-950">
-            Give every listing a <br />
-            better tour experience
-          </h2>
-
-          <p className="text-slate-950 font-semibold text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
-            Welcome buyers, guide the walkthrough, and answer questions in real time with an AI-powered property tour built for modern open houses. The multilingual welcome-message system strengthens the first interaction and broadens accessibility.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Button 
-              size="lg"
-              onClick={() => setIsDemoModalOpen(true)}
-              className="w-full sm:w-auto h-12 px-8 bg-slate-950 hover:bg-slate-900 text-white font-bold rounded-xl text-sm border-none shadow-md"
-            >
-              Book a Demo
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsDemoModalOpen(true)}
-              className="w-full sm:w-auto h-12 px-8 bg-white border border-slate-200 text-slate-800 font-bold rounded-xl text-sm hover:bg-slate-50 transition-colors shadow-sm"
-            >
-              Talk to Sales
-            </Button>
+          {/* Column 3: Legal Disclosures */}
+          <div className="space-y-4 text-left">
+            <h4 className="font-bold text-xs uppercase tracking-widest text-stone-200">Legal & Disclosures</h4>
+            <ul className="space-y-2 text-xs text-stone-100/90">
+              <li><Link to="/privacy" className="hover:underline">Privacy Policy (PIPEDA / Law 25)</Link></li>
+              <li><Link to="/terms" className="hover:underline">Terms of Service</Link></li>
+              <li><Link to="/compliance" className="hover:underline">Ontario RECO Compliance Details</Link></li>
+              <li><Link to="/contact" className="hover:underline">Contact Compliance Team</Link></li>
+            </ul>
           </div>
 
         </div>
-      </section>
 
-      {/* 12. Footer */}
-      <footer className="bg-slate-950 text-slate-400 text-xs py-16 px-6 border-t border-slate-900">
-        <div className="max-w-7xl mx-auto space-y-12">
-          
-          {/* Columns */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            
-            {/* Column 1 - Product */}
-            <div className="space-y-4">
-              <h4 className="font-extrabold text-[10px] uppercase tracking-widest text-white">Product</h4>
-              <ul className="space-y-2.5">
-                <li><a href="#product" className="hover:text-white transition-colors">Interactive Tours</a></li>
-                <li><a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a></li>
-                <li><a href="#features" className="hover:text-white transition-colors font-semibold text-blue-400">Feature Deck</a></li>
-                <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing Plans</Link></li>
-              </ul>
-            </div>
-
-            {/* Column 2 - Company */}
-            <div className="space-y-4">
-              <h4 className="font-extrabold text-[10px] uppercase tracking-widest text-white">Company</h4>
-              <ul className="space-y-2.5">
-                <li><Link to="/contact" className="hover:text-white transition-colors">About Team</Link></li>
-                <li><a href="mailto:support@aiopenhouseconnect.com" className="hover:text-white transition-colors">Media Kit</a></li>
-                <li><Link to="/contact" className="hover:text-white transition-colors">Careers</Link></li>
-                <li><Link to="/contact" className="hover:text-white transition-colors">Partnerships</Link></li>
-              </ul>
-            </div>
-
-            {/* Column 3 - Resources */}
-            <div className="space-y-4">
-              <h4 className="font-extrabold text-[10px] uppercase tracking-widest text-white">Resources</h4>
-              <ul className="space-y-2.5">
-                <li><Link to="/compliance" className="hover:text-white transition-colors">Agency Disclosures</Link></li>
-                <li><Link to="/open-houses" className="hover:text-white transition-colors">Open House Manual</Link></li>
-                <li><Link to="/url-import" className="hover:text-white transition-colors">URL Extraction API</Link></li>
-                <li><Link to="/integrations" className="hover:text-white transition-colors">CRM Field Routing</Link></li>
-              </ul>
-            </div>
-
-            {/* Column 4 - Contact */}
-            <div className="space-y-4">
-              <h4 className="font-extrabold text-[10px] uppercase tracking-widest text-white">Contact</h4>
-              <ul className="space-y-2.5">
-                <li><Link to="/contact" className="hover:text-white transition-colors">Contact Concierge</Link></li>
-                <li className="text-zinc-500 font-mono text-[10px]">support@aiopenhouseconnect.com</li>
-                <li className="text-zinc-500 font-mono text-[10px]">AI Open House Connect Headquarters</li>
-                <li className="text-zinc-500 font-mono text-[10px]">Toronto, ON, Canada</li>
-              </ul>
-            </div>
-
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-200/75">
+          <p>© 2026 AI Open House Connect Inc. Founded in Hamilton, Ontario. All rights reserved.</p>
+          <div className="flex gap-4 mt-4 sm:mt-0">
+            <span>Bilingual Service EN/FR</span>
+            <span>|</span>
+            <span>Sora Voice: Kore</span>
           </div>
-
-          {/* Bottom row: copyright, privacy, terms */}
-          <div className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] text-zinc-500">
-            <span>&copy; {new Date().getFullYear()} AI Open House Connect Inc. All rights reserved.</span>
-            <div className="flex gap-6">
-              <Link to="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-              <Link to="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-              <Link to="/compliance" className="hover:text-white transition-colors">RECO Regulatory Disclosure</Link>
-            </div>
-          </div>
-
         </div>
       </footer>
 
-      {/* Realistic Booking Dialog / Modal */}
+      {/* 11. Custom Validated Demo Booking Modal */}
       <Dialog open={isDemoModalOpen} onOpenChange={setIsDemoModalOpen}>
-        <DialogContent className="sm:max-w-[420px] rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl">
-          <DialogHeader className="space-y-2.5 text-left">
-            <div className="h-10 w-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-bold">
-              <CalendarDays className="h-5 w-5" />
-            </div>
-            <DialogTitle className="text-xl font-bold tracking-tight text-slate-950 font-sans">
-              Schedule a Demo
+        <DialogContent className="sm:max-w-[480px] bg-white border border-stone-200 rounded-3xl p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-[#111827]">
+              {lang === "en" ? "Schedule a Custom AI Tour Demo" : "Planifier une démo personnalisée"}
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 leading-relaxed font-normal">
-              Book a live walking walkthrough of AI Open House Connect. Provide your information below and an account specialist will coordinate with you.
+            <DialogDescription className="text-xs text-[#6B7280]">
+              {lang === "en" 
+                ? "Provide your details. Our system uses strict validation to confirm agent credentials."
+                : "Saisissez vos informations. Notre système utilise une validation stricte."}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleBookingSubmit} className="space-y-4 pt-2">
-            {/* 1. Full Name */}
-            <div className="space-y-1.5 text-left">
-              <div className="flex justify-between items-start gap-2">
-                <Label htmlFor="demo_fullName" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block pt-0.5">Full Name</Label>
-                {bookingTouched.name && bookingErrors.name && !bookingErrors.name.isValid && (
-                  <span className="text-rose-600 text-[10px] font-semibold text-right leading-tight max-w-[240px]">
-                    {bookingErrors.name.errorMessage}
-                  </span>
-                )}
-                {bookingTouched.name && (!bookingErrors.name || bookingErrors.name.isValid) && bookingForm.name && (
-                  <span className="text-emerald-600 text-[10px] font-bold text-right leading-none">✓ Valid</span>
-                )}
-              </div>
+          <form onSubmit={handleBookingSubmit} className="space-y-4 pt-2 text-left">
+            
+            {/* Full Name field with Capitalization validation */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-[#111827]">
+                {lang === "en" ? "Full Name" : "Nom complet"} <span className="text-[#0052A5]">*</span>
+              </Label>
               <Input 
-                id="demo_fullName"
                 value={bookingForm.name}
-                onChange={e => handleBookingNameChange(e.target.value)}
-                onBlur={() => {
-                  setBookingTouched(prev => ({ ...prev, name: true }));
-                  validateBookingField("name", bookingForm.name);
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const formatted = val.replace(/\b\w/g, char => char.toUpperCase());
+                  setBookingForm(prev => ({ ...prev, name: formatted }));
+                  if (bookingTouched.name) validateBookingField("name", formatted);
                 }}
-                placeholder="John Smith"
-                className={`bg-slate-50/50 h-10 text-xs rounded-xl transition-all duration-200 ${
-                  bookingTouched.name 
-                    ? bookingErrors.name && !bookingErrors.name.isValid
-                      ? "border-rose-500 bg-rose-50/10 focus-visible:ring-rose-500" 
-                      : "border-emerald-500 bg-emerald-50/10 focus-visible:ring-emerald-500"
-                    : "border-slate-200"
-                }`}
-                required
+                onBlur={() => {
+                  const formatted = bookingForm.name.replace(/\b\w/g, char => char.toUpperCase()).trim().replace(/\s+/g, " ");
+                  setBookingForm(prev => ({ ...prev, name: formatted }));
+                  setBookingTouched(prev => ({ ...prev, name: true }));
+                  validateBookingField("name", formatted);
+                }}
+                placeholder="e.g. Michael Jean"
+                className="rounded-xl border-stone-200 text-sm h-11"
               />
+              {bookingTouched.name && bookingErrors.name && !bookingErrors.name.isValid && (
+                <p className="text-xs text-rose-600 font-medium pl-1">{bookingErrors.name.errorMessage}</p>
+              )}
             </div>
 
-            {/* 2. Email Address */}
-            <div className="space-y-1.5 text-left">
-              <div className="flex justify-between items-start gap-2">
-                <Label htmlFor="demo_email" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block pt-0.5">Email Address</Label>
-                {bookingTouched.email && bookingErrors.email && !bookingErrors.email.isValid && (
-                  <span className="text-rose-600 text-[10px] font-semibold text-right leading-tight max-w-[240px]">
-                    {bookingErrors.email.errorMessage}
-                  </span>
-                )}
-                {bookingTouched.email && (!bookingErrors.email || bookingErrors.email.isValid) && bookingForm.email && (
-                  <span className="text-emerald-600 text-[10px] font-bold text-right leading-none">✓ Valid</span>
-                )}
-              </div>
+            {/* Email field */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-[#111827]">
+                {lang === "en" ? "Email Address" : "Adresse courriel"} <span className="text-[#0052A5]">*</span>
+              </Label>
               <Input 
-                id="demo_email"
                 type="email"
                 value={bookingForm.email}
-                onChange={e => handleBookingEmailChange(e.target.value)}
+                onChange={(e) => {
+                  setBookingForm(prev => ({ ...prev, email: e.target.value }));
+                  if (bookingTouched.email) validateBookingField("email", e.target.value);
+                }}
                 onBlur={() => {
                   setBookingTouched(prev => ({ ...prev, email: true }));
                   validateBookingField("email", bookingForm.email);
                 }}
-                placeholder="name@example.com"
-                className={`bg-slate-50/50 h-10 text-xs rounded-xl transition-all duration-200 ${
-                  bookingTouched.email 
-                    ? bookingErrors.email && !bookingErrors.email.isValid
-                      ? "border-rose-500 bg-rose-50/10 focus-visible:ring-rose-500" 
-                      : "border-emerald-500 bg-emerald-50/10 focus-visible:ring-emerald-500"
-                    : "border-slate-200"
-                }`}
-                required
+                placeholder="agent@example.com"
+                className="rounded-xl border-stone-200 text-sm h-11"
               />
+              {bookingTouched.email && bookingErrors.email && !bookingErrors.email.isValid && (
+                <p className="text-xs text-rose-600 font-medium pl-1">{bookingErrors.email.errorMessage}</p>
+              )}
             </div>
 
-            {/* 3. Phone Number */}
-            <div className="space-y-1.5 text-left">
-              <div className="flex justify-between items-start gap-2">
-                <Label htmlFor="demo_phone" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block pt-0.5">Phone Number</Label>
-                {bookingTouched.phone && bookingErrors.phone && !bookingErrors.phone.isValid && (
-                  <span className="text-rose-600 text-[10px] font-semibold text-right leading-tight max-w-[240px]">
-                    {bookingErrors.phone.errorMessage}
-                  </span>
-                )}
-                {bookingTouched.phone && (!bookingErrors.phone || bookingErrors.phone.isValid) && bookingForm.phone && (
-                  <span className="text-emerald-600 text-[10px] font-bold text-right leading-none">✓ Valid</span>
-                )}
-              </div>
+            {/* Phone field */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-[#111827]">
+                {lang === "en" ? "Phone Number" : "Numéro de téléphone"} <span className="text-[#0052A5]">*</span>
+              </Label>
               <Input 
-                id="demo_phone"
-                type="tel"
                 value={bookingForm.phone}
-                onChange={e => handleBookingPhoneChange(e.target.value)}
+                onChange={(e) => {
+                  const formatted = formatPhoneNumber(e.target.value);
+                  setBookingForm(prev => ({ ...prev, phone: formatted }));
+                  if (bookingTouched.phone) validateBookingField("phone", formatted);
+                }}
                 onBlur={() => {
                   setBookingTouched(prev => ({ ...prev, phone: true }));
                   validateBookingField("phone", bookingForm.phone);
                 }}
                 placeholder="(289) 659-2541"
-                className={`bg-slate-50/50 h-10 text-xs rounded-xl transition-all duration-200 ${
-                  bookingTouched.phone 
-                    ? bookingErrors.phone && !bookingErrors.phone.isValid
-                      ? "border-rose-500 bg-rose-50/10 focus-visible:ring-rose-500" 
-                      : "border-emerald-500 bg-emerald-50/10 focus-visible:ring-emerald-500"
-                    : "border-slate-200"
-                }`}
-                required
+                className="rounded-xl border-stone-200 text-sm h-11"
               />
+              {bookingTouched.phone && bookingErrors.phone && !bookingErrors.phone.isValid && (
+                <p className="text-xs text-rose-600 font-medium pl-1">{bookingErrors.phone.errorMessage}</p>
+              )}
             </div>
 
-            {/* 4. Website */}
-            <div className="space-y-1.5 text-left">
-              <div className="flex justify-between items-start gap-2">
-                <Label htmlFor="demo_website" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block pt-0.5">Website</Label>
-                {bookingTouched.website && bookingErrors.website && !bookingErrors.website.isValid && (
-                  <span className="text-rose-600 text-[10px] font-semibold text-right leading-tight max-w-[240px]">
-                    {bookingErrors.website.errorMessage}
-                  </span>
-                )}
-                {bookingTouched.website && (!bookingErrors.website || bookingErrors.website.isValid) && bookingForm.website && (
-                  <span className="text-emerald-600 text-[10px] font-bold text-right leading-none">✓ Valid</span>
-                )}
-              </div>
+            {/* Website starting with https:// */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-[#111827]">
+                {lang === "en" ? "Brokerage Website" : "Site web d'agence"} <span className="text-[#0052A5]">*</span>
+              </Label>
               <Input 
-                id="demo_website"
-                type="url"
                 value={bookingForm.website}
-                onChange={e => handleBookingWebsiteChange(e.target.value)}
+                onChange={(e) => {
+                  setBookingForm(prev => ({ ...prev, website: e.target.value }));
+                  if (bookingTouched.website) validateBookingField("website", e.target.value);
+                }}
                 onBlur={() => {
                   setBookingTouched(prev => ({ ...prev, website: true }));
                   validateBookingField("website", bookingForm.website);
                 }}
-                placeholder="https://www.website.com"
-                className={`bg-slate-50/50 h-10 text-xs rounded-xl transition-all duration-200 ${
-                  bookingTouched.website 
-                    ? bookingErrors.website && !bookingErrors.website.isValid
-                      ? "border-rose-500 bg-rose-50/10 focus-visible:ring-rose-500" 
-                      : "border-emerald-500 bg-emerald-50/10 focus-visible:ring-emerald-500"
-                    : "border-slate-200"
-                }`}
-                required
+                placeholder="https://www.michaelstjean.com"
+                className="rounded-xl border-stone-200 text-sm h-11"
               />
+              {bookingTouched.website && bookingErrors.website && !bookingErrors.website.isValid && (
+                <p className="text-xs text-rose-600 font-medium pl-1">{bookingErrors.website.errorMessage}</p>
+              )}
             </div>
 
-            {/* 5. Details */}
-            <div className="space-y-1.5 text-left relative">
-              <div className="flex justify-between items-start gap-2">
-                <Label htmlFor="demo_details" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block pt-0.5">Details</Label>
-                {bookingTouched.details && bookingErrors.details && !bookingErrors.details.isValid && (
-                  <span className="text-rose-600 text-[10px] font-semibold text-right leading-tight max-w-[240px]">
-                    {bookingErrors.details.errorMessage}
-                  </span>
-                )}
-                {bookingTouched.details && (!bookingErrors.details || bookingErrors.details.isValid) && bookingForm.details && (
-                  <span className="text-emerald-600 text-[10px] font-bold text-right leading-none">✓ Valid</span>
-                )}
-              </div>
-              <div className="relative">
-                <textarea 
-                  id="demo_details"
-                  value={bookingForm.details}
-                  onChange={e => handleBookingDetailsChange(e.target.value)}
-                  onBlur={() => {
-                    setBookingTouched(prev => ({ ...prev, details: true }));
-                    validateBookingField("details", bookingForm.details);
-                  }}
-                  placeholder="Enter up to 1000 characters (start with uppercase)"
-                  rows={3}
-                  className={`w-full bg-slate-50/50 border h-20 text-xs rounded-xl p-3 focus:outline-none focus:ring-2 transition-all duration-200 font-sans resize-none text-slate-800 ${
-                    bookingTouched.details 
-                      ? bookingErrors.details && !bookingErrors.details.isValid
-                        ? "border-rose-500 focus:ring-rose-500 bg-rose-50/10" 
-                        : "border-emerald-500 focus:ring-emerald-500 bg-emerald-50/10"
-                      : "border-slate-200 focus:ring-blue-500"
-                  }`}
-                  maxLength={1000}
-                  required
-                />
-                <div className={`absolute bottom-2 right-3 text-[9px] font-mono select-none ${bookingForm.details.length >= 750 ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>
-                  {bookingForm.details.length} / 1000 {bookingForm.details.length >= 750 && <span className="animate-pulse font-normal">(75% Reached)</span>}
-                </div>
+            {/* Comments / Details */}
+            <div className="space-y-1.5 relative">
+              <Label className="text-xs font-semibold text-[#111827]">
+                {lang === "en" ? "Tour Requirements" : "Exigences de visite"}
+              </Label>
+              <textarea 
+                value={bookingForm.details}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const capitalized = val.slice(0, 1).toUpperCase() + val.slice(1);
+                  const limited = capitalized.slice(0, 1000);
+                  setBookingForm(prev => ({ ...prev, details: limited }));
+                }}
+                placeholder={lang === "en" ? "Enter property detail notes..." : "Saisissez les notes de propriété..."}
+                rows={3}
+                className="w-full rounded-xl border border-stone-200 p-3 pr-4 pb-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#0052A5]"
+              />
+              <div className="absolute bottom-2 right-3 text-[10px] text-slate-400 font-mono pointer-events-none">
+                {bookingForm.details.length} / 1,000
               </div>
             </div>
 
-            <div className="pt-2">
-              <Button 
-                type="submit" 
-                className={`w-full font-bold h-11 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all duration-200 ${
-                  isBookingFormValid() 
-                    ? "bg-slate-900 hover:bg-slate-800 text-white cursor-pointer" 
-                    : "bg-slate-200 text-slate-400 cursor-not-allowed opacity-80"
-                }`}
-                disabled={isSubmittingBooking}
-              >
-                {isSubmittingBooking ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Scheduling...</span>
-                  </>
-                ) : (
-                  <>
-                    <CalendarDays className="h-4 w-4" />
-                    <span>Confirm Booking Slot</span>
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button 
+              type="submit"
+              disabled={isSubmittingBooking}
+              className="w-full bg-[#0052A5] hover:bg-[#004185] text-white font-bold h-11 rounded-xl transition-all hover:scale-[1.02] active:scale-95 duration-200 cursor-pointer shadow-md"
+            >
+              {isSubmittingBooking ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                lang === "en" ? "Request Live Pilot Access" : "Demander un accès pilote"
+              )}
+            </Button>
           </form>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

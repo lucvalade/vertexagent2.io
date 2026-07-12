@@ -276,7 +276,7 @@ export default function App() {
                       Thanks! You have been successfully added to our elite private pilot program.
                     </p>
                     <p className="text-slate-400 text-xs max-w-xs mx-auto">
-                      Registration details have been submitted and dispatched directly to <strong className="text-slate-200 font-semibold">sales@vertexagent.io</strong> for seat activation.
+                      Registration details have been submitted and dispatched directly to <strong className="text-slate-200 font-semibold">sales@aiopenhouseconnect.com</strong> for seat activation.
                     </p>
                   </div>
 

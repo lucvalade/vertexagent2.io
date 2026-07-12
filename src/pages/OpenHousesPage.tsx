@@ -446,7 +446,7 @@ export default function OpenHousesPage() {
   };
 
   // QR Code generator state
-  const [qrUrl, setQrUrl] = useState("https://vertexagent.io/tour/luxury-modern-craftsman");
+  const [qrUrl, setQrUrl] = useState("https://aiopenhouseconnect.com/tour/luxury-modern-craftsman");
   const [qrColor, setQrColor] = useState("#2563eb");
 
   // Flyer template state
@@ -663,7 +663,7 @@ export default function OpenHousesPage() {
       }
     }
 
-    const notificationText = `[VertexAgent] Live Lead Captured at ${timeString}\nAddress: ${formattedAdr}\nEmail address: ${guestName} (${guestEmail})\nTel.: ${guestPhone} just checked in.\nStatus: ${representationStatus}.\nTwilio check: Valid Cellular (Line: Rogers Mobile).\nDirect follow-up triggered. ${customQAString ? `\n\nCustom survey answers:\n${customQAString}` : ""}${requestedDocs.length > 0 ? `\n\nAttachments requested for dispatch:\n- ${requestedDocs.join("\n- ")}` : ""}`;
+    const notificationText = `[AI Open House Connect] Live Lead Captured at ${timeString}\nAddress: ${formattedAdr}\nEmail address: ${guestName} (${guestEmail})\nTel.: ${guestPhone} just checked in.\nStatus: ${representationStatus}.\nTwilio check: Valid Cellular (Line: Rogers Mobile).\nDirect follow-up triggered. ${customQAString ? `\n\nCustom survey answers:\n${customQAString}` : ""}${requestedDocs.length > 0 ? `\n\nAttachments requested for dispatch:\n- ${requestedDocs.join("\n- ")}` : ""}`;
     setLastNotification(notificationText);
 
     // Clear inputs
@@ -2215,7 +2215,7 @@ export default function OpenHousesPage() {
 
                   {/* Tiny simulated branding */}
                   <div className="text-center font-mono text-[9px] text-slate-400 mt-4 pt-3 border-t">
-                    Locked Securely in Kiosk Mode • Powered by VertexAgent.io
+                    Locked Securely in Kiosk Mode • Powered by AI Open House Connect
                   </div>
                 </div>
 
@@ -2388,7 +2388,7 @@ export default function OpenHousesPage() {
               & Actionable Insights
             </h2>
             <p className="text-slate-600 leading-relaxed font-normal">
-              VertexAgent automatically follows up with custom feedback questionnaires 2 hours after the open house ends. Ask specific home-buying timelines, budget matches, real-estate representation status, and overall interest to score leads accurately.
+              AI Open House Connect automatically follows up with custom feedback questionnaires 2 hours after the open house ends. Ask specific home-buying timelines, budget matches, real-estate representation status, and overall interest to score leads accurately.
             </p>
 
             <div className="space-y-4 pt-4">

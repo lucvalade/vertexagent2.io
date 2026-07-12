@@ -5,7 +5,7 @@ import Logo from "./Logo";
 import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import AgentVoiceControl from "./AgentVoiceControl";
-import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video } from "lucide-react";
+import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -154,7 +154,6 @@ export default function ProtectedLayout() {
     { label: "Dashboard", icon: LayoutDashboard, path: "/app/overview" },
     { label: "Listings", icon: List, path: "/app/listings" },
     { label: "AI Tour", icon: Mic2, path: "/app/aitours" },
-    { label: "AI Video Avatars", icon: Video, path: "/app/settings?tab=avatars" },
     { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
     { 
       label: "Open Houses", 
@@ -169,7 +168,7 @@ export default function ProtectedLayout() {
     { label: "Leads", icon: Users, path: "/app/leads" },
     { label: "Lenders", icon: Link2, path: "/app/lenders" },
     { label: "Teams", icon: Building2, path: "/app/team" },
-    { label: "Billing & Plans", icon: CreditCard, path: "/app/billing" },
+    { label: "Settings", icon: Settings, path: "/app/settings" },
     { label: "Pilot Admin", icon: Zap, path: "/app/pilot-admin" },
   ];
 
@@ -181,6 +180,7 @@ export default function ProtectedLayout() {
     { label: "All Listings", icon: List, path: "/app/admin/listings" },
     { label: "Welcome Messages", icon: Volume2, path: "/app/admin/welcomes" },
     { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
+    { label: "Onboarding Emails", icon: Mail, path: "/app/admin/emails" },
     { label: "Launch Notifications FREE Plan", icon: Bell, path: "/app/admin/notifications" },
     { label: "System Logs", icon: FileBox, path: "/app/admin/logs" },
     { label: "Settings", icon: Settings, path: "/app/admin/settings" },

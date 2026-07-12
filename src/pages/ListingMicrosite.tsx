@@ -727,7 +727,7 @@ ${pairedLender && listing?.lenderHandoff !== false ? `- Active Financing Partner
           createdAt: Date.now()
         });
 
-        const agentEmail = agent?.email || "sales@vertexagent.io";
+        const agentEmail = agent?.email || "sales@aiopenhouseconnect.com";
         const emailBody = `
           <h2>New AI Tour Lead Captured!</h2>
           <p>A visitor has completed the AI Tour and consented to share their contact information.</p>

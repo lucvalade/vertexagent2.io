@@ -641,7 +641,7 @@ export default function Dashboard() {
                     bgColor={qrBgColor}
                     {...((qrBrandingOption === "logo" || qrBrandingOption === "photo") ? {
                       imageSettings: {
-                        src: qrBrandingOption === "photo" ? (agentBranding?.agentPhotoUrl || "") : (agentBranding?.imageUrl || agentBranding?.logoUrl || "https://vertexagent.io/favicon.ico"),
+                        src: qrBrandingOption === "photo" ? (agentBranding?.agentPhotoUrl || "") : (agentBranding?.imageUrl || agentBranding?.logoUrl || "https://aiopenhouseconnect.com/favicon.ico"),
                         x: undefined,
                         y: undefined,
                         height: 28,

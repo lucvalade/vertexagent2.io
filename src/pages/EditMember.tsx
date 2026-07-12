@@ -21,11 +21,11 @@ export default function EditMember() {
   const navigate = useNavigate();
 
   const DUMMY_AGENTS = [
-    { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", listings: 4, office: "Vertex Agent Group" },
-    { id: "2", name: "Sarah Jenkins", email: "sarah.j@vertexagent.io", role: "Agent", listings: 12, office: "Vertex Agent Group" },
-    { id: "3", name: "Michael Chang", email: "m.chang@vertexagent.io", role: "Agent", listings: 8, office: "Vertex Agent Group" },
-    { id: "4", name: "Jessica Smith", email: "admin@vertexagent.io", role: "Office Manager", listings: 0, office: "Vertex Agent Group" },
-    { id: "inv_luc", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", listings: 0, office: "Vertex Agent Group" }
+    { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", listings: 4, office: "AI Open House Connect Group" },
+    { id: "2", name: "Sarah Jenkins", email: "sarah.j@aiopenhouseconnect.com", role: "Agent", listings: 12, office: "AI Open House Connect Group" },
+    { id: "3", name: "Michael Chang", email: "m.chang@aiopenhouseconnect.com", role: "Agent", listings: 8, office: "AI Open House Connect Group" },
+    { id: "4", name: "Jessica Smith", email: "admin@aiopenhouseconnect.com", role: "Office Manager", listings: 0, office: "AI Open House Connect Group" },
+    { id: "inv_luc", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", listings: 0, office: "AI Open House Connect Group" }
   ];
 
   const [formData, setFormData] = useState({

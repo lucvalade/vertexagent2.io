@@ -29,7 +29,7 @@ export default function PrivacyPolicy() {
               Privacy <span className="text-blue-600">Policy</span>
             </h1>
             <p className="text-lg text-slate-600 leading-relaxed font-medium">
-              Last Updated: May 25, 2026. This Privacy Policy details how VertexAgent.io ("we", "us", "our") collects, uses, protects, and discloses personal data for real estate tours.
+              Last Updated: May 25, 2026. This Privacy Policy details how AI Open House Connect ("we", "us", "our") collects, uses, protects, and discloses personal data for real estate tours.
             </p>
           </div>
 
@@ -82,7 +82,7 @@ export default function PrivacyPolicy() {
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">2. How We Use Information</h2>
               <p>
-                We put collected data into operational use through VertexAgent.io features:
+                We put collected data into operational use through AI Open House Connect features:
               </p>
               <ul className="list-disc pl-6 space-y-2">
                 <li>Instantly creating and managing digital talking open houses and spatial 3D tour landing pages.</li>
@@ -103,7 +103,7 @@ export default function PrivacyPolicy() {
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">4. Third-Party Integrations & Cloud Partners</h2>
               <p>
-                VertexAgent.io operates utilizing trusted top-tier infrastructure platforms. Personal telemetry and media assets map to specific service pipelines:
+                AI Open House Connect operates utilizing trusted top-tier infrastructure platforms. Personal telemetry and media assets map to specific service pipelines:
               </p>
               <ul className="list-disc pl-6 space-y-2">
                 <li><strong>Google Cloud & Firebase:</strong> For reliable Firestore persistence, user verification handshakes, and AI text/voice generation pipelines.</li>
@@ -132,7 +132,7 @@ export default function PrivacyPolicy() {
       </main>
 
       <footer className="py-8 text-center text-slate-400 text-sm border-t border-slate-200 bg-white">
-        &copy; {new Date().getFullYear()} <a href="https://www.VertexAgent.io" target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-slate-600">VertexAgent.io</a>. All rights reserved.
+        &copy; {new Date().getFullYear()} AI Open House Connect. All rights reserved.
       </footer>
     </div>
   );

@@ -778,7 +778,7 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                   {activeListings.map((listing) => (
                     <div 
                       key={listing.id} 
-                      onClick={() => navigate(`/app/listings/${listing.id}`)}
+                      onClick={() => navigate(`/app/listings/${listing.id}?from=overview`, { state: { from: "overview" } })}
                       className="border border-stone-200/90 rounded-xl bg-white overflow-hidden cursor-pointer hover:shadow-md transition-all flex flex-col justify-between hover-blue-pulse"
                     >
                       {(() => {

@@ -65,6 +65,8 @@ export interface Listing {
   status?: "Active" | "Inactive" | "Processing";
   qrBrandingOption?: "logo" | "photo" | "none";
   ctas?: { label: string; action: string }[];
+  rooms?: any[];
+  qas?: any[];
   publishedAt?: string;
   createdAt: number;
   updatedAt: number;
@@ -235,6 +237,70 @@ export async function updateListing(listingId: string, updates: Partial<Listing>
   }
 }
 
+export interface TourConfig {
+  voiceId: string;
+  ttsModel: string;
+  welcomeTexts: Record<string, string>;
+  defaultLanguage: string;
+  mediaManifest: { key: string; url: string; caption: string }[];
+  rooms?: { id: string; name: string; script: string; order: number }[];
+  qas?: { question: string; answer: string }[];
+  ctas?: { label: string; action: string }[];
+  brokerageBranding: {
+    logoUrl?: string;
+    accentColor?: string;
+    backgroundUrl?: string;
+    avatarId?: string;
+  };
+  updatedAt?: number;
+}
+
+export const DEFAULT_WELCOME_TEXTS: Record<string, string> = {
+  ar: "أهلاً بك! أنا سورا، مساعدتك الذكية في مجال العقارات. شكراً لزيارتك هذا البيت المفتوح. لا تتردد في إلقاء نظرة حولك، واستكشاف الغرف، وطرح أي أسئلة عليّ بخصوص ميزات العقار أو Сعر أو الحي.",
+  "zh-CN": "欢迎！我是 Sora，您的房产人工智能助手。感谢您参观本次开放日。请随意看看，探索各个房间，并向我提问有关房产特征、价格或周边的任何问题。",
+  "zh-TW": "歡迎！我是 Sora，您的房地產人工智慧助手。感謝您參觀本次開放日。請隨意看看，探索各個房間，並向我提問有關房產特徵、價格或周邊的任何問題。",
+  nl: "Welkom! Ik ben Sora, uw vastgoed AI-assistent. Bedankt voor uw bezoek aan dit open huis. Voel u vrij om rond te kijken, de kamers te verkennen en mij vragen te stellen over de kenmerken van de woning, de prijs of de buurt.",
+  en: "Welcome! I am Sora, your real estate AI assistant. Thank you for visiting this open house. Please feel free to look around, explore the rooms, and ask me any questions about the property features, pricing, or neighborhood.",
+  fr: "Bonjour ! Je suis Sora, votre guide pour cette visite. Je suis ravie de vous accompagner. Avez-vous des questions sur cette propriété ?",
+  de: "Willkommen! Ich bin Sora, Ihre Immobilien-KI-Assistentin. Vielen Dank für Ihren Besuch bei diesem Tag der offenen Tür. Bitte schauen Sie sich ungezwungen um, erkunden Sie die Räume und stellen Sie mir Fragen zu den Eigenschaften der Immobilie, dem Preis oder der Nachbarschaft.",
+  hi: "स्वागत है! मैं सोरा हूँ, आपकी रियल एस्टेट एआई सहायक। इस ओपन हाउस में आने के लिए धन्यवाद। कृपया बेझिझक चारों ओर देखें, कमरों का अन्веषण करें, और मुझसे संपत्ति की विशेषताओं, कीमत या पड़ोस के बारे में कोई भी प्रश्न पूछें।",
+  it: "Benvenuto! Sono Sora, la tua assistente AI immobiliare. Grazie per aver visitato questa casa aperta. Ti invitiamo a guardarti intorno, esplorare le stanze e farmi qualsiasi domanda sulle caratteristiche della proprietà, sul prezzo o sul quartiere.",
+  ja: "ようこそ！私は不動産AIアシスタントのSoraです。このオープンハウスにお越しいただきありがとうございます。どうぞご自由に周りを見渡し、お部屋を探索し、物件の特徴や価格、周辺環境について何でもご質問ください。",
+  ko: "환영합니다! 저는 귀하의 부동산 AI 어시스턴트인 Sora입니다. 이번 오픈 하우스에 방문해 주셔서 감사합니다. 자유롭게 둘러보시고, 방을 살펴보시며 매물의 특징, 가격 또는 주변 환경에 대해 궁금한 점이 있으시면 언제든지 질문해 주세요.",
+  pt: "Bem-vindo! Eu sou Sora, sua assistente de IA imobiliária. Obrigado por visitar esta casa aberta. Sinta-se à vontade para olhar ao redor, explorar os cômodos e me fazer qualquer pergunta sobre as características do imóvel, preço ou vizinhança.",
+  ru: "Добро пожаловать! Я Сора, ваш ИИ-помощник по недвижимости. Спасибо, что посетили этот день открытых дверей. Пожалуйста, не стесняйтесь осматриваться, изучать комнаты и задавать мне любые вопросы о характеристиках недвижимости, цене или районе.",
+  es: "¡Bienvenido! Soy Sora, su asistente de inteligencia artificial para bienes raíces. Gracias por visitar esta casa abierta. Por favor, siéntase libre de mirar a su alrededor, explorar las habitaciones y hacerme cualquier pregunta sobre las características de la propiedad, el precio o el vecindario.",
+  vi: "Chào mừng! Tôi là Sora, trợ lý AI bất động sản của bạn. Cảm ơn bạn đã ghé thăm buổi mở cửa xem nhà này. Xin vui lòng tự nhiên nhìn xung quanh, khám phá các phòng và hỏi tôi bất kỳ câu hỏi nào về các tính năng của bất động sản, giá cả hoặc khu lân cận."
+};
+
+export async function getTourConfig(listingId: string): Promise<TourConfig | null> {
+  const path = `listings/${listingId}/tourConfig/main`;
+  try {
+    const docRef = doc(db, "listings", listingId, "tourConfig", "main");
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as TourConfig;
+    }
+    return null;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+    return null;
+  }
+}
+
+export async function saveTourConfig(listingId: string, data: Partial<TourConfig>) {
+  const path = `listings/${listingId}/tourConfig/main`;
+  try {
+    const docRef = doc(db, "listings", listingId, "tourConfig", "main");
+    await setDoc(docRef, {
+      ...data,
+      updatedAt: Date.now()
+    }, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
 export async function deleteListingOp(listingId: string) {
   const path = `listings/${listingId}`;
   try {
@@ -244,7 +310,7 @@ export async function deleteListingOp(listingId: string) {
   }
 }
 
-export async function getListingBasic(listingId: string): Promise<Pick<Listing, "id" | "address" | "ownerId" | "city" | "province" | "price" | "beds" | "baths" | "images" | "openHouseDate" | "openHouseTime" | "qrDestination" | "country" | "welcome_en" | "welcome_fr"> | null> {
+export async function getListingBasic(listingId: string): Promise<Pick<Listing, "id" | "address" | "ownerId" | "city" | "province" | "price" | "beds" | "baths" | "images" | "openHouseDate" | "openHouseTime" | "qrDestination" | "country" | "welcome_en" | "welcome_fr" | "tourDescriptors"> | null> {
   if (listingId === "pilot-listing-01") {
     const full = await getListing(listingId);
     if (full) {
@@ -263,7 +329,8 @@ export async function getListingBasic(listingId: string): Promise<Pick<Listing, 
         qrDestination: full.qrDestination,
         country: full.country,
         welcome_en: full.welcome_en,
-        welcome_fr: full.welcome_fr
+        welcome_fr: full.welcome_fr,
+        tourDescriptors: full.tourDescriptors || []
       };
     }
     return null;
@@ -288,7 +355,8 @@ export async function getListingBasic(listingId: string): Promise<Pick<Listing, 
         qrDestination: data.qrDestination,
         country: data.country,
         welcome_en: data.welcome_en,
-        welcome_fr: data.welcome_fr
+        welcome_fr: data.welcome_fr,
+        tourDescriptors: data.tourDescriptors || []
       };
     }
     return null;

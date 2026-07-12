@@ -76,8 +76,8 @@ export default function InviteAgent() {
         details: {
           recipient: email,
           template: "AGENT_INVITATION",
-          subject: `You've been invited to join ${user?.email?.split('@')[1] || 'the brokerage'} on VertexAgent`,
-          body: `Hi ${fullName},\n\n${user?.email} has invited you to join their team on VertexAgent.io.\n\nVertexAgent is an AI-powered assistant for modern real estate professionals.\n\nClick here to accept: https://vertexagent.io/register?invite=${btoa(email)}`,
+          subject: `You've been invited to join ${user?.email?.split('@')[1] || 'the brokerage'} on AI Open House Connect`,
+          body: `Hi ${fullName},\n\n${user?.email} has invited you to join their team on AI Open House Connect.\n\nAI Open House Connect is an AI-powered assistant for modern real estate professionals.\n\nClick here to accept: https://aiopenhouseconnect.com/register?invite=${btoa(email)}`,
           metadata: { sender: user?.email, role }
         }
       });

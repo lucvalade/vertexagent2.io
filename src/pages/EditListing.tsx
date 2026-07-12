@@ -1530,6 +1530,19 @@ export default function EditListing() {
 
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+  const getComputedDescriptorsFromImages = (imgsList: ListingImage[]) => {
+    const computed = new Array(16).fill("");
+    for (let i = 0; i < 16; i++) {
+      if (i < imgsList.length) {
+        let name = imgsList[i].name || "";
+        name = name.replace(/\.[^/.]+$/, "");
+        name = name.split(/[_\-\s]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+        computed[i] = name.slice(0, 30);
+      }
+    }
+    return computed;
+  };
+
   const saveImageName = async () => {
     if (editingImageIndex !== null && editingImageName.trim()) {
       const updated = [...images];
@@ -1538,9 +1551,15 @@ export default function EditListing() {
       setIsRenameDialogOpen(false);
       setEditingImageIndex(null);
       
+      const newComputed = getComputedDescriptorsFromImages(updated);
+      setTourDescriptors(newComputed);
+
       if (isEdit && listingId) {
         try {
-          await updateListing(listingId, { images: updated });
+          await updateListing(listingId, { 
+            images: updated,
+            tourDescriptors: newComputed.filter(d => d.trim() !== "")
+          });
           toast.success("Image renamed and synced to assets");
         } catch (err) {
           toast.error("Renamed locally but failed to sync to assets");
@@ -1561,9 +1580,15 @@ export default function EditListing() {
     const updated = images.filter((_, idx) => idx !== index);
     setImages(updated);
     
+    const newComputed = getComputedDescriptorsFromImages(updated);
+    setTourDescriptors(newComputed);
+
     if (isEdit && listingId) {
       try {
-        await updateListing(listingId, { images: updated });
+        await updateListing(listingId, { 
+          images: updated,
+          tourDescriptors: newComputed.filter(d => d.trim() !== "")
+        });
         toast.success("Image deleted and synced to listing");
       } catch (err) {
         toast.error("Removed locally but failed to sync to server");
@@ -1609,10 +1634,16 @@ export default function EditListing() {
       updated[targetIndex] = temp;
       setImages(updated);
 
+      const newComputed = getComputedDescriptorsFromImages(updated);
+      setTourDescriptors(newComputed);
+
       if (isEdit && listingId) {
         const tid = toast.loading("Saving new image layout order...");
         try {
-          await updateListing(listingId, { images: updated });
+          await updateListing(listingId, { 
+            images: updated,
+            tourDescriptors: newComputed.filter(d => d.trim() !== "")
+          });
           toast.dismiss(tid);
           toast.success(`Image moved ${direction} successfully and auto-saved!`);
         } catch (err) {
@@ -1691,13 +1722,13 @@ export default function EditListing() {
 
     if (mlsNumber) {
       if (mlsCountry === "US") {
-        if (!/^\d{8}$/.test(mlsNumber)) {
-          toast.error("Invalid USA MLS Number format. Must be exactly 8 digits (purely numeric, e.g. 12345678).");
+        if (!/^\d{6,10}$/.test(mlsNumber)) {
+          toast.error("Invalid USA MLS Number format. Must be 6 to 10 digits (purely numeric, e.g. 12345678).");
           return false;
         }
       } else {
-        if (!/^[A-Z]\d{8}$/i.test(mlsNumber)) {
-          toast.error("Invalid Canadian MLS Number format. Must be a single letter followed by 8 digits (e.g. X12345678).");
+        if (!/^[A-Z]?\d{6,9}$/i.test(mlsNumber)) {
+          toast.error("Invalid Canadian MLS Number format. Must be an optional single letter followed by 6 to 9 digits (e.g. W981024, C1234567 or 12345678).");
           return false;
         }
       }
@@ -2127,9 +2158,9 @@ export default function EditListing() {
                 {displayedText}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-              <span>Connected to Firecrawl Ingestion Pipeline</span>
+            <div className="flex items-start gap-2 text-xs text-slate-500 text-left bg-slate-50 p-3 rounded-lg border border-slate-100">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500 mt-0.5" />
+              <span>This will automatically deep-crawl the page—extracting descriptions, property details, and every single high-resolution image hidden inside pop-up or slider galleries.</span>
             </div>
           </div>
         </div>
@@ -2515,30 +2546,20 @@ export default function EditListing() {
                     onChange={e => {
                       const val = e.target.value;
                       if (mlsCountry === "US") {
-                        const filtered = val.replace(/\D/g, "").slice(0, 8);
+                        const filtered = val.replace(/\D/g, "").slice(0, 10);
                         setMlsNumber(filtered);
                       } else {
-                        const upperVal = val.toUpperCase();
-                        if (upperVal.length === 0) {
-                          setMlsNumber("");
-                        } else {
-                          const firstChar = upperVal[0];
-                          const restChars = upperVal.slice(1).replace(/\D/g, "").slice(0, 8);
-                          if (/[A-Z]/i.test(firstChar)) {
-                            setMlsNumber(firstChar + restChars);
-                          } else {
-                            setMlsNumber(restChars);
-                          }
-                        }
+                        const filtered = val.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10);
+                        setMlsNumber(filtered);
                       }
                     }} 
-                    placeholder={mlsCountry === "US" ? "e.g. 12345678" : "e.g. X12345678"} 
-                    maxLength={mlsCountry === "US" ? 8 : 9}
+                    placeholder={mlsCountry === "US" ? "e.g. 12345678" : "e.g. X13065798"} 
+                    maxLength={10}
                   />
                   <p className="text-[10px] text-slate-400">
                     {mlsCountry === "US" 
-                      ? "USA: Purely numeric (8 digits)" 
-                      : "Canada: Single letter followed by 8 digits"}
+                      ? "USA: Purely numeric (6 to 10 digits)" 
+                      : "Canada: Alphanumeric format (e.g. X13065798 or numeric)"}
                   </p>
                 </div>
                 <div className="space-y-2 text-left">

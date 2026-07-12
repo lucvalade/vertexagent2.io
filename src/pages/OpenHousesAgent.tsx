@@ -484,7 +484,7 @@ export default function OpenHousesAgent() {
             lenderShown: true,
             mortgageQuestion: true,
             agentNotes: "Enjoy your guided tour with Sora!",
-            status: sess.status,
+            status: (endDate.getTime() < Date.now()) ? "completed" : sess.status,
             createdAt: sess.created_at
           } as any;
         });
@@ -541,7 +541,7 @@ export default function OpenHousesAgent() {
               lenderShown: true,
               mortgageQuestion: true,
               agentNotes: "Enjoy your guided tour with Sora!",
-              status: sess.status,
+              status: (endDate.getTime() < Date.now()) ? "completed" : sess.status,
               createdAt: sess.created_at
             } as any;
           });

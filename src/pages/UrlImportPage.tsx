@@ -295,7 +295,7 @@ export default function UrlImportPage() {
               The Four Ingestion Phase Protocols
             </h2>
             <p className="text-slate-600 leading-relaxed font-normal">
-              Think of it like this: regular tools just copy and paste the basic description box from a website. VertexAgent goes way deeper—we pull the behind-the-scenes code of the entire page.
+              Think of it like this: regular tools just copy and paste the basic description box from a website. AI Open House Connect goes way deeper—we pull the behind-the-scenes code of the entire page.
             </p>
           </div>
 

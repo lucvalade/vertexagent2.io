@@ -41,8 +41,8 @@ export default function AdminNotifications() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedReferrals, setSelectedReferrals] = useState<{ email: string; name: string; parentId: string }[]>([]);
   const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
-  const [emailSubject, setEmailSubject] = useState("VertexAgent: Connect with us");
-  const [emailBody, setEmailBody] = useState("Hi there,\n\nThanks for your interest in VertexAgent! We'd love to chat more about how our AI can help your brokerage or real estate practice.\n\nBest regards,\nThe VertexAgent Team\n\nWebsite: VertexAgent.io (https://www.vertexagent.io)\nBook a Demo: https://calendly.com/vertexagent-demo");
+  const [emailSubject, setEmailSubject] = useState("AI Open House Connect: Connect with us");
+  const [emailBody, setEmailBody] = useState("Hi there,\n\nThanks for your interest in AI Open House Connect! We'd love to chat more about how our AI can help your brokerage or real estate practice.\n\nBest regards,\nThe AI Open House Connect Team\n\nWebsite: AI Open House Connect (https://aiopenhouseconnect.com)\nBook a Demo: https://calendly.com/aiopenhouseconnect-demo");
   const [isSending, setIsSending] = useState(false);
 
   const trackInteraction = async (type: string, detail: any) => {
@@ -509,30 +509,30 @@ export default function AdminNotifications() {
             <div className="pt-2 border-t border-slate-100 bg-slate-50/50 p-3 rounded-xl space-y-1.5">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Signature Resource Links</p>
               <div className="flex flex-col gap-1 text-xs">
-                <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                 <div className="flex items-center gap-1.5 font-semibold text-slate-700">
                   <span className="text-slate-400">Website:</span>
                   <a 
-                    href="https://www.vertexagent.io" 
+                    href="https://aiopenhouseconnect.com" 
                     target="_blank" 
                     rel="noopener noreferrer" 
                     onClick={() => trackInteraction("website_link_click", { 
-                      link: "https://www.vertexagent.io", 
+                      link: "https://aiopenhouseconnect.com", 
                       context: "Direct Outreach Popup" 
                      })} 
                     className="text-blue-600 hover:underline font-bold inline-flex items-center gap-1"
                   >
-                    VertexAgent.io
+                    aiopenhouseconnect.com
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
                 <div className="flex items-center gap-1.5 font-semibold text-slate-700">
                   <span className="text-slate-400">Book a Demo:</span>
                   <a 
-                    href="https://calendly.com/vertexagent-demo" 
+                    href="https://calendly.com/aiopenhouseconnect-demo" 
                     target="_blank" 
                     rel="noopener noreferrer" 
                     onClick={() => trackInteraction("book_a_demo_link_click", { 
-                      link: "https://calendly.com/vertexagent-demo", 
+                      link: "https://calendly.com/aiopenhouseconnect-demo", 
                       context: "Direct Outreach Popup" 
                      })} 
                     className="text-emerald-600 hover:underline font-black uppercase tracking-wider inline-flex items-center gap-1"

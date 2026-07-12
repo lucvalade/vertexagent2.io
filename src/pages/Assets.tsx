@@ -162,6 +162,30 @@ export default function Assets() {
     }
   };
 
+  const computeTourDescriptors = (imgs: any[]): string[] => {
+    const descriptors = new Array(16).fill("");
+    if (imgs && imgs.length > 0) {
+      for (let i = 0; i < 16; i++) {
+        if (i < imgs.length) {
+          const img = imgs[i];
+          let rawName = "";
+          if (typeof img === 'string') {
+            rawName = img.split('/').pop()?.split('?')[0] || "";
+          } else if (img && typeof img === 'object') {
+            rawName = img.name || "";
+          }
+          let name = rawName.replace(/\.[^/.]+$/, ""); // Strip extensions
+          name = name.split(/[_\-\s]+/)
+            .filter(Boolean)
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
+          descriptors[i] = name.slice(0, 30);
+        }
+      }
+    }
+    return descriptors.filter(d => d.trim() !== "");
+  };
+
   const handleDeleteAsset = async () => {
     if (!selectedListing || !assetToDelete) return;
     
@@ -171,7 +195,11 @@ export default function Assets() {
     });
 
     try {
-      await updateListing(selectedListing.id, { images: updatedImages });
+      const newDescriptors = computeTourDescriptors(updatedImages);
+      await updateListing(selectedListing.id, { 
+        images: updatedImages,
+        tourDescriptors: newDescriptors
+      });
       
       setListingAssetsMap(prev => ({
         ...prev,
@@ -179,10 +207,10 @@ export default function Assets() {
       }));
       
       setListings(prev => prev.map(l => 
-        l.id === selectedListing.id ? { ...l, images: updatedImages } : l
+        l.id === selectedListing.id ? { ...l, images: updatedImages, tourDescriptors: newDescriptors } : l
       ));
 
-      setSelectedListing(prev => prev ? { ...prev, images: updatedImages } : null);
+      setSelectedListing(prev => prev ? { ...prev, images: updatedImages, tourDescriptors: newDescriptors } : null);
       
       setAssetToDelete(null);
       toast.success("Asset deleted and listing updated");
@@ -230,7 +258,11 @@ export default function Assets() {
     });
 
     try {
-      await updateListing(selectedListing.id, { images: updatedImages });
+      const newDescriptors = computeTourDescriptors(updatedImages);
+      await updateListing(selectedListing.id, { 
+        images: updatedImages,
+        tourDescriptors: newDescriptors
+      });
       
       setListingAssetsMap(prev => ({
         ...prev,
@@ -240,10 +272,10 @@ export default function Assets() {
       }));
 
       setListings(prev => prev.map(l => 
-        l.id === selectedListing.id ? { ...l, images: updatedImages } : l
+        l.id === selectedListing.id ? { ...l, images: updatedImages, tourDescriptors: newDescriptors } : l
       ));
 
-      setSelectedListing(prev => prev ? { ...prev, images: updatedImages } : null);
+      setSelectedListing(prev => prev ? { ...prev, images: updatedImages, tourDescriptors: newDescriptors } : null);
 
       setIsRenameOpen(false);
       toast.success("Asset renamed and synced to listing");

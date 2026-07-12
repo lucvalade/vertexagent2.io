@@ -259,6 +259,18 @@ service cloud.firestore {
         && incoming().agent_id == existing().agent_id;
       allow delete: if isAdmin();
     }
+
+    match /agentOnboarding/{agentUid} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /emails/{emailId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /emailTemplates/{step} {
+      allow read, write: if isSignedIn();
+    }
   }
 }
 

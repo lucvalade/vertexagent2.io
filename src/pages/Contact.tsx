@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2, Mail, Phone, MapPin, Send, HelpCircle, Shield, Building } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import Logo from "@/components/Logo";
 
 export default function Contact() {
   const navigate = useNavigate();
@@ -45,8 +46,8 @@ export default function Contact() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: "sales@vertexagent.io", // Default sales email
-          subject: `VertexAgent Contact: ${formData.subject}`,
+          to: "sales@aiopenhouseconnect.com", // Default sales email
+          subject: `AI Open House Connect Contact: ${formData.subject}`,
           text: `Name: ${formData.name}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`,
           html: `
             <div style="font-family: sans-serif; padding: 20px; color: #333;">
@@ -82,13 +83,10 @@ export default function Contact() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-50">
         <div 
-          className="flex items-center gap-2 font-bold text-xl tracking-tight cursor-pointer" 
+          className="cursor-pointer" 
           onClick={() => navigate("/")}
         >
-          <div className="h-8 w-8 bg-blue-600 rounded flex items-center justify-center text-white text-lg">
-            V
-          </div>
-          VertexAgent.io
+          <Logo variant="blue" />
         </div>
         <Button variant="ghost" onClick={() => navigate("/")}>Back to Home</Button>
       </header>
@@ -100,7 +98,7 @@ export default function Contact() {
               {tab === "mission" ? (
                 <>Our Mission & <span className="text-blue-600">Core Values</span></>
               ) : tab === "support" ? (
-                <>VertexAgent <span className="text-blue-600">Client Support</span></>
+                <>AI Open House Connect <span className="text-blue-600">Client Support</span></>
               ) : tab === "enterprise" ? (
                 <>Scale with <span className="text-blue-600">Enterprise Solutions</span></>
               ) : (
@@ -109,7 +107,7 @@ export default function Contact() {
             </h1>
             <p className="text-lg text-slate-600 leading-relaxed">
               {tab === "mission" ? (
-                "VertexAgent was built to elevate and humanize the real-estate experience. We pair natural conversational artificial intelligence with localized multi-channel text & flyer assets to turn any static transaction into a deeper, relationship-driven outcome."
+                "AI Open House Connect was built to elevate and humanize the real-estate experience. We pair natural conversational artificial intelligence with localized multi-channel text & flyer assets to turn any static transaction into a deeper, relationship-driven outcome."
               ) : tab === "support" ? (
                 "Need help with your tablet sign-in kiosks, Firecrawl ingestion settings, or natural voice profile custom configs? Our client care team is available 24/7 to keep your listing workflows running perfectly green."
               ) : tab === "enterprise" ? (
@@ -240,7 +238,7 @@ export default function Contact() {
       </main>
 
       <footer className="py-8 text-center text-slate-400 text-sm border-t border-slate-200 bg-white">
-        &copy; {new Date().getFullYear()} <a href="https://www.VertexAgent.io" target="_blank" rel="noopener noreferrer" className="hover:underline hover:text-slate-600">VertexAgent.io</a>. All rights reserved.
+        &copy; {new Date().getFullYear()} AI Open House Connect. All rights reserved.
       </footer>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { Listing, getListing, deleteListingOp, createListing, getVoiceNotes, createVoiceNote, deleteVoiceNote, VoiceNote } from "@/lib/api";
 import { auth } from "@/lib/firebase";
@@ -45,6 +45,9 @@ import {
 export default function ListingDetails() {
   const { listingId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const fromPage = location.state?.from || searchParams.get("from");
   const [listing, setListing] = useState<Listing | null>(null);
   const [loading, setLoading] = useState(true);
   const [sharedModalListing, setSharedModalListing] = useState<Listing | null>(null);
@@ -311,13 +314,13 @@ export default function ListingDetails() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <Link 
-          to="/app/listings" 
+          to={fromPage === "overview" ? "/app/overview" : "/app/listings"} 
           className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors font-medium group"
         >
           <div className="p-1 h-7 w-7 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-slate-200">
             <ChevronLeft className="h-4 w-4" />
           </div>
-          View Listings
+          {fromPage === "overview" ? "Back to Dashboard" : "View Listings"}
         </Link>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.open(`/tour/${listing.id}`, "_blank")}>

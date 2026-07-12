@@ -35,6 +35,7 @@ import AdminListings from './pages/admin/AdminListings.tsx';
 import AdminWelcomeMessages from './pages/admin/AdminWelcomeMessages.tsx';
 import AdminNotifications from './pages/admin/AdminNotifications.tsx';
 import AdminLogs from './pages/admin/AdminLogs.tsx';
+import AdminEmails from './pages/admin/AdminEmails.tsx';
 import InviteAgent from './pages/admin/InviteAgent.tsx';
 import BrokerageSettings from './pages/admin/BrokerageSettings.tsx';
 import PilotAdmin from './pages/admin/PilotAdmin.tsx';
@@ -60,6 +61,7 @@ import PublicIntegrationsPage from './pages/PublicIntegrationsPage.tsx';
 import PricingPage from './pages/PricingPage.tsx';
 import DemoPage from './pages/DemoPage.tsx';
 import HowItWorksPage from './pages/HowItWorksPage.tsx';
+import GuidesPage from './pages/GuidesPage.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { db } from './lib/firebase.ts';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -127,6 +129,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="microsite/:listingId" element={<ListingMicrosite />} />
             <Route path="settings/embeds/welcome-message-defaults" element={<WelcomeMessageDefaultsEmbed />} />
             <Route path="pilot-admin" element={<PilotAdmin />} />
+            <Route path="admin/emails" element={<AdminEmails />} />
             
             {/* New public subpages */}
             <Route path="product" element={<ProductPage />} />
@@ -135,6 +138,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="brokerages" element={<BrokeragesPage />} />
             <Route path="integrations" element={<PublicIntegrationsPage />} />
             <Route path="pricing" element={<PricingPage />} />
+            <Route path="guides" element={<GuidesPage />} />
             <Route path="demo" element={<DemoPage />} />
             <Route path="how-it-works" element={<HowItWorksPage />} />
             <Route path="what-this-software-does" element={<HowItWorksPage />} />
@@ -174,6 +178,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="welcomes" element={<AdminWelcomeMessages />} />
                 <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="logs" element={<AdminLogs />} />
+                <Route path="emails" element={<AdminEmails />} />
                 <Route path="brokerage" element={<BrokerageSettings />} />
                 <Route path="settings" element={<Settings />} />
               </Route>

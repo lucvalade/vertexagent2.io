@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { getAllListings, getUserListings, updateListing, Listing } from "@/lib/api";
+import { getAllListings, getUserListings, updateListing, Listing, getTourConfig, saveTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,7 @@ export default function AiTours() {
 
   // Tour properties/options
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [soraVoice, setSoraVoice] = useState("Kore");
   const [multilingualEnabled, setMultilingualEnabled] = useState(false);
   const [signInPrompt, setSignInPrompt] = useState<"none" | "start" | "midway" | "end">("start");
   const [lenderHandoff, setLenderHandoff] = useState(false);
@@ -359,8 +360,9 @@ export default function AiTours() {
         setRooms(updated);
         if (selectedListing) {
           localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
+          await initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, updated);
         }
-        toast.success(`Succesfully translated room script to ${roomTargetLang}! Save changes by publishing.`);
+        toast.success(`Succesfully translated room script to ${roomTargetLang}! Saved and live!`);
       } else {
         toast.error(data.error || "Failed online translation.");
       }
@@ -389,8 +391,9 @@ export default function AiTours() {
         setQas(updated);
         if (selectedListing) {
           localStorage.setItem(`qas_tour_${selectedListing.id}`, JSON.stringify(updated));
+          await initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, updated);
         }
-        toast.success(`Successfully translated answer to ${qaTargetLang}! Save changes by publishing.`);
+        toast.success(`Successfully translated answer to ${qaTargetLang}! Saved and live!`);
       } else {
         toast.error(data.error || "Failed online translation.");
       }
@@ -467,47 +470,116 @@ export default function AiTours() {
       "Private outdoor terrace with customized heating units"
     ]);
 
-    // Initial Rooms set
-    const savedRooms = localStorage.getItem(`rooms_tour_${listing.id}`);
-    if (savedRooms) {
-      setRooms(JSON.parse(savedRooms));
-    } else {
-      const defaultRooms = [
-        { id: "1", name: "Grand Foyer", script: "We begin in the grand foyer, accented by double-height ceilings and custom brass chandelier fixtures. Take a moment to notice the seamless alignment of the white oak floors flowing elegantly into the main living pavilion.", order: 1 },
-        { id: "2", name: "Chef's Kitchen", script: "Next is the kitchen. This culinary studio features a massive Calacatta gold marble island, custom soft-close cabinetry, and integrated Sub-Zero refrigerator. Perfect for both morning espresso and large catering events.", order: 2 },
-        { id: "3", name: "Primary Oasis", script: "Finally, the master chamber features dual walk-in dressing suites, motorized sun shades, and a spa-inspired wet bath complete with a freestanding soaking tub and direct private balcony access.", order: 3 }
-      ];
-      setRooms(defaultRooms);
-      localStorage.setItem(`rooms_tour_${listing.id}`, JSON.stringify(defaultRooms));
-    }
+    // Set initial defaults
+    const defaultRooms = [
+      { id: "1", name: "Grand Foyer", script: "We begin in the grand foyer, accented by double-height ceilings and custom brass chandelier fixtures. Take a moment to notice the seamless alignment of the white oak floors flowing elegantly into the main living pavilion.", order: 1 },
+      { id: "2", name: "Chef's Kitchen", script: "Next is the kitchen. This culinary studio features a massive Calacatta gold marble island, custom soft-close cabinetry, and integrated Sub-Zero refrigerator. Perfect for both morning espresso and large catering events.", order: 2 },
+      { id: "3", name: "Primary Oasis", script: "Finally, the master chamber features dual walk-in dressing suites, motorized sun shades, and a spa-inspired wet bath complete with a freestanding soaking tub and direct private balcony access.", order: 3 }
+    ];
 
-    // Initial Q&As
-    const savedQas = localStorage.getItem(`qas_tour_${listing.id}`);
-    if (savedQas) {
-      setQas(JSON.parse(savedQas));
-    } else {
-      const defaultQas = [
-        { question: "When was the roof last replaced?", answer: "The roof was fully replaced in Fall 2024 with premium architectural shingles designed to withstand adverse weather, backed by a fully transferable 30-year warranty." },
-        { question: "What is the average utility cost?", answer: "Thanks to newly installed high-efficiency dual-zone heat pumps and multi-pane smart glass, the average combined monthly HVAC and electric utilities operate under $240, even during peak summer months." }
-      ];
-      setQas(defaultQas);
-      localStorage.setItem(`qas_tour_${listing.id}`, JSON.stringify(defaultQas));
-    }
+    const defaultQas = [
+      { question: "When was the roof last replaced?", answer: "The roof was fully replaced in Fall 2024 with premium architectural shingles designed to withstand adverse weather, backed by a fully transferable 30-year warranty." },
+      { question: "What is the average utility cost?", answer: "Thanks to newly installed high-efficiency dual-zone heat pumps and multi-pane smart glass, the average combined monthly HVAC and electric utilities operate under $240, even during peak summer months." }
+    ];
 
-    // Custom CTAs selection
-    const savedCtas = localStorage.getItem(`ctas_tour_${listing.id}`);
-    if (savedCtas) {
-      setCtas(JSON.parse(savedCtas));
-    } else if ((listing as any).ctas) {
-      setCtas((listing as any).ctas);
-    } else {
-      const defaultCtas = [
-        { label: "Book Private Tour", action: "calendar" },
-        { label: "Request Disclosures & Floor Plans", action: "documents" }
-      ];
-      setCtas(defaultCtas);
-      localStorage.setItem(`ctas_tour_${listing.id}`, JSON.stringify(defaultCtas));
-    }
+    const defaultCtas = [
+      { label: "Book Private Tour", action: "calendar" },
+      { label: "Request Disclosures & Floor Plans", action: "documents" }
+    ];
+
+    // Load tourConfig from Firestore or migrate on-demand
+    const fetchOrCreateTourConfig = async () => {
+      try {
+        const config = await getTourConfig(listing.id);
+        if (config) {
+          // Document exists! Set the loaded states
+          if (config.welcomeTexts) {
+            setWelcomeEn(config.welcomeTexts.en || initialEnScript);
+            setWelcomeFr(config.welcomeTexts.fr || initialFrScript);
+            // Detect other language code
+            const otherLangCode = Object.keys(config.welcomeTexts).find(k => k !== "en" && k !== "fr");
+            if (otherLangCode) {
+              setWelcomeOtherScript(config.welcomeTexts[otherLangCode] || "");
+              const langName = {
+                ar: "Arabic", "zh-CN": "Chinese (Simplified)", "zh-TW": "Chinese (Traditional)",
+                nl: "Dutch", en: "English", fr: "French", de: "German", hi: "Hindi",
+                it: "Italian", ja: "Japanese", ko: "Korean", pt: "Portuguese",
+                ru: "Russian", es: "Spanish", vi: "Vietnamese"
+              }[otherLangCode] || "Spanish";
+              setTargetLang(langName);
+              setRoomTargetLang(langName);
+              setQaTargetLang(langName);
+            }
+          }
+          if (config.voiceId) {
+            setSoraVoice(config.voiceId);
+          }
+          if (config.rooms && config.rooms.length > 0) {
+            setRooms(config.rooms);
+            localStorage.setItem(`rooms_tour_${listing.id}`, JSON.stringify(config.rooms));
+          } else {
+            setRooms(defaultRooms);
+          }
+          if (config.qas && config.qas.length > 0) {
+            setQas(config.qas);
+            localStorage.setItem(`qas_tour_${listing.id}`, JSON.stringify(config.qas));
+          } else {
+            setQas(defaultQas);
+          }
+          if (config.ctas && config.ctas.length > 0) {
+            setCtas(config.ctas);
+            localStorage.setItem(`ctas_tour_${listing.id}`, JSON.stringify(config.ctas));
+          } else {
+            setCtas(defaultCtas);
+          }
+        } else {
+          // Document does not exist yet! Perform on-demand migration to Firestore
+          console.log(`[On-Demand Migration] Creating tourConfig for listing ${listing.id}`);
+          const welcomeTextsMap: Record<string, string> = {
+            ...DEFAULT_WELCOME_TEXTS,
+            en: initialEnScript,
+            fr: initialFrScript
+          };
+          const initialConfig = {
+            voiceId: "Kore",
+            ttsModel: "gemini-2.5-flash-preview-tts",
+            welcomeTexts: welcomeTextsMap,
+            defaultLanguage: "en",
+            rooms: defaultRooms,
+            qas: defaultQas,
+            ctas: defaultCtas,
+            mediaManifest: [],
+            brokerageBranding: {
+              logoUrl: listing.brokerageLogo || "",
+              accentColor: "#0052A5",
+              backgroundUrl: "",
+              avatarId: ""
+            },
+            updatedAt: Date.now()
+          };
+          await saveTourConfig(listing.id, initialConfig);
+          
+          setRooms(defaultRooms);
+          setQas(defaultQas);
+          setCtas(defaultCtas);
+          setSoraVoice("Kore");
+          
+          localStorage.setItem(`rooms_tour_${listing.id}`, JSON.stringify(defaultRooms));
+          localStorage.setItem(`qas_tour_${listing.id}`, JSON.stringify(defaultQas));
+          localStorage.setItem(`ctas_tour_${listing.id}`, JSON.stringify(defaultCtas));
+        }
+      } catch (err) {
+        console.error("[AiTours] Error fetching/migrating tourConfig:", err);
+        // Fallback to local storage if Firestore has issues
+        const savedRooms = localStorage.getItem(`rooms_tour_${listing.id}`);
+        setRooms(savedRooms ? JSON.parse(savedRooms) : defaultRooms);
+        const savedQas = localStorage.getItem(`qas_tour_${listing.id}`);
+        setQas(savedQas ? JSON.parse(savedQas) : defaultQas);
+        const savedCtas = localStorage.getItem(`ctas_tour_${listing.id}`);
+        setCtas(savedCtas ? JSON.parse(savedCtas) : defaultCtas);
+      }
+    };
+    fetchOrCreateTourConfig();
 
     // Load basic voice / sign-in configurations from listing
     setVoiceEnabled(listing.voiceEnabled !== undefined ? !!listing.voiceEnabled : (listing.voiceName !== "Disabled"));
@@ -517,15 +589,59 @@ export default function AiTours() {
     setSignInPrompt(listing.qrDestination === "sign-in" ? "start" : "none");
   };
 
-  // Auto-Save helper for Sora Tour Workspace
+  // Auto-Save helper for Sora Tour Workspace - saves BOTH welcome texts and rooms/qas/ctas/voices to Firestore
   const initiateAutoSave = async (
     enVal = welcomeEn,
     frVal = welcomeFr,
     otherVal = welcomeOtherScript,
-    langVal = targetLang
+    langVal = targetLang,
+    updatedRooms = rooms,
+    updatedQas = qas,
+    updatedCtas = ctas,
+    voiceIdVal = soraVoice
   ) => {
     if (!selectedListing) return;
     try {
+      // Get language code for 'langVal'
+      const langMap: Record<string, string> = {
+        Arabic: "ar", "Chinese (Simplified)": "zh-CN", "Chinese (Traditional)": "zh-TW",
+        Dutch: "nl", English: "en", French: "fr", German: "de", Hindi: "hi",
+        Italian: "it", Japanese: "ja", Korean: "ko", Portuguese: "pt",
+        Russian: "ru", Spanish: "es", Vietnamese: "vi"
+      };
+      const otherLangCode = langMap[langVal] || "es";
+      
+      const welcomeTextsMap = {
+        ...DEFAULT_WELCOME_TEXTS,
+        en: enVal,
+        fr: frVal
+      };
+      if (langVal && otherLangCode) {
+        welcomeTextsMap[otherLangCode] = otherVal;
+      }
+
+      // Save tourConfig to listings/{listingId}/tourConfig/main
+      const configData = {
+        voiceId: voiceIdVal,
+        ttsModel: "gemini-2.5-flash-preview-tts",
+        welcomeTexts: welcomeTextsMap,
+        defaultLanguage: "en",
+        rooms: updatedRooms,
+        qas: updatedQas,
+        ctas: updatedCtas,
+        mediaManifest: (selectedListing as any).mediaManifest || [],
+        brokerageBranding: {
+          logoUrl: selectedListing.brokerageLogo || "",
+          accentColor: "#0052A5",
+          backgroundUrl: "",
+          avatarId: ""
+        },
+        updatedAt: Date.now()
+      };
+      
+      await saveTourConfig(selectedListing.id, configData);
+
+      // Save to main listing doc for backwards compatibility and real-time syncing
       await updateListing(selectedListing.id, {
         welcome_en_script: enVal,
         welcome_fr_script: frVal,
@@ -533,9 +649,19 @@ export default function AiTours() {
         welcome_other_script: otherVal,
         ...(selectedListing.welcome_en?.startsWith("data:audio") ? {} : { welcome_en: enVal }),
         ...(selectedListing.welcome_fr?.startsWith("data:audio") ? {} : { welcome_fr: frVal }),
+        rooms: updatedRooms,
+        qas: updatedQas,
+        ctas: updatedCtas,
+        voiceName: voiceEnabled ? "Sora Studio Male/Female (Neural)" : "Disabled",
+        voiceEnabled: voiceEnabled,
+        multilingualEnabled: multilingualEnabled,
+        lenderHandoff: lenderHandoff,
+        selectedLenderName: selectedLenderName,
+        qrDestination: signInPrompt === "start" ? "sign-in" : "tour",
         updatedAt: Date.now()
       });
-      toast.success("Auto-save complete!", { duration: 1500 });
+
+      toast.success("Changes auto-saved and live!", { duration: 1500 });
     } catch (err) {
       console.error("Auto-save failed", err);
     }
@@ -653,6 +779,7 @@ export default function AiTours() {
     setNewRoomName("");
     setNewRoomScript("");
     toast.success(`Successfully added the "${newlyAdded.name}" to the AI Tour!`);
+    initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, updated);
   };
 
   const handleDeleteRoom = (roomId: string) => {
@@ -661,6 +788,7 @@ export default function AiTours() {
     setRooms(updated);
     localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
     toast.info("Room removed from tour");
+    initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, updated);
   };
 
   const handleMoveRoomUp = (index: number) => {
@@ -678,6 +806,7 @@ export default function AiTours() {
     setRooms(updated);
     localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
     toast.success("Room moved up sequence successfully!");
+    initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, updated);
   };
 
   const handleMoveRoomDown = (index: number) => {
@@ -695,6 +824,7 @@ export default function AiTours() {
     setRooms(updated);
     localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
     toast.success("Room moved down sequence successfully!");
+    initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, updated);
   };
 
   const handleAddPoint = () => {
@@ -729,6 +859,7 @@ export default function AiTours() {
     setNewQuestion("");
     setNewAnswer("");
     toast.success("Added new frequently asked buyer question block.");
+    initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, updated);
   };
 
   const handleDeleteQa = (index: number) => {
@@ -736,6 +867,7 @@ export default function AiTours() {
     const updated = qas.filter((_, i) => i !== index);
     setQas(updated);
     localStorage.setItem(`qas_tour_${selectedListing.id}`, JSON.stringify(updated));
+    initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, updated);
   };
 
   const handleAddCta = () => {
@@ -749,6 +881,7 @@ export default function AiTours() {
     setCtas(updated);
     if (selectedListing) {
       localStorage.setItem(`ctas_tour_${selectedListing.id}`, JSON.stringify(updated));
+      initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas, updated);
     }
     setNewCtaLabel("");
     toast.success("Added new interaction button on the mobile client experience.");
@@ -759,6 +892,7 @@ export default function AiTours() {
     setCtas(updated);
     if (selectedListing) {
       localStorage.setItem(`ctas_tour_${selectedListing.id}`, JSON.stringify(updated));
+      initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas, updated);
     }
     setCtaToDelete(null);
     toast.success("Removed client-facing interactive button.");
@@ -832,27 +966,17 @@ export default function AiTours() {
     if (!selectedListing) return;
     setLoading(true);
     try {
-      // Save elements directly into the listing model in Firestore
-      await updateListing(selectedListing.id, {
-        welcome_en_script: welcomeEn,
-        welcome_fr_script: welcomeFr,
-        welcome_other_lang: targetLang,
-        welcome_other_script: welcomeOtherScript,
-        room_walkthrough_lang: pubRoomLang,
-        qa_knowledge_lang: pubQaLang,
-        // Bypass text scripts if the existing field values are voice base64 URLs
-        ...(selectedListing.welcome_en?.startsWith("data:audio") ? {} : { welcome_en: welcomeEn }),
-        ...(selectedListing.welcome_fr?.startsWith("data:audio") ? {} : { welcome_fr: welcomeFr }),
-        talkingPoints: talkingPoints,
-        qrDestination: signInPrompt === "start" ? "sign-in" : "tour",
-        voiceName: voiceEnabled ? "Sora Studio Male/Female (Neural)" : "Disabled",
-        voiceEnabled: voiceEnabled,
-        multilingualEnabled: multilingualEnabled,
-        lenderHandoff: lenderHandoff,
-        selectedLenderName: selectedLenderName,
-        ctas: ctas,
-        publishedAt: new Date().toISOString()
-      });
+      // Save elements directly into the listing model in Firestore via initiateAutoSave
+      await initiateAutoSave(
+        welcomeEn,
+        welcomeFr,
+        welcomeOtherScript,
+        targetLang,
+        pubRooms,
+        pubQas,
+        ctas,
+        soraVoice
+      );
 
       // Show immediate response
       toast.success(`🎉 Excellent! "${selectedListing.address}" AI Voice Tour is compiled and published live!`, {
@@ -901,15 +1025,16 @@ export default function AiTours() {
     if (!selectedListing) return;
     setLoading(true);
     try {
-      await updateListing(selectedListing.id, {
-        qrDestination: signInPrompt === "start" ? "sign-in" : "tour",
-        voiceName: voiceEnabled ? "Sora Studio Male/Female (Neural)" : "Disabled",
-        voiceEnabled: voiceEnabled,
-        multilingualEnabled: multilingualEnabled,
-        lenderHandoff: lenderHandoff,
-        selectedLenderName: selectedLenderName,
-        updatedAt: Date.now()
-      });
+      await initiateAutoSave(
+        welcomeEn,
+        welcomeFr,
+        welcomeOtherScript,
+        targetLang,
+        rooms,
+        qas,
+        ctas,
+        soraVoice
+      );
       toast.success("Verification & Gating Rules saved successfully!", {
         description: "Gating mechanics, sign-in flows, and active features updated on Firestore."
       });
@@ -1531,58 +1656,6 @@ export default function AiTours() {
           {/* Settings / Controls Column */}
           <div className="space-y-4 min-w-0 w-full">
             
-            {/* Action panel & CTAs */}
-            <Card className="border-blue-900 shadow-sm bg-blue-950 rounded-2xl overflow-hidden w-full mx-0">
-              <CardHeader className="py-2.5 px-4 border-b border-blue-900 bg-blue-900">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xs font-black uppercase text-white tracking-wider">Deploy & Publish Status</CardTitle>
-                  {isDirty ? (
-                    <span className="text-[9px] font-black uppercase text-amber-700 px-1.5 py-0.2 bg-amber-50 border border-amber-200 rounded animate-pulse">Draft</span>
-                  ) : (
-                    <span className="text-[9px] font-black uppercase text-emerald-700 px-1.5 py-0.2 bg-emerald-50 border border-emerald-200 rounded">Saved</span>
-                  )}
-                </div>
-                <CardDescription className="text-[10px] text-white font-medium">Publish your changes to sync across print flyers, tablets, and QR paths.</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3 bg-white">
-                <div className="p-2.5 bg-amber-50/50 rounded-lg border border-amber-100 text-[10px] text-amber-900 leading-normal font-sans">
-                  <p className="font-bold uppercase tracking-wide text-[8px] text-amber-700 mb-0.5">Live Endpoint</p>
-                  Your guided property tour is configured at: <br/>
-                  <span className="font-mono bg-white px-1 border border-amber-100 rounded text-blue-600 font-bold block mt-0.5 truncate text-[10px]">
-                    {window.location.origin}/tour/{selectedListing.id}
-                  </span>
-                </div>
-
-                <div className="space-y-2 pt-1 font-sans">
-                  <Button 
-                    onClick={handlePublishTour}
-                    className="w-full bg-amber-600 hover:bg-amber-500 font-black text-[11px] h-8.5 tracking-wider uppercase flex items-center justify-center gap-1 shadow-sm"
-                  >
-                    <BookmarkCheck className="h-4 w-4" /> Publish Active Tour
-                  </Button>
-                  
-                  <div className="text-center pt-0.5">
-                    <p className="text-stone-500 font-mono text-[9px] font-medium leading-none">
-                      Last Published: {selectedListing?.publishedAt ? (() => {
-                        const d = new Date(selectedListing.publishedAt);
-                        const optionsDate: Intl.DateTimeFormatOptions = { month: 'short', day: '2-digit', year: 'numeric' };
-                        const dateFormatted = d.toLocaleDateString('en-US', optionsDate);
-                        
-                        let hours = d.getHours();
-                        const minutes = d.getMinutes().toString().padStart(2, '0');
-                        const ampm = hours >= 12 ? 'PM' : 'AM';
-                        hours = hours % 12;
-                        hours = hours ? hours : 12;
-                        const timeFormatted = `${hours}:${minutes} ${ampm}`;
-                        
-                        return `${dateFormatted}, ${timeFormatted}`;
-                      })() : "Jun 10, 2026, 3:39 PM"}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Tour CTA Config */}
             <Card className="border-stone-200 shadow-sm bg-white rounded-2xl overflow-hidden w-full mx-0">
               <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-white">
@@ -1718,21 +1791,14 @@ export default function AiTours() {
                   </div>
                   
                   <div className="space-y-1 pt-0.5">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white opacity-80">
                       <input 
                         type="checkbox" 
-                        checked={voiceEnabled} 
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          if (!val && !multilingualEnabled && !lenderHandoff) {
-                            toast.error("At least one enabled feature must be selected under Verification & Gating Rules.");
-                            return;
-                          }
-                          setVoiceEnabled(val);
-                        }}
+                        checked={true} 
+                        disabled={true}
                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600"
                       />
-                      Enable Sora voice synthetic audio
+                      Enable Sora voice synthetic audio (Always On)
                     </label>
 
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white">
@@ -1741,15 +1807,11 @@ export default function AiTours() {
                         checked={multilingualEnabled} 
                         onChange={(e) => {
                           const val = e.target.checked;
-                          if (!val && !voiceEnabled && !lenderHandoff) {
-                            toast.error("At least one enabled feature must be selected under Verification & Gating Rules.");
-                            return;
-                          }
                           setMultilingualEnabled(val);
                         }}
                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600"
                       />
-                      Enable Multilingual Support (75+ languages)
+                      Enable Multilingual Support (15 languages)
                     </label>
 
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white mt-0.5">
@@ -1758,16 +1820,30 @@ export default function AiTours() {
                         checked={lenderHandoff} 
                         onChange={(e) => {
                           const val = e.target.checked;
-                          if (!val && !voiceEnabled && !multilingualEnabled) {
-                            toast.error("At least one enabled feature must be selected under Verification & Gating Rules.");
-                            return;
-                          }
                           setLenderHandoff(val);
                         }}
                         className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600"
                       />
                       Active Lender Handoff
                     </label>
+                  </div>
+
+                  <div className="p-2 bg-blue-900/50 rounded-lg border border-blue-800 space-y-1 mt-2 text-left">
+                    <Label className="text-[9px] font-black uppercase text-blue-200 font-bold">Sora Voice Narrator Profile</Label>
+                    <select 
+                      value={soraVoice}
+                      onChange={(e) => {
+                        const newVoice = e.target.value;
+                        setSoraVoice(newVoice);
+                        initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas, ctas, newVoice);
+                      }}
+                      className="bg-white border text-[10px] h-7 rounded-md w-full outline-none px-1.5 focus:ring-1 focus:ring-amber-500 mt-0.5 font-bold text-stone-750"
+                    >
+                      <option value="Kore">Kore (Universal Warm Neutral)</option>
+                      <option value="Kona">Kona (Professional Standard)</option>
+                      <option value="Sora">Sora (Classic Cinematic)</option>
+                      <option value="Alex">Alex (Executive Accent)</option>
+                    </select>
                   </div>
 
                   {lenderHandoff && (

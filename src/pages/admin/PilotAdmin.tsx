@@ -11,7 +11,7 @@ import { Loader2, Save, Globe, Plus, Trash2, ShieldAlert, Play, Pause, Volume2, 
 // Translations dictionary for EN/FR UI support
 const TRANSLATIONS = {
   en: {
-    title: "VertexAgent — Pilot Admin",
+    title: "AI Open House Connect — Pilot Admin",
     save: "Save",
     saving: "Saving...",
     saved: "Saved successfully",
@@ -69,7 +69,7 @@ const TRANSLATIONS = {
     validationPhone: "Format hint: +1 XXX XXX XXXX"
   },
   fr: {
-    title: "VertexAgent — Admin Pilote",
+    title: "AI Open House Connect — Admin Pilote",
     save: "Enregistrer",
     saving: "Enregistrement...",
     saved: "Enregistré avec succès",
