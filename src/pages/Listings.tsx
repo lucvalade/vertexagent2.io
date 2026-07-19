@@ -156,6 +156,8 @@ export default function Dashboard() {
   const [visibleCount, setVisibleCount] = useState(3);
   const [layoutCols, setLayoutCols] = useState<2 | 3>(3);
   const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
 
   async function handleDuplicateListing(listing: Listing) {
     const toastId = toast.loading("Duplicating property listing asset...");
@@ -435,185 +437,276 @@ export default function Dashboard() {
         </Card>
       ) : (
         <div className="space-y-8">
-          <div className={`grid gap-6 sm:grid-cols-2 ${layoutCols === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2 max-w-5xl'}`}>
-            {(() => {
-              const uniqueRaw = Array.from(new Map(listings.map(l => [l.id, l])).values());
-              const sorted = [...uniqueRaw].sort((a, b) => {
-                const timeA = a.createdAt || 0;
-                const timeB = b.createdAt || 0;
-                return sortOrder === "latest" ? timeB - timeA : timeA - timeB;
-              });
-              return sorted.slice(0, visibleCount);
-            })().map(listing => (
-              <Card key={'listing-' + listing.id} className="overflow-hidden flex flex-col group hover:shadow-lg transition-all duration-300 border border-slate-200 hover-blue-pulse">
-                <div 
-                  className="h-48 bg-slate-100 relative cursor-pointer overflow-hidden"
-                  onClick={() => navigate(`/app/listings/${listing.id}`)}
+          {/* Search Bar */}
+          <div className="flex flex-col sm:flex-row gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+            <div className="relative flex-1">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by property address or MLS number..."
+                className="w-full pl-10 pr-4 h-10 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:outline-none focus:border-blue-500 transition-colors shadow-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    setAppliedQuery(searchQuery);
+                  }
+                }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={() => setAppliedQuery(searchQuery)}
+                className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all"
+              >
+                Search
+              </Button>
+              {appliedQuery && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setAppliedQuery("");
+                  }}
+                  className="h-10 px-3 bg-white border-slate-200 text-slate-500 rounded-xl text-xs sm:text-sm hover:bg-slate-50 shadow-sm"
                 >
-                  {listing.images && listing.images.length > 0 ? (
-                    <img 
-                      src={typeof listing.images[0] === 'string' ? listing.images[0] : listing.images[0].url} 
-                      alt={cleanAddress(listing.address, listing.id)} 
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = `https://picsum.photos/seed/${listing.id}/600/400`;
-                      }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-slate-400">No Image</div>
-                  )}
-                </div>
-                <CardHeader className="pb-2 cursor-pointer relative" onClick={() => navigate(`/app/listings/${listing.id}`)}>
-                  <div className="flex justify-between items-start gap-4">
-                    <CardTitle className="text-lg line-clamp-1 group-hover:text-blue-600 transition-colors flex-1">
-                      {cleanAddress(listing.address, listing.id)}{listing.city ? `, ${listing.city}` : ''}{listing.province ? `, ${listing.province}` : ''}
-                    </CardTitle>
-                     <div onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-black hover:text-slate-950 transition-colors -mt-1 -mr-1" type="button" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
-                            <MoreVertical className="h-4 w-4 stroke-[3.5] text-black" strokeWidth={3.5} />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {(() => {
+            const uniqueRaw = Array.from(new Map(listings.map(l => [l.id, l])).values());
+            const filtered = uniqueRaw.filter(listing => {
+              if (!appliedQuery) return true;
+              const query = appliedQuery.toLowerCase();
+              const addressMatch = (listing.address || "").toLowerCase().includes(query);
+              const mlsMatch = (listing.mlsNumber || "").toLowerCase().includes(query);
+              return addressMatch || mlsMatch;
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <Card className="flex flex-col items-center justify-center h-64 text-center p-6 border-dashed">
+                  <MapPin className="h-8 w-8 text-slate-400 mb-2" />
+                  <h3 className="text-lg font-medium">No matches found</h3>
+                  <p className="text-sm text-slate-500 mt-1 mb-4 max-w-sm">
+                    We couldn't find any listings matching "{appliedQuery}". Try checking for typos or clear the search.
+                  </p>
+                  <Button onClick={() => { setSearchQuery(""); setAppliedQuery(""); }}>Clear Search</Button>
+                </Card>
+              );
+            }
+
+            const sorted = [...filtered].sort((a, b) => {
+              const timeA = a.createdAt || 0;
+              const timeB = b.createdAt || 0;
+              return sortOrder === "latest" ? timeB - timeA : timeA - timeB;
+            });
+
+            return (
+              <div className="space-y-8">
+                <div className={`grid gap-6 sm:grid-cols-2 ${layoutCols === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2 max-w-5xl'}`}>
+                  {sorted.slice(0, visibleCount).map(listing => (
+                    <Card key={'listing-' + listing.id} className="overflow-hidden flex flex-col group hover:shadow-lg transition-all duration-300 border border-slate-200 hover-blue-pulse">
+                      <div 
+                        className="h-48 bg-slate-100 relative cursor-pointer overflow-hidden"
+                        onClick={() => navigate(`/app/listings/${listing.id}`)}
+                      >
+                        {listing.images && listing.images.length > 0 ? (
+                          <img 
+                            src={typeof listing.images[0] === 'string' ? listing.images[0] : listing.images[0].url} 
+                            alt={cleanAddress(listing.address, listing.id)} 
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = `https://picsum.photos/seed/${listing.id}/600/400`;
+                            }}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-slate-400">No Image</div>
+                        )}
+                      </div>
+                      <CardHeader className="pb-2 cursor-pointer relative" onClick={() => navigate(`/app/listings/${listing.id}`)}>
+                        <div className="flex justify-between items-start gap-4">
+                          <CardTitle className="text-lg line-clamp-1 group-hover:text-blue-600 transition-colors flex-1">
+                            {cleanAddress(listing.address, listing.id)}{listing.city ? `, ${listing.city}` : ''}{listing.province ? `, ${listing.province}` : ''}
+                          </CardTitle>
+                          <div onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={
+                                <Button size="icon" variant="ghost" className="h-8 w-8 text-black hover:text-slate-950 transition-colors -mt-1 -mr-1" type="button" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
+                                  <MoreVertical className="h-4 w-4 stroke-[3.5] text-black" strokeWidth={3.5} />
+                                </Button>
+                              } />
+                              <DropdownMenuContent align="end" className="w-52 p-2 rounded-xl shadow-xl border-slate-200" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/${listing.id}`); }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <Eye className="h-4 w-4 text-blue-600" /> View Tour
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/edit/${listing.id}`); }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <Edit className="h-4 w-4 text-blue-600" /> Edit Listing
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/openhouses`); }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <Calendar className="h-4 w-4 text-blue-600" /> Create Open House
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateListing(listing); }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <CopyIcon className="h-4 w-4 text-blue-600" /> Duplicate Listing
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSharedModalListing(listing); }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <Users className="h-4 w-4 text-blue-600" /> Shared Listing
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="my-1" />
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  setQrListing(listing);
+                                  trackShareActivity(listing.id, 'QR');
+                                }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <QrCode className="h-4 w-4 text-blue-600" /> Get QR Code
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShareListing(listing);
+                                  trackShareActivity(listing.id, 'SOCIAL');
+                                }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <ExternalLink className="h-4 w-4 text-blue-600" /> Get Tour URL
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate('/app/flyers');
+                                }} className="rounded-lg font-bold gap-2 text-xs">
+                                  <Layout className="h-4 w-4 text-blue-600" /> Print Flyer
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="my-1" />
+                                <DropdownMenuItem 
+                                  className="rounded-lg font-bold gap-2 text-red-600 focus:text-red-700 focus:bg-red-50 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteId(listing.id);
+                                    setDeleteAddress(listing.address);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" /> Delete Listing
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                        <CardDescription className="flex items-center gap-2 mt-2">
+                          <span className="font-bold text-slate-900 border px-2 py-0.5 rounded-lg text-sm bg-blue-50 border-blue-100 shadow-sm text-blue-700">
+                            {listing.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(listing.price) : 'Price Unlisted'}
+                          </span>
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex-1 pb-4 cursor-pointer" onClick={() => navigate(`/app/listings/${listing.id}`)}>
+                          <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
+                             {listing.beds !== undefined && listing.beds !== null && (
+                               <span className="flex items-center gap-1.5"><Bed className="h-4 w-4 text-slate-400"/> {listing.beds} Beds</span>
+                             )}
+                             {listing.baths !== undefined && listing.baths !== null && (
+                               <span className="flex items-center gap-1.5"><Bath className="h-4 w-4 text-slate-400"/> {listing.baths} Baths</span>
+                             )}
+                          </div>
+                          {(() => {
+                            const matchEvent = openHouseEvents.find(evt => {
+                              if (evt.listingId !== listing.id) return false;
+                              if (!evt.eventDate) return false;
+                              
+                              // Get local today's date string in YYYY-MM-DD
+                              const today = new Date();
+                              const year = today.getFullYear();
+                              const month = String(today.getMonth() + 1).padStart(2, '0');
+                              const day = String(today.getDate()).padStart(2, '0');
+                              const todayStr = `${year}-${month}-${day}`;
+                              
+                              // Standardize event date to YYYY-MM-DD if it is formatted as MM/DD/YYYY
+                              let dateStr = evt.eventDate;
+                              if (dateStr.includes("/")) {
+                                const parts = dateStr.split("/");
+                                if (parts.length === 3) {
+                                  const mm = parts[0].padStart(2, '0');
+                                  const dd = parts[1].padStart(2, '0');
+                                  const yyyy = parts[2];
+                                  dateStr = `${yyyy}-${mm}-${dd}`;
+                                }
+                              }
+                              
+                              return dateStr >= todayStr;
+                            });
+                            if (matchEvent) {
+                              return (
+                                <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-blue-700 bg-blue-50/60 p-2 rounded-lg border border-blue-100/70">
+                                  <div className="flex items-center gap-1 font-bold text-blue-800">
+                                    <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                    Scheduled Open House
+                                  </div>
+                                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-0.5 text-stone-700 font-medium overflow-hidden text-ellipsis">
+                                    <span>Date: <strong className="text-black font-semibold">{formatDate(matchEvent.eventDate)}</strong></span>
+                                    <span className="hidden sm:inline text-slate-300">|</span>
+                                    <span>Time: <strong className="text-black font-semibold">{formatTime12h(matchEvent.startTime)} - {formatTime12h(matchEvent.endTime)}</strong></span>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                      </CardContent>
+                      <CardFooter className="bg-slate-50 border-t py-2.5 px-4 flex items-center justify-between gap-2 overflow-hidden">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="flex-1 h-8 min-w-0 bg-white hover:bg-[#155dfc] hover:text-white hover:border-[#155dfc] shadow-sm transition-all group/tour text-[11px] font-bold px-2" 
+                          onClick={() => window.open(`/tour/${listing.id}`, '_blank')}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1.5 text-slate-400 group-hover/tour:text-white transition-colors shrink-0" /> <span className="truncate">Ai Tour</span>
+                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button 
+                            size="sm"
+                            variant="ghost" 
+                            className="h-8 px-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5 text-[11px] font-bold" 
+                            onClick={() => navigate(`/app/listings/edit/${listing.id}`)}
+                          >
+                            <Edit className="h-3 w-3" /> <span>Edit</span>
                           </Button>
-                        } />
-                        <DropdownMenuContent align="end" className="w-52 p-2 rounded-xl shadow-xl border-slate-200" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/${listing.id}`); }} className="rounded-lg font-bold gap-2 text-xs">
-                            <Eye className="h-4 w-4 text-blue-600" /> View Tour
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/edit/${listing.id}`); }} className="rounded-lg font-bold gap-2 text-xs">
-                            <Edit className="h-4 w-4 text-blue-600" /> Edit Listing
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/openhouses`); }} className="rounded-lg font-bold gap-2 text-xs">
-                            <Calendar className="h-4 w-4 text-blue-600" /> Create Open House
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicateListing(listing); }} className="rounded-lg font-bold gap-2 text-xs">
-                            <CopyIcon className="h-4 w-4 text-blue-600" /> Duplicate Listing
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSharedModalListing(listing); }} className="rounded-lg font-bold gap-2 text-xs">
-                            <Users className="h-4 w-4 text-blue-600" /> Shared Listing
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="my-1" />
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            setQrListing(listing);
-                            trackShareActivity(listing.id, 'QR');
-                          }} className="rounded-lg font-bold gap-2 text-xs">
-                            <QrCode className="h-4 w-4 text-blue-600" /> Get QR Code
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            setShareListing(listing);
-                            trackShareActivity(listing.id, 'SOCIAL');
-                          }} className="rounded-lg font-bold gap-2 text-xs">
-                            <ExternalLink className="h-4 w-4 text-blue-600" /> Get Tour URL
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            navigate('/app/flyers');
-                          }} className="rounded-lg font-bold gap-2 text-xs">
-                            <Layout className="h-4 w-4 text-blue-600" /> Print Flyer
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="my-1" />
-                          <DropdownMenuItem 
-                            className="rounded-lg font-bold gap-2 text-red-600 focus:text-red-700 focus:bg-red-50 text-xs"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                          
+                          <Button 
+                            size="sm"
+                            variant="ghost" 
+                            className="h-8 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1.5 text-[11px] font-bold" 
+                            onClick={() => {
                               setDeleteId(listing.id);
                               setDeleteAddress(listing.address);
                             }}
                           >
-                            <Trash2 className="h-4 w-4" /> Delete Listing
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                  <CardDescription className="flex items-center gap-2 mt-2">
-                    <span className="font-bold text-slate-900 border px-2 py-0.5 rounded-lg text-sm bg-blue-50 border-blue-100 shadow-sm text-blue-700">
-                      {listing.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(listing.price) : 'Price Unlisted'}
-                    </span>
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1 pb-4 cursor-pointer" onClick={() => navigate(`/app/listings/${listing.id}`)}>
-                    <div className="flex items-center gap-4 text-sm text-slate-500 font-medium">
-                       {listing.beds !== undefined && listing.beds !== null && (
-                         <span className="flex items-center gap-1.5"><Bed className="h-4 w-4 text-slate-400"/> {listing.beds} Beds</span>
-                       )}
-                       {listing.baths !== undefined && listing.baths !== null && (
-                         <span className="flex items-center gap-1.5"><Bath className="h-4 w-4 text-slate-400"/> {listing.baths} Baths</span>
-                       )}
-                    </div>
-                    {(() => {
-                      const matchEvent = openHouseEvents.find(evt => evt.listingId === listing.id);
-                      if (matchEvent) {
-                        return (
-                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-blue-700 bg-blue-50/60 p-2 rounded-lg border border-blue-100/70">
-                            <div className="flex items-center gap-1 font-bold text-blue-800">
-                              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              Scheduled Open House
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mt-0.5 text-stone-700 font-medium overflow-hidden text-ellipsis">
-                              <span>Date: <strong className="text-black font-semibold">{formatDate(matchEvent.eventDate)}</strong></span>
-                              <span className="hidden sm:inline text-slate-300">|</span>
-                              <span>Time: <strong className="text-black font-semibold">{formatTime12h(matchEvent.startTime)} - {formatTime12h(matchEvent.endTime)}</strong></span>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                </CardContent>
-                <CardFooter className="bg-slate-50 border-t py-2.5 px-4 flex items-center justify-between gap-2 overflow-hidden">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="flex-1 h-8 min-w-0 bg-white hover:bg-[#155dfc] hover:text-white hover:border-[#155dfc] shadow-sm transition-all group/tour text-[11px] font-bold px-2" 
-                    onClick={() => window.open(`/tour/${listing.id}`, '_blank')}
-                  >
-                    <ExternalLink className="h-3 w-3 mr-1.5 text-slate-400 group-hover/tour:text-white transition-colors shrink-0" /> <span className="truncate">Ai Tour</span>
-                  </Button>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button 
-                      size="sm"
-                      variant="ghost" 
-                      className="h-8 px-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center gap-1.5 text-[11px] font-bold" 
-                      onClick={() => navigate(`/app/listings/edit/${listing.id}`)}
-                    >
-                      <Edit className="h-3 w-3" /> <span>Edit</span>
-                    </Button>
-                    
-                    <Button 
-                      size="sm"
-                      variant="ghost" 
-                      className="h-8 px-2 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center gap-1.5 text-[11px] font-bold" 
-                      onClick={() => {
-                        setDeleteId(listing.id);
-                        setDeleteAddress(listing.address);
-                      }}
-                    >
-                      <Trash2 className="h-3 w-3" /> <span>Delete</span>
-                    </Button>
-                  </div>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
+                            <Trash2 className="h-3 w-3" /> <span>Delete</span>
+                          </Button>
+                        </div>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
 
-          {listings.length > visibleCount && (
-            <div className="flex flex-col items-center gap-4 py-8 border-t border-slate-100">
-               <div className="text-sm font-medium text-slate-500 bg-slate-100 px-4 py-1.5 rounded-full">
-                 {visibleCount} of {listings.length} Listings
-               </div>
-               <button 
-                 onClick={() => setVisibleCount(prev => prev + 3)}
-                 className="text-blue-600 hover:text-blue-700 font-bold text-lg flex items-center gap-2 transition-colors cursor-pointer"
-               >
-                 Show More Listings
-               </button>
-               <span className="text-xs text-slate-400 uppercase tracking-widest font-bold">Next Listings</span>
-            </div>
-          )}
+                {filtered.length > visibleCount && (
+                  <div className="flex flex-col items-center gap-4 py-8 border-t border-slate-100">
+                    <div className="text-sm font-medium text-slate-500 bg-slate-100 px-4 py-1.5 rounded-full">
+                      {visibleCount} of {filtered.length} Listings
+                    </div>
+                    <button 
+                      onClick={() => setVisibleCount(prev => prev + 3)}
+                      className="text-blue-600 hover:text-blue-700 font-bold text-lg flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      Show More Listings
+                    </button>
+                    <span className="text-xs text-slate-400 uppercase tracking-widest font-bold">Next Listings</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

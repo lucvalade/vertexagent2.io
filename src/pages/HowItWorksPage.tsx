@@ -45,7 +45,7 @@ export default function HowItWorksPage() {
             </p>
 
             <p className="text-slate-700 text-lg md:text-xl leading-relaxed font-normal">
-              By combining direct MLS/Zillow URL imports powered by Google Gemini and custom extraction pipes with real-time CRM synchronization engines like HubSpot or Follow Up Boss, the platform transforms static listing information into automated conversational funnels. The system handles everything from automated speech walkthroughs and instant flyer QR generation to rigorous MLS disclosure tracking and structured analytic reviews, ensuring every home show runs as a modern, high-converting digital exhibition.
+              By combining your direct or MLS/Zillow URL imports powered by Google Gemini and custom extraction pipes with real-time CRM synchronization engines like HubSpot or Follow Up Boss, the platform transforms static listing information into automated conversational funnels. The system handles everything from automated speech walkthroughs and instant flyer QR generation to rigorous MLS disclosure tracking and structured analytic reviews, ensuring every home show runs as a modern, high-converting digital exhibition.
             </p>
           </motion.div>
 

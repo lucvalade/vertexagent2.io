@@ -1,27 +1,117 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Sparkles, Square, AlertCircle, Loader2, Star } from "lucide-react";
+import { Play, Sparkles, Square, AlertCircle, Loader2, Star, ChevronDown, Search, Check } from "lucide-react";
 import { useAgentTierCapabilities } from "./UpdatedFeatureController";
 import { getTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
 
 /**
  * Mapping language select codes to full language names for TTS parameters
  */
-const LANGUAGE_NAMES: Record<string, string> = {
+const LANGUAGE_API_NAMES: Record<string, string> = {
   ar: "Arabic",
-  "zh-CN": "Chinese (Simplified)",
-  "zh-TW": "Chinese (Traditional)",
+  bn: "Bengali",
   nl: "Dutch",
   en: "English",
   fr: "French",
   de: "German",
   hi: "Hindi",
+  id: "Indonesian",
   it: "Italian",
   ja: "Japanese",
   ko: "Korean",
+  pl: "Polish",
   pt: "Portuguese",
+  ro: "Romanian",
   ru: "Russian",
   es: "Spanish",
-  vi: "Vietnamese"
+  sv: "Swedish",
+  ta: "Tamil",
+  th: "Thai",
+  tr: "Turkish",
+  ur: "Urdu",
+  vi: "Vietnamese",
+  "zh-CN": "Chinese (Simplified)",
+  "zh-TW": "Chinese (Traditional)"
+};
+
+const LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
+  ar: "العربية (Arabic - Egyptian)",
+  bn: "বাংলা (Bengali)",
+  nl: "Nederlands (Dutch)",
+  en: "English (English - US)",
+  fr: "Français (French)",
+  de: "Deutsch (German)",
+  hi: "हिन्दी (Hindi)",
+  id: "Bahasa Indonesia (Indonesian)",
+  it: "Italiano (Italian)",
+  ja: "日本語 (Japanese)",
+  ko: "한국어 (Korean)",
+  pl: "Polski (Polish)",
+  pt: "Português (Portuguese)",
+  ro: "Română (Romanian)",
+  ru: "Русский (Russian)",
+  es: "Español (Spanish)",
+  sv: "Svenska (Swedish)",
+  ta: "தமிழ் (Tamil)",
+  th: "ภาษาไทย (Thai)",
+  tr: "Türkçe (Turkish)",
+  ur: "اردو (Urdu)",
+  vi: "Tiếng Việt (Vietnamese)",
+  "zh-CN": "简体中文 (Chinese Simplified)",
+  "zh-TW": "繁體中文 (Chinese Traditional)"
+};
+
+const START_TRANSLATIONS: Record<string, string> = {
+  ar: "ابدأ (Start)",
+  bn: "শুরু করুন (Start)",
+  nl: "Starten (Start)",
+  en: "Start",
+  fr: "Démarrer (Start)",
+  de: "Starten (Start)",
+  hi: "शुरू करें (Start)",
+  id: "Mulai (Start)",
+  it: "Avvia (Start)",
+  ja: "開始 (Start)",
+  ko: "시작 (Start)",
+  pl: "Rozpocznij (Start)",
+  pt: "Iniciar (Start)",
+  ro: "Start",
+  ru: "Начать (Start)",
+  es: "Iniciar (Start)",
+  sv: "Starta (Start)",
+  ta: "தொடங்கு (Start)",
+  th: "เริ่ม (Start)",
+  tr: "Başlat (Start)",
+  ur: "شروع کریں (Start)",
+  vi: "Bắt đầu (Start)",
+  "zh-CN": "开始 (Start)",
+  "zh-TW": "開始 (Start)"
+};
+
+const PLAY_TRANSLATIONS: Record<string, string> = {
+  ar: "تشغيل الصوت / Play Audio",
+  bn: "অডিও শুনুন / Play Audio",
+  nl: "Audio afspelen / Play Audio",
+  en: "Play Audio",
+  fr: "Écouter l'audio / Play Audio",
+  de: "Audio abspielen / Play Audio",
+  hi: "ऑडियो चलाएं / Play Audio",
+  id: "Putar Audio / Play Audio",
+  it: "Riproduci audio / Play Audio",
+  ja: "オーディオ再生 / Play Audio",
+  ko: "오디오 재생 / Play Audio",
+  pl: "Odtwórz dźwięk / Play Audio",
+  pt: "Reproduzir áudio / Play Audio",
+  ro: "Redare audio / Play Audio",
+  ru: "Воспроизвести аудио / Play Audio",
+  es: "Reproducir audio / Play Audio",
+  sv: "Spela ljud / Play Audio",
+  ta: "ஆடியோவை இயக்கு / Play Audio",
+  th: "เล่นเสียง / Play Audio",
+  tr: "Sesi Çal / Play Audio",
+  ur: "آڈیو چلائیں / Play Audio",
+  vi: "Phát âm thanh / Play Audio",
+  "zh-CN": "播放音频 / Play Audio",
+  "zh-TW": "播放音訊 / Play Audio"
 };
 
 interface WelcomeAudioProps {
@@ -50,7 +140,7 @@ export default function WelcomeAudio({
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const activeUrlRef = useRef<string | null>(null);
 
-  const { capabilities } = useAgentTierCapabilities(agentId);
+  const { capabilities, loading: capabilitiesLoading } = useAgentTierCapabilities(agentId);
   const isPro = capabilities.maxConversationTurns > 10 || agentPlan === "pro" || agentPlan === "pro_agent" || agentPlan === "elite" || agentPlan === "team_pro";
 
   const [language, setLanguage] = useState("en");
@@ -63,6 +153,27 @@ export default function WelcomeAudio({
   const [welcomeTexts, setWelcomeTexts] = useState<Record<string, string>>(DEFAULT_WELCOME_TEXTS);
   const [voiceId, setVoiceId] = useState("Kore");
   const [ttsModel, setTtsModel] = useState("gemini-2.5-flash-preview-tts");
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const filteredLanguages = Object.entries(LANGUAGE_DISPLAY_NAMES).filter(([code, name]) =>
+    name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    code.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const generateAudioForLanguageWithParams = async (
     langCode: string,
@@ -83,7 +194,7 @@ export default function WelcomeAudio({
     setSpeaking(false);
 
     const textToSpeak = texts[langCode] || texts["en"] || DEFAULT_WELCOME_TEXTS[langCode] || DEFAULT_WELCOME_TEXTS["en"];
-    const langName = LANGUAGE_NAMES[langCode] || "English";
+    const langName = LANGUAGE_API_NAMES[langCode] || "English";
 
     try {
       const response = await fetch("/api/tts-simple", {
@@ -180,11 +291,11 @@ export default function WelcomeAudio({
             }
           }
         }
-        // Pre-generate audio with the correct loaded configurations
-        await generateAudioForLanguageWithParams(activeLang, activeTexts, activeVoice, activeModel, false);
+        // Set status to idle to wait for manual Start button click
+        setStatus("idle");
       } catch (err) {
         console.error("[WelcomeAudio] Error loading Firestore tourConfig:", err);
-        await generateAudioForLanguageWithParams("en", DEFAULT_WELCOME_TEXTS, "Kore", "gemini-2.5-flash-preview-tts", false);
+        setStatus("idle");
       }
     };
     fetchTourConfig();
@@ -222,19 +333,11 @@ export default function WelcomeAudio({
 
   // Lock language to English if agent is on Solo tier
   useEffect(() => {
-    if (!isPro && language !== "en") {
+    if (!capabilitiesLoading && !isPro && language !== "en") {
       setLanguage("en");
       handleReset();
     }
-  }, [agentPlan, isPro, language]);
-
-  // Preset language dropdown menu on mount to explicitly "English" ("en")
-  useEffect(() => {
-    setLanguage("en");
-    if (!listingId) {
-      generateAudioForLanguageWithParams("en", DEFAULT_WELCOME_TEXTS, "Kore", "gemini-2.5-flash-preview-tts", false);
-    }
-  }, []);
+  }, [capabilitiesLoading, agentPlan, isPro, language]);
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedLang = e.target.value;
@@ -243,14 +346,20 @@ export default function WelcomeAudio({
       return;
     }
     setLanguage(selectedLang);
-    generateAudioForLanguage(selectedLang, false);
+    // Clear previous audio on language change, so it's generated on-demand
+    if (activeUrlRef.current) {
+      URL.revokeObjectURL(activeUrlRef.current);
+      activeUrlRef.current = null;
+      setBlobUrl(null);
+    }
+    setStatus("idle");
   };
 
   const play = async () => {
     const el = audioElementRef.current;
     if (!el) return;
 
-    if (!blobUrl || status === "error") {
+    if (!blobUrl || status === "error" || status === "idle") {
       await generateAudioForLanguage(language, true);
       return;
     }
@@ -302,6 +411,16 @@ export default function WelcomeAudio({
     setSpeaking(false);
   };
 
+  const getButtonLabel = () => {
+    if (status === "generating") {
+      return "Generating audio…";
+    }
+    if (status === "ready") {
+      return PLAY_TRANSLATIONS[language] || "Play Audio";
+    }
+    return START_TRANSLATIONS[language] || "Start";
+  };
+
   return (
     <div id="ai-guided-welcome-tour-card" className="flex flex-col w-full bg-slate-900/60 border border-slate-800/80 rounded-xl p-5 backdrop-blur-sm shadow-lg mt-4 animate-in fade-in duration-300 text-left">
       <audio
@@ -332,34 +451,93 @@ export default function WelcomeAudio({
         </span>
       </div>
 
-      {/* 1. Language Dropdown Label & Select */}
-      <div className="w-full mb-3">
-        <label htmlFor="welcome-language-select" className="block text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1.5">
+      {/* 1. Searchable Language Dropdown */}
+      <div className="w-full mb-3 relative" ref={dropdownRef}>
+        <label className="block text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1.5">
           Welcome Language
         </label>
-        <select
-          id="welcome-language-select"
-          value={language}
-          onChange={handleLanguageChange}
+        
+        {/* Toggle Button */}
+        <button
+          type="button"
           disabled={status === "generating"}
-          className="w-full bg-slate-800 border border-slate-700/80 text-slate-200 rounded-lg p-2.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          className="w-full bg-slate-800 border border-slate-700/80 text-slate-200 rounded-lg p-2.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between text-left"
         >
-          <option value="ar" disabled={!isPro}>Arabic (العربية) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="zh-CN" disabled={!isPro}>Chinese (Simplified / 简体中文) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="zh-TW" disabled={!isPro}>Chinese (Traditional / 繁體中文) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="nl" disabled={!isPro}>Dutch (Nederlands) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="en">English (English)</option>
-          <option value="fr" disabled={!isPro}>French (Français) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="de" disabled={!isPro}>German (Deutsch) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="hi" disabled={!isPro}>Hindi (हिन्दी) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="it" disabled={!isPro}>Italian (Italiano) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="ja" disabled={!isPro}>Japanese (日本語) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="ko" disabled={!isPro}>Korean (한국어) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="pt" disabled={!isPro}>Portuguese (Português) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="ru" disabled={!isPro}>Russian (Русский) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="es" disabled={!isPro}>Spanish (Español) {!isPro && "🔒 (Pro Upgrade)"}</option>
-          <option value="vi" disabled={!isPro}>Vietnamese (Tiếng Việt) {!isPro && "🔒 (Pro Upgrade)"}</option>
-        </select>
+          <span>{LANGUAGE_DISPLAY_NAMES[language] || "English (English - US)"}</span>
+          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+        </button>
+
+        {/* Floating Dropdown Menu */}
+        {isDropdownOpen && (
+          <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-700/80 rounded-lg shadow-xl z-50 max-h-[250px] flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+            {/* Search Box */}
+            <div className="p-2 border-b border-slate-800 flex items-center gap-2 bg-slate-950/80">
+              <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search language..."
+                className="w-full bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+                onClick={(e) => e.stopPropagation()}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSearchQuery(""); }}
+                  className="text-[10px] text-slate-500 hover:text-slate-300"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Language List */}
+            <div className="overflow-y-auto flex-1 py-1 max-h-[190px]">
+              {filteredLanguages.length > 0 ? (
+                filteredLanguages.map(([code, name]) => {
+                  const isLocked = !isPro && code !== "en";
+                  const isSelected = language === code;
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => {
+                        setLanguage(code);
+                        // Clear previous audio on language change
+                        if (activeUrlRef.current) {
+                          URL.revokeObjectURL(activeUrlRef.current);
+                          activeUrlRef.current = null;
+                          setBlobUrl(null);
+                        }
+                        setStatus("idle");
+                        setIsDropdownOpen(false);
+                        setSearchQuery("");
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                        isSelected 
+                          ? "bg-blue-600/30 text-blue-400 font-semibold" 
+                          : isLocked 
+                            ? "text-slate-600 cursor-not-allowed opacity-50 hover:bg-transparent" 
+                            : "text-slate-300 hover:bg-slate-800"
+                      }`}
+                    >
+                      <span className="truncate text-left">{name}</span>
+                      {isSelected && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                      {isLocked && <span className="text-[10px] text-slate-500 bg-slate-800/40 px-1.5 py-0.5 rounded shrink-0">🔒 Pro</span>}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="px-3 py-4 text-xs text-slate-500 text-center">
+                  No languages found
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. Status Line */}
@@ -408,11 +586,11 @@ export default function WelcomeAudio({
           <button
             type="button"
             onClick={play}
-            disabled={status !== "ready"}
+            disabled={status !== "ready" && status !== "idle" && status !== "error"}
             className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:active:scale-100 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-lg transition-all border border-blue-500/20 cursor-pointer disabled:bg-slate-800 disabled:text-slate-500 disabled:border-slate-800/80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Play className="h-3 w-3 fill-white text-white" />
-            Start
+            {getButtonLabel()}
           </button>
         )}
       </div>

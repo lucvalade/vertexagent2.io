@@ -45,7 +45,6 @@ const INITIAL_VOICES: Voice[] = [
   { id: "7", name: "Dynamic Storyteller (British Female) Synthetic", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 56, tags: ["Female", "British", "Expressive", "Aoede"] },
   { id: "3", name: "Warm Energetic Male Synthetic (Puck)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 32, tags: ["Male", "Warm", "Energetic", "Puck"] },
   { id: "6", name: "Calm Reassuring Male Synthetic (Charon)", status: "Active", type: "Synthetic", rating: 4.6, ratingCount: 19, tags: ["Male", "Calm", "Warm", "Charon"] },
-  { id: "8", name: "Deep Narrator Synthetic (Fenrir)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 28, tags: ["Male", "Deep", "Narrative", "Fenrir"] },
 ];
 
 export default function VoiceLab() {
@@ -63,6 +62,9 @@ export default function VoiceLab() {
   const [voiceToDelete, setVoiceToDelete] = useState<Voice | null>(null);
   const [activeVoice, setActiveVoice] = useState<Voice | null>(null);
   const [testText, setTestText] = useState("Hi, I'm the AI agent for 888 Bel Air Road. How can I help you today?");
+  const [initialTestText, setInitialTestText] = useState("");
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const previewSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [previewReady, setPreviewReady] = useState(false);
   const [userRating, setUserRating] = useState(0);
@@ -114,6 +116,19 @@ export default function VoiceLab() {
       if (welcomeFrAudio) welcomeFrAudio.pause();
     };
   }, [welcomeEnAudio, welcomeFrAudio]);
+
+  // Clean up any playing testing audio when modal is closed
+  useEffect(() => {
+    if (!isTestOpen) {
+      if (previewSourceRef.current) {
+        try {
+          previewSourceRef.current.stop();
+        } catch (e) {}
+        previewSourceRef.current = null;
+      }
+      setIsPlayingPreview(false);
+    }
+  }, [isTestOpen]);
 
   // Sync with Firestore
   useEffect(() => {
@@ -207,30 +222,48 @@ export default function VoiceLab() {
     }
   };
 
+  const handleSaveCustomText = async () => {
+    if (!user?.id || !activeVoice) return;
+    try {
+      const voiceDocRef = doc(db, "users", user.id, "voices", activeVoice.id);
+      await updateDoc(voiceDocRef, { customSampleText: testText });
+      setInitialTestText(testText);
+      toast.success("Custom sample text saved for this voice!");
+    } catch (e) {
+      console.error("Failed to save custom sample text:", e);
+      toast.error("Failed to save custom sample text");
+    }
+  };
+
   const handleTestVoice = (voice: Voice) => {
     setActiveVoice(voice);
     setPreviewReady(false);
     setUserRating(0); // Ensure rating resets per voice test
     
+    let textToUse = "";
     const lowerName = voice.name.toLowerCase();
-    if (lowerName.includes("welcome")) {
-      setTestText("[slow] Hi, I’m Sora, your AI property assistant. [pause] Welcome to this open house experience. [pause] I’m here to help you explore the home, answer questions, and guide you through the next steps at your own pace.");
+    if ((voice as any).customSampleText) {
+      textToUse = (voice as any).customSampleText;
+    } else if (lowerName.includes("welcome")) {
+      textToUse = "[slow] Hi, I’m Sora, your AI property assistant. [pause] Welcome to this open house experience. [pause] I’m here to help you explore the home, answer questions, and guide you through the next steps at your own pace.";
     } else if (lowerName.includes("sign-in")) {
-      setTestText("[slow] Welcome in. [pause] Please take a moment to sign in so we can share property details and help personalize your visit. [pause] If you have any questions during the tour, I’ll be here to help.");
+      textToUse = "[slow] Welcome in. [pause] Please take a moment to sign in so we can share property details and help personalize your visit. [pause] If you have any questions during the tour, I’ll be here to help.";
     } else if (lowerName.includes("tour intro")) {
-      setTestText("[slow] Welcome to the tour. [pause] As you move through the home, I can point out key features, answer questions, and help you learn more about the property. [pause] Take your time, and explore in whatever order feels most natural to you.");
+      textToUse = "[slow] Welcome to the tour. [pause] As you move through the home, I can point out key features, answer questions, and help you learn more about the property. [pause] Take your time, and explore in whatever order feels most natural to you.";
     } else if (lowerName.includes("lender")) {
-      setTestText("[slow] If you’d like, I can also connect you with a mortgage professional for financing questions. [pause] This is completely optional, but it can be helpful if you’d like to better understand budget, pre-approval, or next steps.");
+      textToUse = "[slow] If you’d like, I can also connect you with a mortgage professional for financing questions. [pause] This is completely optional, but it can be helpful if you’d like to better understand budget, pre-approval, or next steps.";
     } else if (lowerName.includes("follow-up")) {
-      setTestText("[slow] Thank you for visiting today. [pause] I hope the tour helped you get a better feel for the home. [pause] If you’d like more details, want to revisit the property, or have financing questions, I’m here to help with the next step.");
+      textToUse = "[slow] Thank you for visiting today. [pause] I hope the tour helped you get a better feel for the home. [pause] If you’d like more details, want to revisit the property, or have financing questions, I’m here to help with the next step.";
     } else if (lowerName.includes("storyteller")) {
-      setTestText("[slow] Let me tell you about the stunning kitchen which was completely renovated in 2025. It boasts professional-grade appliances, quartz countertops, and a massive walk-in pantry.");
+      textToUse = "[slow] Let me tell you about the stunning kitchen which was completely renovated in 2025. It boasts professional-grade appliances, quartz countertops, and a massive walk-in pantry.";
     } else if (lowerName.includes("executive")) {
-      setTestText("[slow] The master suite is a private sanctuary. Highlighted by panoramic sunset views, integrated fireplace, and a massive walk-in wardrobe.");
+      textToUse = "[slow] The master suite is a private sanctuary. Highlighted by panoramic sunset views, integrated fireplace, and a massive walk-in wardrobe.";
     } else {
-      setTestText("Hi, I'm Sora, your AI assistant. How can I help you explore this beautiful property today?");
+      textToUse = "Hi, I'm Sora, your AI assistant. How can I help you explore this beautiful property today?";
     }
     
+    setTestText(textToUse);
+    setInitialTestText(textToUse);
     setIsTestOpen(true);
   };
 
@@ -294,11 +327,11 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
         voiceName = 'Puck';
         styleInstruction = "Deliver this with an energetic, friendly, and spirited tone: ";
       } else if (lowerName.includes('calm reassuring') || lowerName.includes('charon')) {
-        voiceName = 'Kore';
-        styleInstruction = "Configure Voice: Sora. Deliver this with a calm, friendly, reassuring, and highly trustworthy female tone: ";
+        voiceName = 'Charon';
+        styleInstruction = "Configure Voice: Charon. Deliver this with a calm, friendly, reassuring, and highly trustworthy male tone: ";
       } else if (lowerName.includes('deep narrator') || lowerName.includes('fenrir')) {
-        voiceName = 'Kore';
-        styleInstruction = "Configure Voice: Sora. Deliver this in a slow, soothing, deep-narrative cadence using a professional female voice: ";
+        voiceName = 'Fenrir';
+        styleInstruction = "Configure Voice: Fenrir. Deliver this in a slow, soothing, deep-narrative cadence using a professional narrator voice: ";
       }
 
       const promptText = `${styleInstruction}\n\nDeliver the following script with precise pacing:\n${testText}`;
@@ -372,17 +405,30 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
   const playPreview = () => {
     if (!testAudioBuffer || !audioContextRef.current) return;
     
-    // Stop any existing playback
-    if (isPlayingRef.current) {
-      isPlayingRef.current = false; // We use this purely to signal override logic if needed
-    }
-
     const ctx = audioContextRef.current;
     if (ctx.state === 'suspended') ctx.resume();
+
+    // If already playing, stop it
+    if (isPlayingPreview && previewSourceRef.current) {
+      try {
+        previewSourceRef.current.stop();
+      } catch (e) {
+        console.warn("Error stopping preview source:", e);
+      }
+      setIsPlayingPreview(false);
+      return;
+    }
 
     const source = ctx.createBufferSource();
     source.buffer = testAudioBuffer;
     source.connect(ctx.destination);
+    
+    source.onended = () => {
+      setIsPlayingPreview(false);
+    };
+
+    previewSourceRef.current = source;
+    setIsPlayingPreview(true);
     source.start(0);
     
     toast.info(`Playing neural voice: ${activeVoice?.name}`);
@@ -470,12 +516,11 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
               prebuiltVoiceConfig: { 
                 voiceName: (() => {
                   const lowercaseVoiceName = voice.name.toLowerCase();
-                  if (lowercaseVoiceName.includes('professional female')) return 'Kore';
-                  if (lowercaseVoiceName.includes('executive british')) return 'Zephyr';
-                  if (lowercaseVoiceName.includes('storyteller')) return 'Aoede';
-                  if (lowercaseVoiceName.includes('warm energetic')) return 'Puck';
-                  if (lowercaseVoiceName.includes('calm reassuring')) return 'Kore';
-                  if (lowercaseVoiceName.includes('deep narrator') || lowercaseVoiceName.includes('narrator')) return 'Kore';
+                  if (lowercaseVoiceName.includes('professional female') || lowercaseVoiceName.includes('sora') || lowercaseVoiceName.includes('welcome') || lowercaseVoiceName.includes('sign-in') || lowercaseVoiceName.includes('handoff') || lowercaseVoiceName.includes('follow-up')) return 'Kore';
+                  if (lowercaseVoiceName.includes('executive british') || lowercaseVoiceName.includes('zephyr')) return 'Zephyr';
+                  if (lowercaseVoiceName.includes('storyteller') || lowercaseVoiceName.includes('aoede')) return 'Aoede';
+                  if (lowercaseVoiceName.includes('warm energetic') || lowercaseVoiceName.includes('puck')) return 'Puck';
+                  if (lowercaseVoiceName.includes('calm reassuring') || lowercaseVoiceName.includes('charon')) return 'Charon';
                   return 'Kore';
                 })()
               } 
@@ -581,7 +626,7 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
       const floatData = new Float32Array(pcmData.length);
       for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 0x7FFF;
       
-      const buffer = ctx.createBuffer(1, floatData.length, 16000);
+      const buffer = ctx.createBuffer(1, floatData.length, 24000);
       buffer.getChannelData(0).set(floatData);
       
       const source = ctx.createBufferSource();
@@ -806,9 +851,9 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
       } else if (lowerName.includes('warm energetic') || lowerName.includes('puck')) {
         voiceName = 'Puck';
       } else if (lowerName.includes('calm reassuring') || lowerName.includes('charon')) {
-        voiceName = 'Kore';
+        voiceName = 'Charon';
       } else if (lowerName.includes('deep narrator') || lowerName.includes('fenrir')) {
-        voiceName = 'Kore';
+        voiceName = 'Fenrir';
       }
 
       const promptText = `${styleInstruction}\n\nDeliver the following script with precise pacing:\n${text}`;
@@ -906,21 +951,6 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
     }
   };
 
-  const downloadWelcomeAudio = (lang: 'en' | 'fr') => {
-    const url = lang === 'en' ? enAudioUrl : frAudioUrl;
-    if (!url) {
-      toast.error("Please generate the audio greeting first.");
-      return;
-    }
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = lang === 'en' ? 'welcome_en.mp3' : 'welcome_fr.mp3';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    toast.success(`${lang === 'en' ? 'English' : 'French'} welcome greeting downloaded as welcome_${lang}.mp3!`);
-  };
-
   const handleSaveRename = async () => {
     if (!activeVoice || !user?.id) return;
     
@@ -992,14 +1022,11 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Voice Lab</h1>
-          <p className="text-slate-500 mt-1">Manage AI voices and custom voice clones for your tours.</p>
+          <p className="text-slate-500 mt-1">Manage AI voices and custom voice clones for your tours. You can set the text for the welcome tour in AI Tour.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleRestoreDefaults} className="gap-2 border-slate-200">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden xs:inline">Restore Defaults</span><span className="xs:hidden">Restore</span>
-          </Button>
-          <Button onClick={() => setIsCloneOpen(true)} className="bg-blue-600 hover:bg-blue-700 gap-2 shadow-sm shadow-blue-100">
-            <Plus className="h-4 w-4" /> <span className="hidden xs:inline">Create Voice Clone</span><span className="xs:hidden">Clone</span>
           </Button>
         </div>
       </div>
@@ -1021,7 +1048,7 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
             <Volume2 className="h-5 w-5 text-blue-600" /> Welcome Greetings Audio Builder
           </h2>
           <p className="text-slate-500 text-xs mt-1">
-            Configure, generate, and download high-quality MP3 welcome messages for your open houses and pilot listings.
+            Configure and generate high-quality neural welcome messages for your open houses and pilot listings.
           </p>
         </div>
 
@@ -1105,17 +1132,6 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
                 {playingEnWelcome ? <Pause className="h-4 w-4 text-red-500" /> : <Play className="h-4 w-4 text-blue-600" />}
                 {playingEnWelcome ? "Pause" : "Play Preview"}
               </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!enAudioUrl}
-                onClick={() => downloadWelcomeAudio('en')}
-                className="border-slate-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 gap-2 disabled:opacity-50 ml-auto"
-              >
-                <Download className="h-4 w-4" />
-                Download MP3
-              </Button>
             </div>
           </div>
 
@@ -1166,17 +1182,6 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
               >
                 {playingFrWelcome ? <Pause className="h-4 w-4 text-red-500" /> : <Play className="h-4 w-4 text-blue-600" />}
                 {playingFrWelcome ? "Pause" : "Play Preview"}
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!frAudioUrl}
-                onClick={() => downloadWelcomeAudio('fr')}
-                className="border-slate-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 gap-2 disabled:opacity-50 ml-auto"
-              >
-                <Download className="h-4 w-4" />
-                Download MP3
               </Button>
             </div>
           </div>
@@ -1303,13 +1308,6 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
           </div>
         ))}
 
-        {voices.length === 0 && (
-          <div className="col-span-full py-20 text-center border-2 border-dashed rounded-2xl border-slate-200 bg-slate-50/50">
-            <Mic2 className="mx-auto h-12 w-12 text-slate-200 mb-4" />
-            <h3 className="font-bold text-lg text-slate-900">No voices found</h3>
-            <p className="text-slate-500">Create a clone or use system default voices.</p>
-          </div>
-        )}
       </div>
 
       {/* Live Agent Session Dialog */}
@@ -1417,7 +1415,7 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-6">
-            <div className="space-y-2">
+            <div className="space-y-2 relative pb-10">
               <label className="text-xs font-bold uppercase text-slate-400">Sample Text</label>
               <textarea 
                 value={testText}
@@ -1427,6 +1425,18 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
                 }}
                 className="w-full h-28 p-4 rounded-xl border border-slate-200 bg-slate-50 resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm leading-relaxed"
               />
+              {testText !== initialTestText && (
+                <div className="absolute right-0 bottom-0">
+                  <Button
+                    type="button"
+                    onClick={handleSaveCustomText}
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs gap-1 h-8 rounded-lg shadow-sm font-semibold"
+                  >
+                    <Save className="h-3 w-3" /> Save Preset
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -1480,34 +1490,25 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
               </div>
             ) : previewReady ? (
               <div className="space-y-6">
-                <div className="bg-blue-50 border-2 border-blue-100 rounded-xl p-8 flex flex-col items-center justify-center space-y-4">
+                <div className="bg-blue-50 border-2 border-blue-100 rounded-xl p-5.5 flex flex-col items-center justify-center space-y-3">
                   <div 
                     onClick={playPreview}
-                    className="h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center text-white cursor-pointer hover:scale-105 transition-transform shadow-lg shadow-blue-200"
+                    className="h-14 w-14 bg-blue-600 rounded-full flex items-center justify-center text-white cursor-pointer hover:scale-105 transition-transform shadow-lg shadow-blue-200 animate-none"
+                    title={isPlayingPreview ? "Stop" : "Play"}
                   >
-                    <Play className="h-8 w-8 ml-1" />
+                    {isPlayingPreview ? (
+                      <Pause className="h-7 w-7" />
+                    ) : (
+                      <Play className="h-7 w-7 ml-1" />
+                    )}
                   </div>
                   <div className="text-center flex flex-col items-center">
-                    <p className="text-sm font-bold text-blue-900">Audio preview ready</p>
-                    <p className="text-xs text-blue-600 mt-1 mb-3">Click the button above to listen</p>
-                    {testAudioUrl && (
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          const a = document.createElement('a');
-                          a.href = testAudioUrl;
-                          a.download = `${activeVoice?.name || "voice"}_preview.mp3`;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          toast.success("Preview downloaded successfully!");
-                        }}
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-2 shadow-sm"
-                      >
-                        <Download className="h-4 w-4" /> Download MP3
-                      </Button>
-                    )}
+                    <p className="text-sm font-bold text-blue-900">
+                      {isPlayingPreview ? "Playing neural preview..." : "Audio preview ready"}
+                    </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      {isPlayingPreview ? "Click button to Stop" : "Click button above to listen"}
+                    </p>
                   </div>
                 </div>
 
@@ -1541,8 +1542,17 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
               window.speechSynthesis.cancel();
               setIsTestOpen(false);
             }}>Close</Button>
-            <Button onClick={runTest} disabled={isTesting} className="bg-blue-600 hover:bg-blue-700 min-w-[120px]">
-              {isTesting ? "Generating..." : previewReady ? "Regenerate" : "Generate Preview"}
+            <Button 
+              onClick={isPlayingPreview ? () => {
+                if (previewSourceRef.current) {
+                  try { previewSourceRef.current.stop(); } catch(e){}
+                }
+                setIsPlayingPreview(false);
+              } : runTest} 
+              disabled={isTesting} 
+              className={`min-w-[120px] font-semibold text-white ${isPlayingPreview ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}
+            >
+              {isTesting ? "Generating..." : isPlayingPreview ? "Stop" : previewReady ? "Regenerate" : "Generate Preview"}
             </Button>
           </DialogFooter>
         </DialogContent>

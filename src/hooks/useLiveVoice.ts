@@ -146,51 +146,99 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
           await playbackContextRef.current.resume();
         }
         playbackTimeRef.current = playbackContextRef.current.currentTime;
+      } catch (playbackErr) {
+        console.error("[Voice] Failed to initialize playback AudioContext:", playbackErr);
+      }
 
-        // Microphone capture setup (Gemini expects 16kHz PCM input)
+      // Microphone capture setup (Gemini expects 16kHz PCM input)
+      try {
         audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         await audioContextRef.current.audioWorklet.addModule("/pcm-processor.js");
-      } catch (e) {
-        throw e;
-      }
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true
-        }
-      });
-      
-      sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
-      processorRef.current = new AudioWorkletNode(audioContextRef.current, "pcm-processor");
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            channelCount: 1,
+            sampleRate: 16000,
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        });
+        
+        sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
+        processorRef.current = new AudioWorkletNode(audioContextRef.current, "pcm-processor");
 
-      processorRef.current.port.onmessage = (e) => {
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-        const base64Data = float32ToBase64(e.data);
-        wsRef.current.send(JSON.stringify({
-          type: "input",
-          data: { audio: { data: base64Data, mimeType: "audio/pcm;rate=16000" } }
-        }));
-      };
-      
-      sourceRef.current.connect(processorRef.current);
+        processorRef.current.port.onmessage = (e) => {
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+          const base64Data = float32ToBase64(e.data);
+          wsRef.current.send(JSON.stringify({
+            type: "input",
+            data: { audio: { data: base64Data, mimeType: "audio/pcm;rate=16000" } }
+          }));
+        };
+        
+        sourceRef.current.connect(processorRef.current);
+        console.log("[Voice] Microphone capture setup completed successfully.");
+      } catch (micErr) {
+        console.warn("[Voice] Microphone capture setup failed. Falling back to output-only mode:", micErr);
+        // Fall back gracefully so they can still hear Sora and click presets
+      }
 
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to start camera/mic or connect to voice proxy");
+      setError(err.message || "Failed to connect to voice proxy");
       setConnecting(false);
     }
   };
 
+  const sendTextMessage = (text: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log("[Voice] Sending text query to AI:", text);
+      wsRef.current.send(JSON.stringify({
+        type: "text",
+        text
+      }));
+    } else {
+      console.warn("[Voice] WS not open. Cannot send text query.");
+    }
+  };
+
   const stopSession = () => {
-    if (processorRef.current) processorRef.current.disconnect();
-    if (sourceRef.current) sourceRef.current.disconnect();
-    if (audioContextRef.current) audioContextRef.current.close();
-    if (playbackContextRef.current) playbackContextRef.current.close();
+    try {
+      if (processorRef.current) {
+        processorRef.current.disconnect();
+        processorRef.current = null;
+      }
+    } catch (e) {
+      console.warn("Error disconnecting processor:", e);
+    }
+    try {
+      if (sourceRef.current) {
+        sourceRef.current.disconnect();
+        sourceRef.current = null;
+      }
+    } catch (e) {
+      console.warn("Error disconnecting source:", e);
+    }
+    try {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+    } catch (e) {
+      console.warn("Error closing audioContext:", e);
+    }
+    try {
+      if (playbackContextRef.current) {
+        playbackContextRef.current.close();
+        playbackContextRef.current = null;
+      }
+    } catch (e) {
+      console.warn("Error closing playbackContext:", e);
+    }
     if (wsRef.current) {
-      wsRef.current.close();
+      try {
+        wsRef.current.close();
+      } catch (e) {}
       wsRef.current = null;
     }
     setConnected(false);
@@ -208,6 +256,7 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
     connected,
     error,
     startSession,
-    stopSession
+    stopSession,
+    sendTextMessage
   };
 }

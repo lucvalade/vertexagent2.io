@@ -49,7 +49,7 @@ export default function GuidesPage() {
       subtitle: "Accelerate your open house conversions with personal AI property guidance",
       description: "Sora acts as your dedicated digital co-host, managing visitor sign-ins on tablet kiosk mode while offering instant, multi-lingual audio property walkthroughs. All buyer profiles and interests are automatically structured and synced to your favorite CRM.",
       highlights: [
-        "Interactive AI voice tours for potential buyers, natively in 15 languages.",
+        "Interactive AI voice tours for potential buyers, natively in 24 languages.",
         "Beautiful unbranded open house flyers with custom QR-entry codes.",
         "B2B preferred lender pairing with strict, consent-based routing.",
         "Follow Up Boss custom field mapping for effortless client follow-ups."

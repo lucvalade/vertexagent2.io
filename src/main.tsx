@@ -115,6 +115,7 @@ import PricingPage from './pages/PricingPage.tsx';
 import DemoPage from './pages/DemoPage.tsx';
 import HowItWorksPage from './pages/HowItWorksPage.tsx';
 import GuidesPage from './pages/GuidesPage.tsx';
+import HelpPage from './pages/HelpPage.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { db } from './lib/firebase.ts';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -192,6 +193,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="integrations" element={<PublicIntegrationsPage />} />
             <Route path="pricing" element={<PricingPage />} />
             <Route path="guides" element={<GuidesPage />} />
+            <Route path="help" element={<HelpPage />} />
             <Route path="demo" element={<DemoPage />} />
             <Route path="how-it-works" element={<HowItWorksPage />} />
             <Route path="what-this-software-does" element={<HowItWorksPage />} />

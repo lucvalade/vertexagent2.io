@@ -43,6 +43,7 @@ import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/fires
 import { db } from "@/lib/firebase";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import PublicLayout from "@/components/PublicLayout";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
@@ -476,12 +477,12 @@ export default function PublicSite() {
       socialProof: "Trusted by 5,000+ top-producing Canadian agents across RE/MAX, Royal LePage, and Michael St. John Realty.",
       pullQuote: {
         quote: "The future of real estate tours. AI Open House Connect is bridging physical open houses with conversational AI.",
-        author: "Inman News Review"
+        author: "News Review"
       },
       press: "TO BE FEATURED IN",
       features: {
         question1: "How do we capture qualified buyers without messy paper sheets?",
-        answer1: "Deliver a secure Attendee-Facing Lock Mode. Guests scan or sign in on an offline-buffered tablet that syncs automatically to Google's Firestore, resets in 5 seconds, and requires an agent-configured PIN to exit.",
+        answer1: "Deliver a secure Attendee-Facing Lock Mode. Guests scan a QR Code or sign in on an offline-buffered tablet that syncs automatically to Google's Firestore, resets in 5 seconds, and requires an agent-configured PIN to exit.",
         
         question2: "Can an AI actually guide visitors through a physical home?",
         answer2: "Meet Sora, your warm conversational guide. Sora multilingual capabilities, responds instantly to building specs and local zones, and displays high-definition rooms in sync with the audio walkthrough.",
@@ -496,7 +497,7 @@ export default function PublicSite() {
         answer5: "Always. Upload custom brokerage logos, apply accent colors, and manage multiple listings templates. Set up listing parameters under Ontario's 3+1 bedrooms and in-law suite classifications.",
         
         question6: "Does it synchronize leads automatically with my existing CRM?",
-        answer6: "Asymmetric Follow Up Boss sync with interactive mapping, push system tags, local log preservation, and Zapier/Make.com options."
+        answer6: "Asymmetric Follow Up Boss (and more) sync with interactive mapping, push system tags, local log preservation, and Zapier/Make.com options."
       },
       pricing: {
         title: "Simple, transparent pricing built for real estate",
@@ -506,7 +507,7 @@ export default function PublicSite() {
         soloDesc: "Replaces paper sign-in sheets with digital capture.",
         proName: "Pro Agent",
         proPrice: "$29",
-        proDesc: "Unlock all 15 languages, Follow Up Boss CRM sync, and advanced analytics.",
+        proDesc: "Unlock all 24 languages, Follow Up Boss CRM sync, and advanced analytics.",
         brokerName: "Broker",
         brokerPrice: "$249",
         brokerDesc: "Unlimited listings, team routing overrides, and white-label tools."
@@ -532,12 +533,12 @@ export default function PublicSite() {
       socialProof: "Approuvé par plus de 5 000 agents canadiens chez RE/MAX, Royal LePage et Michael St. John Realty.",
       pullQuote: {
         quote: "L'avenir des visites immobilières. AI Open House Connect relie les visites physiques à l'intelligence artificielle.",
-        author: "Inman News"
+        author: "News Review"
       },
       press: "VU DANS",
       features: {
         question1: "Comment capturer des acheteurs qualifiés sans fiches papier ?",
-        answer1: "Proposez un mode kiosque sécurisé. Les visiteurs s'enregistrent sur une tablette hors ligne avec synchronisation automatique vers Google's Firestore, réinitialisation automatique en 5 secondes et code PIN agent.",
+        answer1: "Proposez un mode kiosque sécurisé. Les visiteurs scannent un code QR ou s'enregistrent sur une tablette hors ligne avec synchronisation automatique vers Google's Firestore, réinitialisation automatique en 5 secondes et code PIN agent.",
         
         question2: "Une IA peut-elle vraiment guider les visiteurs dans une maison ?",
         answer2: "Rencontrez Sora, votre guide conversationnel. Capacités multilingues de Sora, répond instantanément aux détails structurels et affiche les photos en parfaite synchronisation avec l'audio.",
@@ -573,100 +574,9 @@ export default function PublicSite() {
   const curr = t[lang];
 
   return (
-    <div className="min-h-screen flex flex-col font-sans text-[#111827] bg-[#FFFFFF] antialiased">
-      {/* 1. Sticky Nav */}
-      <header 
-        className={`fixed top-0 inset-x-0 w-full z-50 transition-all duration-300 border-b backdrop-blur-md ${
-          scrolled ? "bg-white/95 border-stone-200/80 shadow-md py-3" : "bg-transparent border-transparent py-5"
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2 hover:opacity-95 transition-opacity">
-              <Logo variant="blue" />
-            </Link>
-          </div>
-
-          {/* Nav middle links */}
-          <nav className="hidden lg:flex items-center gap-8 text-sm font-semibold text-[#111827]">
-            <a href="#product" className="hover:text-[#0052A5] transition-colors">{curr.nav.product}</a>
-            <a href="#features" className="hover:text-[#0052A5] transition-colors">{curr.nav.useCases}</a>
-            <Link to="/pricing" className="hover:text-[#0052A5] transition-colors">{curr.nav.pricing}</Link>
-            <a href="#faq" className="hover:text-[#0052A5] transition-colors">{curr.nav.faq}</a>
-          </nav>
-
-          <div className="hidden md:flex items-center gap-4">
-            {/* Role dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold text-stone-600">I'm an</span>
-              <div className="relative">
-                <select 
-                  value={selectedRole}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedRole(val);
-                    navigate(`/guides?role=${val}`);
-                  }}
-                  className="text-xs font-bold bg-white border border-stone-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#0052A5] cursor-pointer"
-                >
-                  <option value="agent">Agent</option>
-                  <option value="team">Team Lead</option>
-                  <option value="broker">Broker</option>
-                  <option value="lender">Lender</option>
-                </select>
-              </div>
-            </div>
-
-            <Link to="/login" className="text-sm font-semibold text-[#6B7280] hover:text-[#111827] transition-colors px-3 py-1.5">
-              {curr.nav.login}
-            </Link>
-            
-            <Button 
-              onClick={() => setIsDemoModalOpen(true)}
-              className="bg-[#0052A5] hover:bg-[#004185] text-white font-bold rounded-xl text-xs px-5 h-10 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shadow-md"
-            >
-              {curr.nav.getStarted}
-            </Button>
-          </div>
-
-          {/* Mobile menu trigger */}
-          <div className="flex items-center gap-3 lg:hidden">
-            <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 border border-stone-200 rounded-lg text-[#111827] hover:bg-stone-50 transition-colors"
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Navigation Menu */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden absolute top-full left-0 w-full bg-white border-b border-stone-200 shadow-xl py-6 px-6 space-y-4">
-            <div className="flex flex-col gap-4 text-sm font-semibold">
-              <a href="#product" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.product}</a>
-              <a href="#features" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.useCases}</a>
-              <Link to="/pricing" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.pricing}</Link>
-              <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="hover:text-[#0052A5] transition-colors">{curr.nav.faq}</a>
-            </div>
-            <hr className="border-stone-100" />
-            <div className="flex flex-col gap-4">
-              <Link to="/login" className="text-sm font-semibold text-[#6B7280] w-full text-center py-2.5 border border-stone-200 rounded-xl">
-                {curr.nav.login}
-              </Link>
-              <Button 
-                onClick={() => { setMobileMenuOpen(false); setIsDemoModalOpen(true); }}
-                className="bg-[#0052A5] hover:bg-[#004185] text-white font-bold rounded-xl text-sm w-full h-11"
-              >
-                {curr.nav.getStarted}
-              </Button>
-            </div>
-          </div>
-        )}
-      </header>
-
+    <PublicLayout>
       {/* 2. Hero Section */}
-      <section className="relative pt-[118px] pb-24 md:pt-[166px] md:pb-32 px-6 overflow-hidden bg-gradient-to-b from-stone-50/50 to-[#FFFFFF]">
+      <section className="relative pt-[79px] lg:pt-[91px] pb-24 md:pb-32 px-6 overflow-hidden bg-gradient-to-b from-stone-50/50 to-[#FFFFFF]">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 items-center relative z-10">
           
           {/* Left Text Column */}
@@ -699,6 +609,25 @@ export default function PublicSite() {
               >
                 {curr.hero.ctaFree}
               </Link>
+            </div>
+
+            {/* Public AI Voice Concierge CTA Widget */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-voice-concierge"))}
+                className="flex items-center gap-3 px-5 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-[#0052A5] hover:from-blue-700 hover:to-[#004185] text-white font-extrabold text-sm shadow-md hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all duration-200 group relative overflow-hidden border border-blue-500/30 cursor-pointer"
+              >
+                <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                <Mic className="h-5 w-5 animate-pulse text-white group-hover:scale-110 transition-transform" />
+                <span>
+                  {lang === "en" ? "Talk to our AI Voice Concierge" : "Parler au Concierge Vocal IA"}
+                </span>
+              </button>
             </div>
 
             {/* Download Badges styled in CSS */}
@@ -812,17 +741,12 @@ export default function PublicSite() {
         </div>
       </section>
 
-      {/* 3. Social Proof Strip */}
-      <div className="py-8 bg-stone-50 border-y border-stone-200/60 text-center">
-        <p className="text-sm font-semibold text-[#6B7280] max-w-2xl mx-auto px-6">
-          {curr.socialProof}
-        </p>
-      </div>
+
 
       {/* 4. Press Mention + Pull Quote */}
       <section className="py-20 px-6 bg-white">
         <div className="max-w-4xl mx-auto text-center space-y-6">
-          <span className="text-xs font-bold text-[#0052A5] tracking-widest uppercase">PRESS HIGHLIGHT</span>
+          <span className="text-xs font-bold text-[#0052A5] tracking-widest uppercase">NEWS REVIEW</span>
           <p className="text-2xl sm:text-3xl font-bold italic text-[#111827] leading-relaxed">
             "{curr.pullQuote.quote}"
           </p>
@@ -978,7 +902,7 @@ export default function PublicSite() {
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold text-[#6B7280] uppercase tracking-wider pl-1">
+                  <h4 className="text-xs font-extrabold text-[#111827] uppercase tracking-wider pl-1">
                     {lang === "en" ? "Select a buyer inquiry:" : "Sélectionnez une question :"}
                   </h4>
                   <div className="grid sm:grid-cols-2 gap-2">
@@ -1326,9 +1250,15 @@ export default function PublicSite() {
               {lang === "en" ? "SEO Brokerage Listing Templates" : "Modèles SEO de fiches immobilières"}
             </h2>
             <p className="text-blue-50/90 max-w-xl mx-auto text-sm">
-              {lang === "en" 
-                ? "Perfectly customized layouts compliant with RECO standards. Search or deploy yours instantly."
-                : "Des mises en page entièrement personnalisées et conformes aux normes d'Ontario. Déployez le vôtre en quelques secondes."}
+              {lang === "en" ? (
+                <>
+                  Perfectly customized layouts compliant with RECO standards.
+                  <br />
+                  Search or deploy yours instantly.
+                </>
+              ) : (
+                "Des mises en page entièrement personnalisées et conformes aux normes d'Ontario. Déployez le vôtre en quelques secondes."
+              )}
             </p>
           </div>
 
@@ -1387,55 +1317,6 @@ export default function PublicSite() {
           </div>
         </div>
       </section>
-
-      {/* 10. Footer (3 columns on #0052A5 background) */}
-      <footer className="bg-[#0052A5] text-white pt-16 pb-12 px-6">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-3 gap-12 border-b border-white/20 pb-12 mb-12">
-          
-          {/* Column 1: Brand & Compliance info */}
-          <div className="space-y-4">
-            <Logo variant="white" />
-            <p className="text-xs text-stone-100/80 leading-relaxed">
-              AI Open House Connect is a bilingual (EN/FR) platform designed for Canadian brokerages. Guided tours, smart offline kiosks, and direct CRM pipelines.
-            </p>
-            <p className="text-[10px] text-stone-200/60 leading-normal">
-              Fully compliant with PIPEDA guidelines, Quebec's Law 25 privacy codes, and RECO unbranded requirements in Ontario.
-            </p>
-          </div>
-
-          {/* Column 2: Product features */}
-          <div className="space-y-4 text-left">
-            <h4 className="font-bold text-xs uppercase tracking-widest text-stone-200">Product & Features</h4>
-            <ul className="space-y-2 text-xs text-stone-100/90">
-              <li><a href="#product" className="hover:underline">Interactive AI Tours</a></li>
-              <li><a href="#features" className="hover:underline">Kiosk Sign-In Mode</a></li>
-              <li><a href="#features" className="hover:underline">Lender Consent Routing</a></li>
-              <li><a href="#features" className="hover:underline">Follow Up Boss Direct Sync</a></li>
-            </ul>
-          </div>
-
-          {/* Column 3: Legal Disclosures */}
-          <div className="space-y-4 text-left">
-            <h4 className="font-bold text-xs uppercase tracking-widest text-stone-200">Legal & Disclosures</h4>
-            <ul className="space-y-2 text-xs text-stone-100/90">
-              <li><Link to="/privacy" className="hover:underline">Privacy Policy (PIPEDA / Law 25)</Link></li>
-              <li><Link to="/terms" className="hover:underline">Terms of Service</Link></li>
-              <li><Link to="/compliance" className="hover:underline">Ontario RECO Compliance Details</Link></li>
-              <li><Link to="/contact" className="hover:underline">Contact Compliance Team</Link></li>
-            </ul>
-          </div>
-
-        </div>
-
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-[11px] text-stone-200/75">
-          <p>© 2026 AI Open House Connect Inc. Founded in Hamilton, Ontario. All rights reserved.</p>
-          <div className="flex gap-4 mt-4 sm:mt-0">
-            <span>Bilingual Service EN/FR</span>
-            <span>|</span>
-            <span>Sora Voice: Kore</span>
-          </div>
-        </div>
-      </footer>
 
       {/* 11. Custom Validated Demo Booking Modal */}
       <Dialog open={isDemoModalOpen} onOpenChange={setIsDemoModalOpen}>
@@ -1587,6 +1468,7 @@ export default function PublicSite() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+
+    </PublicLayout>
   );
 }

@@ -76,10 +76,82 @@ export default function Billing() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [cardData, setCardData] = useState({ number: "", expiry: "", cvc: "" });
   const [selectedPlanId, setSelectedPlanId] = useState("team_pro");
+  const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
+
+  const planDetails: Record<string, { title: string; price: string; features: string[] }> = {
+    free: {
+      title: "Solo Agent Starter",
+      price: "Free",
+      features: [
+        "1 Active Listing",
+        "Kiosk Sign-In Mode with PIN Lock",
+        "Basic Sora AI Assistant (3-5 turns)",
+        "English language only",
+        "1 Linked Lender limit",
+        "50 visitor sessions / month",
+        "7-day data storage retention"
+      ]
+    },
+    starter: {
+      title: "Starter Agent",
+      price: "$14/month",
+      features: [
+        "1 Active Listing",
+        "CRM Syncing Integration (FUB, etc.)",
+        "Basic Sora AI Assistant (3-5 turns)",
+        "Solo data local captures",
+        "Standard client profiles"
+      ]
+    },
+    pro: {
+      title: "Pro Agent",
+      price: "$29/month",
+      features: [
+        "Up to 25 Active Listings",
+        "All 15 Multilingual AI Languages",
+        "Advanced Sora (unlimited Q&A + memory)",
+        "Full Custom Branding & Media Manifest",
+        "Automated Follow-Up and email drafts",
+        "Buyer Intent Analytics dashboard",
+        "Full CRM integrations with custom mapping",
+        "500 visitor sessions / month"
+      ]
+    },
+    team: {
+      title: "Team Pro",
+      price: "From $149/month",
+      features: [
+        "Team-level listings visibility & roster settings",
+        "Enforce team lender block-policies globally",
+        "Shared lead distribution & notifications",
+        "Team-routing logic configurations"
+      ]
+    },
+    brokerage: {
+      title: "Brokerage Office",
+      price: "From $399/month",
+      features: [
+        "Unlimited office-wide listing rules & logs",
+        "Custom branded portal domain & overrides",
+        "Multi-avatar & brokerage-wide template sync",
+        "Office default lenders & team policy overrides"
+      ]
+    },
+    lender: {
+      title: "Sponsoring Lender Plan",
+      price: "$20 to $100/month",
+      features: [
+        "Active B2B partnership seat subscriptions",
+        "Direct client routing queues upon explicit opt-in",
+        "Co-branding on open house kiosks",
+        "Receive shared files & lead notifications"
+      ]
+    }
+  };
 
   useEffect(() => {
     if (planParam) {
-      if (["agent_free", "team_starter", "team_pro", "team_elite", "lender_pro"].includes(planParam)) {
+      if (["agent_free", "agent_starter", "team_starter", "team_pro", "team_elite", "lender_pro"].includes(planParam)) {
         setSelectedPlanId(planParam);
         setActiveModal("upgrade");
         // Clear param so it only triggers once
@@ -139,15 +211,15 @@ export default function Billing() {
       if (selectedPlanId === "agent_free") {
         targetType = "agent";
         targetPlan = "free";
-      } else if (selectedPlanId === "team_starter") {
-        targetType = "team_admin";
+      } else if (selectedPlanId === "agent_starter" || selectedPlanId === "team_starter") {
+        targetType = "agent";
         targetPlan = "starter";
-      } else if (selectedPlanId === "team_pro") {
-        targetType = "team_admin";
+      } else if (selectedPlanId === "team_pro" || selectedPlanId === "agent_pro") {
+        targetType = "agent";
         targetPlan = "pro";
       } else if (selectedPlanId === "team_elite") {
-        targetType = "team_admin";
-        targetPlan = "elite";
+        targetType = "brokerage_admin";
+        targetPlan = "brokerage";
       } else if (selectedPlanId === "lender_pro") {
         targetType = "lender";
         targetPlan = "pro";
@@ -233,25 +305,57 @@ export default function Billing() {
 
         <div className="grid md:grid-cols-3 gap-6">
           {/* STEP 1: Account Roles */}
-          <div className="bg-white border border-slate-150 rounded-xl p-4 space-y-3">
+          <div className="bg-white border border-slate-150 rounded-xl p-4 space-y-3 relative">
             <h3 className="font-bold text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <User className="h-3.5 w-3.5 text-blue-500" /> 1. Account Roles & Subtypes
             </h3>
             <div className="grid gap-2">
               <button 
                 onClick={() => handleUpdateSubscription("agent", currentStatus, "free")}
+                onMouseEnter={() => setHoveredPlan("free")}
+                onMouseLeave={() => setHoveredPlan(null)}
                 className={`w-full py-2 px-3 text-xs text-left rounded-lg font-bold flex items-center justify-between border transition-all ${
-                  currentRole === 'agent' 
+                  currentRole === 'agent' && currentPlan === 'free'
                     ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                 }`}
               >
                 <span>Solo Agent (Free)</span>
-                {currentRole === 'agent' && <CheckCircle className="h-3.5 w-3.5" />}
+                {currentRole === 'agent' && currentPlan === 'free' && <CheckCircle className="h-3.5 w-3.5" />}
+              </button>
+
+              <button 
+                onClick={() => handleUpdateSubscription("agent", currentStatus, "starter")}
+                onMouseEnter={() => setHoveredPlan("starter")}
+                onMouseLeave={() => setHoveredPlan(null)}
+                className={`w-full py-2 px-3 text-xs text-left rounded-lg font-bold flex items-center justify-between border transition-all ${
+                  currentRole === 'agent' && currentPlan === 'starter'
+                    ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>Starter Agent ($14/mo)</span>
+                {currentRole === 'agent' && currentPlan === 'starter' && <CheckCircle className="h-3.5 w-3.5" />}
+              </button>
+
+              <button 
+                onClick={() => handleUpdateSubscription("agent", currentStatus, "pro")}
+                onMouseEnter={() => setHoveredPlan("pro")}
+                onMouseLeave={() => setHoveredPlan(null)}
+                className={`w-full py-2 px-3 text-xs text-left rounded-lg font-bold flex items-center justify-between border transition-all ${
+                  currentRole === 'agent' && currentPlan === 'pro'
+                    ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>Pro Agent ($29/mo)</span>
+                {currentRole === 'agent' && currentPlan === 'pro' && <CheckCircle className="h-3.5 w-3.5" />}
               </button>
 
               <button 
                 onClick={() => handleUpdateSubscription("team_admin", currentStatus, "pro")}
+                onMouseEnter={() => setHoveredPlan("team")}
+                onMouseLeave={() => setHoveredPlan(null)}
                 className={`w-full py-2 px-3 text-xs text-left rounded-lg font-bold flex items-center justify-between border transition-all ${
                   currentRole === 'team_admin' 
                     ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
@@ -264,6 +368,8 @@ export default function Billing() {
 
               <button 
                 onClick={() => handleUpdateSubscription("brokerage_admin", currentStatus, "elite")}
+                onMouseEnter={() => setHoveredPlan("brokerage")}
+                onMouseLeave={() => setHoveredPlan(null)}
                 className={`w-full py-2 px-3 text-xs text-left rounded-lg font-bold flex items-center justify-between border transition-all ${
                   currentRole === 'brokerage_admin' 
                     ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
@@ -276,6 +382,8 @@ export default function Billing() {
 
               <button 
                 onClick={() => handleUpdateSubscription("lender", currentStatus, "pro")}
+                onMouseEnter={() => setHoveredPlan("lender")}
+                onMouseLeave={() => setHoveredPlan(null)}
                 className={`w-full py-2 px-3 text-xs text-left rounded-lg font-bold flex items-center justify-between border transition-all ${
                   currentRole === 'lender' 
                     ? 'bg-blue-500 text-white border-blue-600 shadow-sm' 
@@ -286,6 +394,21 @@ export default function Billing() {
                 {currentRole === 'lender' && <CheckCircle className="h-3.5 w-3.5" />}
               </button>
             </div>
+
+            {/* HOVER TOOLTIP POPUP */}
+            {hoveredPlan && planDetails[hoveredPlan] && (
+              <div className="absolute z-30 left-0 right-0 top-full mt-2 p-4 bg-slate-900 text-white rounded-xl shadow-xl border border-slate-700 text-xs space-y-2 pointer-events-none">
+                <div className="flex justify-between items-center border-b border-slate-700 pb-1.5">
+                  <span className="font-bold text-sm text-blue-400">{planDetails[hoveredPlan].title}</span>
+                  <span className="font-extrabold text-xs text-emerald-400">{planDetails[hoveredPlan].price}</span>
+                </div>
+                <ul className="space-y-1 text-[11px] list-disc list-inside text-slate-300">
+                  {planDetails[hoveredPlan].features.map((f, i) => (
+                    <li key={i}>{f}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* STEP 2: Subscription Status */}
@@ -356,7 +479,9 @@ export default function Billing() {
 
             <div className="border-t border-slate-100 pt-3 mt-3">
               <p className="text-[10px] text-slate-500 italic leading-snug">
-                {currentRole === 'agent' && "✅ Core walkthroughs, sign-ins, and standard CRM mapping are fully bypassed from limits in Solo Agent."}
+                {currentRole === 'agent' && currentPlan === 'free' && "✅ Core walkthroughs, sign-ins, and standard CRM mapping are fully bypassed from limits in Solo Agent."}
+                {currentRole === 'agent' && currentPlan === 'starter' && "✅ Starter Plan activated. Automated CRM integration is unlocked with full custom tag and field mapping."}
+                {currentRole === 'agent' && currentPlan === 'pro' && "💎 Pro Agent Plan activated. Immersive 24-language AI tours with custom knowledge bases are unlocked."}
                 {currentRole === 'team_admin' && currentStatus === 'active' && "💎 Brokerage controls are ACTIVE. Automatic co-hosted listings are enabled."}
                 {currentRole === 'team_admin' && (currentStatus === 'past_due' || currentStatus === 'canceled') && "⛔ Brokerage rule limits apply: co-branded shared listings deactivated, team overrides reverted."}
                 {currentRole === 'lender' && "🏦 Mortgage tracking partner is designated. Setup sponsorship status details on Lenders Page."}
@@ -378,7 +503,13 @@ export default function Billing() {
               <div>
                 <h2 className="text-xl font-extrabold text-slate-900">Active Account: {getRoleLabel(currentRole)}</h2>
                 <p className="text-slate-500 text-sm mt-1">
-                  {currentPlan === 'free' ? "Free Starter Tier ($0/mo)" : `Premium Package: ${currentPlan.toUpperCase()} ($${currentRole === 'lender' ? '20' : '50'}/mo)`}
+                  {currentPlan === 'free' ? "Free Solo Plan ($0/mo)" : 
+                   currentPlan === 'starter' ? "Starter Plan: Automated CRM Integration ($14/mo)" :
+                   currentPlan === 'pro' && currentRole === 'agent' ? "Pro Plan: Advanced Conversational AI ($29/mo)" :
+                   currentPlan === 'pro' && currentRole === 'lender' ? "Sponsoring Lender Plan ($20/mo)" :
+                   currentPlan === 'pro' ? "Team Pro Plan ($149/mo)" :
+                   (currentPlan === 'elite' || currentPlan === 'brokerage') ? "Brokerage Plan ($399/mo)" : 
+                   `Premium Package: ${currentPlan.toUpperCase()}`}
                 </p>
               </div>
               <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
@@ -512,57 +643,57 @@ export default function Billing() {
         </h2>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
-          {/* TIER 1: Solo Agent */}
+          {/* TIER 1: Solo Free */}
           <div className="border border-slate-150 rounded-2xl p-5 space-y-4 hover:border-slate-350 transition-colors flex flex-col justify-between">
             <div className="space-y-4">
               <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-slate-400">Best for Getting Started</span>
-                <h3 className="font-extrabold text-lg text-slate-900">Solo Agent</h3>
+                <span className="text-[10px] font-black uppercase text-slate-400">Captures Leads</span>
+                <h3 className="font-extrabold text-lg text-slate-900">Solo</h3>
                 <p className="font-extrabold text-blue-600 text-xl font-mono">Free</p>
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">A simple way to run smarter open houses without upfront cost. Great for agents replacing paper sign-in sheets with digital lead capture and guided visitor support.</p>
+              <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">Ditch the paper sheets. Run unlimited, offline-capable open house sign-ins and organize your client contacts within a clean local workspace.</p>
               <div className="border-t border-slate-100 pt-3 space-y-2 text-xs text-slate-600">
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> 1 active property listing</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Unlimited basic sign-ins</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Lead capture & event setup</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Basic Sora visitor assistance</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> 1 active lender connection</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Basic English-only Sora assistant</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Secure offline buffer with sync</div>
               </div>
             </div>
           </div>
 
-          {/* TIER 2: Pro Agent */}
+          {/* TIER 2: Starter */}
+          <div className="border border-slate-150 rounded-2xl p-5 space-y-4 hover:border-slate-350 transition-colors flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase text-indigo-500">Connects Them</span>
+                <h3 className="font-extrabold text-lg text-slate-900">Starter</h3>
+                <p className="font-extrabold text-blue-600 text-xl font-mono">$14 / mo</p>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">Keep your database updated automatically. Syncs every captured lead directly to your Follow Up Boss or kvCORE CRM with zero manual effort.</p>
+              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs text-slate-600">
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Everything in Solo included</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Automated CRM synchronization</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> FUB custom tag & field mapping</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Real-time contact status updates</div>
+              </div>
+            </div>
+          </div>
+
+          {/* TIER 3: Pro */}
           <div className="border border-blue-200 bg-blue-50/10 rounded-2xl p-5 space-y-4 relative flex flex-col justify-between">
-            <span className="absolute top-4 right-4 bg-blue-100 text-blue-700 font-extrabold text-[9px] uppercase px-2 py-0.5 rounded-full tracking-wide">Most Popular</span>
+            <span className="absolute top-4 right-4 bg-blue-100 text-blue-700 font-extrabold text-[9px] uppercase px-2 py-0.5 rounded-full tracking-wide">Closes Them</span>
             <div className="space-y-4">
               <div className="space-y-1">
                 <span className="text-[10px] font-black uppercase text-blue-600">Most Popular</span>
-                <h3 className="font-extrabold text-lg text-slate-900">Pro Agent</h3>
+                <h3 className="font-extrabold text-lg text-slate-900">Pro</h3>
                 <p className="font-extrabold text-blue-600 text-xl font-mono">$29 / mo</p>
               </div>
-              <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">For active agents who want stronger branding, more AI support, and a more polished visitor experience.</p>
+              <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">Turn listings into immersive interactive experiences. Engages buyers in 24 languages, guided by custom knowledge bases and advanced voice tours.</p>
               <div className="border-t border-slate-150 pt-3 space-y-2 text-xs text-slate-600">
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Advanced Sora interactions</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Enhanced branding & config</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Higher usage limits</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Better follow-up support</div>
-              </div>
-            </div>
-          </div>
-
-          {/* TIER 3: Team */}
-          <div className="border border-slate-150 rounded-2xl p-5 space-y-4 hover:border-slate-350 transition-colors flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-slate-500">For Growing Teams</span>
-                <h3 className="font-extrabold text-lg text-slate-900">Team</h3>
-                <p className="font-extrabold text-blue-600 text-xl font-mono">$99 / mo</p>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">For teams that share coverage, host on each other’s listings, and need team-level oversight.</p>
-              <div className="border-t border-slate-100 pt-3 space-y-2 text-xs text-slate-600">
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Multi-agent access</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Shared listing workflows</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Team oversight & collab</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Lender override support</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Everything in Starter included</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Full 24-language translation</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Interactive conversational Sora guide</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Detailed buyer intent scoring</div>
               </div>
             </div>
           </div>
@@ -571,16 +702,16 @@ export default function Billing() {
           <div className="border border-slate-800 bg-slate-900 text-white rounded-2xl p-5 space-y-4 flex flex-col justify-between">
             <div className="space-y-4">
               <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-amber-300">Custom Onboarding</span>
-                <h3 className="font-extrabold text-lg text-white">Brokerage</h3>
-                <p className="font-extrabold text-amber-400 text-xl font-mono">Starting at $249 / mo</p>
+                <span className="text-[10px] font-black uppercase text-amber-300">Scales Them</span>
+                <h3 className="font-extrabold text-lg text-white">Broker</h3>
+                <p className="font-extrabold text-amber-400 text-xl font-mono">$249 / mo</p>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed min-h-[64px]">For brokerages that need centralized control across agents, listings, and events.</p>
+              <p className="text-xs text-slate-300 leading-relaxed min-h-[64px]">Empower your entire brokerage. Enforce brand templates, manage team-wide assignments, configure custom domains, and route shared listing leads.</p>
               <div className="border-t border-slate-800 pt-3 space-y-2 text-xs text-slate-300">
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Brokerage-level controls</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Multi-agent & office config</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Shared listing assignment</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Central routing & policy</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Centralized team and admin controls</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Brokerage-wide white-labeling</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Custom domain configuration</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Shared listing override rules</div>
               </div>
             </div>
           </div>
@@ -613,51 +744,51 @@ export default function Billing() {
                       className="cursor-pointer"
                     />
                     <div>
-                      <div className="font-extrabold text-slate-900 text-xs">Standard Free Agent</div>
-                      <div className="text-slate-500 text-[10px] uppercase">Unlimited listings & CRM push</div>
+                      <div className="font-extrabold text-slate-900 text-xs">Solo Plan</div>
+                      <div className="text-slate-500 text-[10px] uppercase font-bold">1 listing, offline kiosk sign-ins</div>
                     </div>
                   </div>
                   <span className="font-bold text-xs text-slate-900">$0 / mo</span>
                 </label>
 
                 <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer ${
-                  selectedPlanId === "team_starter" ? "border-blue-600 bg-blue-50/20" : 'border-slate-200 hover:bg-slate-50'
+                  selectedPlanId === "agent_starter" || selectedPlanId === "team_starter" ? "border-blue-600 bg-blue-50/20" : 'border-slate-200 hover:bg-slate-50'
                 }`}>
                   <div className="flex items-center gap-3">
                     <input 
                       type="radio" 
                       name="pricing_select" 
-                      value="team_starter"
-                      checked={selectedPlanId === "team_starter"}
-                      onChange={() => setSelectedPlanId("team_starter")}
+                      value="agent_starter"
+                      checked={selectedPlanId === "agent_starter" || selectedPlanId === "team_starter"}
+                      onChange={() => setSelectedPlanId("agent_starter")}
                       className="cursor-pointer"
                     />
                     <div>
-                      <div className="font-extrabold text-slate-900 text-xs font-indigo-900">Team Starter (Up to 10 Agents)</div>
-                      <div className="text-slate-500 text-[10px] uppercase">Co-hosted listings & branding</div>
+                      <div className="font-extrabold text-slate-900 text-xs">Starter Plan</div>
+                      <div className="text-slate-500 text-[10px] uppercase font-bold">Automatic CRM synchronization</div>
                     </div>
                   </div>
-                  <span className="font-bold text-xs text-slate-900">$50 / mo</span>
+                  <span className="font-bold text-xs text-slate-900">$14 / mo</span>
                 </label>
 
                 <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer ${
-                  selectedPlanId === "team_pro" ? "border-blue-600 bg-blue-50/20" : 'border-slate-200 hover:bg-slate-50'
+                  selectedPlanId === "team_pro" || selectedPlanId === "agent_pro" ? "border-blue-600 bg-blue-50/20" : 'border-slate-200 hover:bg-slate-50'
                 }`}>
                   <div className="flex items-center gap-3">
                     <input 
                       type="radio" 
                       name="pricing_select" 
                       value="team_pro"
-                      checked={selectedPlanId === "team_pro"}
+                      checked={selectedPlanId === "team_pro" || selectedPlanId === "agent_pro"}
                       onChange={() => setSelectedPlanId("team_pro")}
                       className="cursor-pointer"
                     />
                     <div>
-                      <div className="font-extrabold text-slate-900 text-xs text-indigo-950">Team Pro (Up to 25 Agents)</div>
-                      <div className="text-slate-500 text-[10px] uppercase font-bold">Joint-branding & lender override policy</div>
+                      <div className="font-extrabold text-slate-900 text-xs">Pro Plan</div>
+                      <div className="text-slate-500 text-[10px] uppercase font-bold">24 languages, conversational Sora AI</div>
                     </div>
                   </div>
-                  <span className="font-bold text-xs text-slate-900">$100 / mo</span>
+                  <span className="font-bold text-xs text-slate-900">$29 / mo</span>
                 </label>
 
                 <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer ${
@@ -673,11 +804,11 @@ export default function Billing() {
                       className="cursor-pointer"
                     />
                     <div>
-                      <div className="font-extrabold text-slate-900 text-xs">Team Elite (Up to 50 Agents)</div>
-                      <div className="text-slate-500 text-[10px] uppercase">Compliance checks & advanced statistics</div>
+                      <div className="font-extrabold text-slate-900 text-xs">Broker Plan</div>
+                      <div className="text-slate-500 text-[10px] uppercase font-bold">Team management, custom domains</div>
                     </div>
                   </div>
-                  <span className="font-bold text-xs text-slate-900">$150 / mo</span>
+                  <span className="font-bold text-xs text-slate-900">$249 / mo</span>
                 </label>
 
                 <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer ${
@@ -693,7 +824,7 @@ export default function Billing() {
                       className="cursor-pointer"
                     />
                     <div>
-                      <div className="font-extrabold text-slate-900 text-xs">Lender Sponsors (Active B2B Pro Seat)</div>
+                      <div className="font-extrabold text-slate-900 text-xs">Lender Sponsors</div>
                       <div className="text-slate-500 text-[10px] uppercase font-bold">External API sync & Priority Placement</div>
                     </div>
                   </div>

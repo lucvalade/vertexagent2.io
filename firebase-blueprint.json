@@ -297,9 +297,29 @@
         }
       },
       "required": ["agent_id", "account_tier", "sora_session_constraints", "media_processing_rules", "branding_configuration"]
+    },
+    "TourConfig": {
+      "title": "TourConfig",
+      "description": "AI Tour configuration for a listing",
+      "type": "object",
+      "properties": {
+        "voiceId": { "type": "string" },
+        "ttsModel": { "type": "string" },
+        "welcomeTexts": { "type": "object" },
+        "defaultLanguage": { "type": "string" },
+        "mediaManifest": { "type": "array" },
+        "brokerageBranding": { "type": "object" },
+        "knowledgeBase": { "type": "array" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["voiceId", "ttsModel", "welcomeTexts", "defaultLanguage"]
     }
   },
   "firestore": {
+    "listings/{listingId}/tourConfig/{configId}": {
+      "schema": { "$ref": "#/entities/TourConfig" },
+      "description": "AI Tour config for a listing (main document)"
+    },
     "agent_pricing_branding_profiles/{profileId}": {
       "schema": { "$ref": "#/entities/AgentPricingAndBrandingProfileV2" },
       "description": "Agent pricing plan details, Sora usage limits, media upload rules, and brokerage branding configurations"

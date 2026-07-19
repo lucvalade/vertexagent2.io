@@ -11,6 +11,7 @@ import {
   createVoiceNote,
   finishTourAndGetNotes,
   getTourConfig,
+  getOpenHouseSessions,
 } from "@/lib/api";
 import TourGate from "@/components/TourGate";
 import { useAgentTierCapabilities } from "@/components/UpdatedFeatureController";
@@ -50,9 +51,12 @@ import {
   AlertCircle,
   RefreshCw,
   Play,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import WelcomeAudio from "@/components/WelcomeAudio";
 import SocialShareBubble from "@/components/SocialShareBubble";
+import AskMeAboutTable from "@/components/AskMeAboutTable";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -874,28 +878,25 @@ const localizeDescriptor = (desc: string, lang: string): string => {
 };
 
 const getGeminiVoice = (voiceName: string = ""): string => {
-  const name = voiceName.toLowerCase();
-  if (name.includes("professional female")) return "Kore";
-  if (name.includes("executive british")) return "Zephyr";
-  if (name.includes("storyteller") || name.includes("aoede")) return "Aoede";
-  if (
-    name.includes("warm energetic") ||
-    name.includes("warm male") ||
-    name.includes("puck")
-  )
+  const name = String(voiceName).toLowerCase();
+  if (name === "2" || name.includes("professional female") || name.includes("sora") || name.includes("kore")) {
+    return "Kore";
+  }
+  if (name === "3" || name.includes("warm energetic") || name.includes("warm male") || name.includes("puck") || name.includes("alex")) {
     return "Puck";
-  if (
-    name.includes("calm reassuring") ||
-    name.includes("calm male") ||
-    name.includes("charon")
-  )
-    return "Kore";
-  if (
-    name.includes("deep narrator") ||
-    name.includes("narrator") ||
-    name.includes("fenrir")
-  )
-    return "Kore";
+  }
+  if (name === "6" || name.includes("calm reassuring") || name.includes("calm male") || name.includes("charon") || name.includes("marcus")) {
+    return "Charon";
+  }
+  if (name === "8" || name.includes("deep narrator") || name.includes("fenrir")) {
+    return "Fenrir";
+  }
+  if (name === "5" || name.includes("executive british") || name.includes("zephyr")) {
+    return "Zephyr";
+  }
+  if (name === "7" || name.includes("storyteller") || name.includes("aoede")) {
+    return "Aoede";
+  }
   return "Kore"; // default fallback - premium professional female voice
 };
 
@@ -965,6 +966,7 @@ export default function Tour() {
   const [listing, setListing] = useState<Listing | null>(null);
   const [agent, setAgent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<any[]>([]);
 
   // Load Agent Tier & Capabilities
   const { capabilities, profile } = useAgentTierCapabilities(listing?.ownerId);
@@ -1032,10 +1034,14 @@ export default function Tour() {
     }
   };
 
+  // Stop active HeyGen generating scripts/handshakes per user directive (avatar deferred)
   useEffect(() => {
+    // Commented out to stop active HeyGen generation / handshake requests per user rule
+    /*
     if (activeAvatar?.avatarId) {
       triggerHeyGenHandshake(activeAvatar.avatarId);
     }
+    */
   }, [activeAvatar?.avatarId]);
 
   // Compliance Country calculation (Primary anchor: property/agent, secondary: simulated/IP)
@@ -1073,6 +1079,110 @@ export default function Tour() {
   const currentCountry = getComplianceCountry();
   const isUS = currentCountry === "US";
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+
+  const getManifestKeyForQuestion = (question: string): string => {
+    const q = question.toLowerCase();
+    if (q.includes("bedroom") || q.includes("bathroom") || q.includes("chambre") || q.includes("bain")) {
+      return "primary_bed";
+    }
+    if (q.includes("in-law") || q.includes("suite") || q.includes("parentale") || q.includes("invité")) {
+      return "inlaw_suite";
+    }
+    if (q.includes("kitchen") || q.includes("cuisine") || q.includes("caractéristiques et les appareils")) {
+      return "kitchen";
+    }
+    if (q.includes("backyard") || q.includes("lot") || q.includes("cour arrière") || q.includes("terrain")) {
+      return "backyard";
+    }
+    if (q.includes("basement") || q.includes("sous-sol")) {
+      return "basement";
+    }
+    if (q.includes("parking") || q.includes("garage") || q.includes("stationnement")) {
+      return "driveway";
+    }
+    if (q.includes("school") || q.includes("transit") || q.includes("highway") || q.includes("transport") || q.includes("autoroute") || q.includes("écoles") || q.includes("épiceries") || q.includes("parks") || q.includes("amenities") || q.includes("commodités")) {
+      return "neighbourhood_map";
+    }
+    if (q.includes("square footage") || q.includes("superficie")) {
+      return "floorplan";
+    }
+    if (q.includes("mls") || q.includes("tax")) {
+      return "floorplan";
+    }
+    if (q.includes("heating") || q.includes("cooling") || q.includes("chauffage") || q.includes("climatisation")) {
+      return "living";
+    }
+    if (q.includes("built") || q.includes("construction")) {
+      return "exterior_front";
+    }
+    if (q.includes("showing") || q.includes("offer") || q.includes("visite")) {
+      return "front_porch";
+    }
+    if (q.includes("mortgage") || q.includes("financing") || q.includes("hypothèque") || q.includes("financement")) {
+      return "floorplan";
+    }
+    return "";
+  };
+
+  const changeImageForQuestion = (question: string) => {
+    const askMeAboutArray = (listing as any)?.askMeAbout || [];
+    const matchingEntry = askMeAboutArray.find((entry: any) => 
+      entry.active && (
+        (entry.sampleQuestion && entry.sampleQuestion.toLowerCase() === question.toLowerCase()) ||
+        (entry.category && entry.category.toLowerCase() === question.toLowerCase()) ||
+        (entry.question && entry.question.toLowerCase() === question.toLowerCase())
+      )
+    );
+
+    let key = "";
+    if (matchingEntry && matchingEntry.mediaKey) {
+      key = matchingEntry.mediaKey;
+    } else {
+      key = getManifestKeyForQuestion(question);
+    }
+
+    if (key && listing?.images) {
+      // 1. Look up by exact key or name-match in listing.images
+      const foundIdx = listing.images.findIndex((img: any) => {
+        if (!img) return false;
+        if (typeof img === "object") {
+          const imgKey = (img.key || img.manifestKey || img.mediaKey || img.name || "").toLowerCase();
+          const targetKey = key.toLowerCase();
+          return imgKey === targetKey || 
+                 imgKey.includes(targetKey) || 
+                 targetKey.includes(imgKey) ||
+                 imgKey.replace(/_/g, " ").includes(targetKey.replace(/_/g, " "));
+        }
+        return false;
+      });
+
+      if (foundIdx !== -1) {
+        setActiveImageIndex(foundIdx);
+        return;
+      }
+      
+      // 2. Look up in mediaManifest
+      if (tourConfig?.mediaManifest) {
+        const manifestIdx = tourConfig.mediaManifest.findIndex((m: any) => m && m.key === key);
+        if (manifestIdx !== -1) {
+          const url = tourConfig.mediaManifest[manifestIdx].url;
+          const imgIdx = listing.images.findIndex((img: any) => 
+            typeof img === "string" ? img === url : img?.url === url
+          );
+          if (imgIdx !== -1) {
+            setActiveImageIndex(imgIdx);
+            return;
+          }
+          // Fallback to index if manifestIdx is within bounds
+          if (manifestIdx < listing.images.length) {
+            setActiveImageIndex(manifestIdx);
+            return;
+          }
+        }
+      }
+    }
+  };
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [language, setLanguage] = useState("English");
   const [isWelcomingSpeaking, setIsWelcomingSpeaking] = useState(false);
@@ -1260,6 +1370,11 @@ export default function Tour() {
           }
         }
         setListing(data as Listing);
+        getOpenHouseSessions(id).then(sessionsList => {
+          setSessions(sessionsList);
+        }).catch(err => {
+          console.error("Failed to load sessions in basic tour:", err);
+        });
         const agentData = await getAgent(data.ownerId);
         setAgent(agentData);
         if (agentData?.avatarSettings) {
@@ -1321,6 +1436,11 @@ export default function Tour() {
       }
       setListing(data);
       if (data) {
+        getOpenHouseSessions(data.id).then(sessionsList => {
+          setSessions(sessionsList);
+        }).catch(err => {
+          console.error("Failed to load sessions in full tour:", err);
+        });
         getTourConfig(data.id).then((config) => {
           if (config) {
             setTourConfig(config);
@@ -1502,17 +1622,104 @@ If the visitor says no:
 `;
 
   const getFormattedPrompt = () => {
-    const rawTemplate = customPrompt || `You are Sora, a warm, professional female real-estate assistant for {brokerage} in {city}, {province}. You help buyers explore {address}.
+    const rawTemplate = customPrompt || `You are Sora, a warm, professional real-estate assistant acting
+directly on behalf of the listing agent for {brokerage} in {city},
+{province}, helping buyers explore {address}. You are always
+LISTENING unless actively speaking. If the buyer speaks while you
+are talking, stop instantly and listen (barge-in).
 
-RULES:
-- Answer in {language}. Never switch languages mid-answer.
-- Use facts from the KNOWLEDGE BASE only. Never invent details.
-- Reference KEY HIGHLIGHTS naturally at the start of the tour.
-- When the buyer asks about a specific room or area, set showMedia.key to the matching manifest key. Never fabricate URLs.
-- Keep spokenReply under 40 words. Speak like a helpful human, not a brochure.
-- If you don't know an answer, say so honestly and offer to have the agent follow up.
+OPENING GREETING (LOCKED RULE — fires automatically the instant
+the buyer presses Start, before the buyer speaks):
+Your very first spokenReply of every session MUST include a
+self-introduction by name — e.g. "Hi, I'm Sora, your AI guide for
+{address}." Never skip straight to the tour-mode question without
+introducing yourself first. After introducing yourself, ask if
+they'd like a guided tour or prefer to explore and ask questions as
+they go, and mention voice notes are available any time. This
+introduction is a single spokenReply, not two separate turns.
 
-KEY HIGHLIGHTS: {highlights}
+TOUR MODES:
+- Guided AI Tour: narrate room-by-room, set showMedia to match
+  whatever room/feature you are actively describing.
+- Self-Guided: buyer explores freely. Use the ROOM DETECTION rules
+  below to know their context.
+
+ROOM DETECTION & CONTEXT RULES:
+1. Prioritize explicit UI/system hints (e.g. "System Note: user is
+   viewing photo: kitchen_upgrades" or "User tapped: Kitchen
+   Upgrades"). Assume that is their current room/topic.
+2. If a room-specific question has no hint and you cannot infer the
+   room from their words, ask: "Which room are you in right now?"
+3. Once known, set showMedia to the matching manifest key.
+
+BARGE-IN + PHOTO SYNC (LOCKED RULE — the photo must follow the
+NEW question, not stay on the room you were narrating):
+1. If the buyer barges in mid-narration with a question naming or
+   implying a DIFFERENT room/feature than what you were currently
+   showing, you MUST set showMedia to that new room's manifest key
+   in your very next response — do not leave showMedia on the
+   interrupted room, and do not wait for the buyer to ask again.
+2. Resolve the new room the same way as any question: match it to
+   an ASK ME ABOUT entry's [IMAGE_ID] first, then a KNOWLEDGE BASE
+   fact, then the MEDIA MANIFEST KEYS list directly if neither has
+   an entry but the room name still maps to a known manifest key.
+3. If the buyer's interrupting question does NOT reference a room
+   or feature (e.g. "how much is it", "can I book a showing"),
+   leave showMedia as null and do not change the photo.
+4. After answering the barge-in question, resume Guided narration
+   from where you left off (or ask the buyer if they'd like you to
+   continue) — do not silently skip ahead.
+
+ASK ME ABOUT — HOW TO READ IT:
+The ASK ME ABOUT block below is structured data, formatted exactly
+as the buyer sees it on screen:
+  ## [Category]              <- tappable heading buyer may select
+  *[Sample question]*        <- italic suggested question
+  [IMAGE_ID: manifest_key]   <- photo to show when this is answered
+  Answer: [text]             <- what you say, in your own words
+  ---                        <- separates one entry from the next
+Each entry maps 1:1 to a category the buyer can tap OR ask aloud in
+their own words. Never speak the Markdown syntax, headings, dashes,
+or "[IMAGE_ID: ...]" tag out loud or in spokenReply — only the
+answer content, said naturally.
+
+ASK ME ABOUT — MATCHING RULES (apply first, before Knowledge Base):
+1. If the buyer taps a category or speaks its exact sample question,
+   go straight to that entry's Answer.
+2. If the buyer asks ANY free-form variation — including a single
+   bare topic word with no full sentence, e.g. just "kitchen?" or
+   "what about the kitchen" — match it to the closest ## Category
+   by topic/intent, then use that entry's Answer. A bare topic word
+   is enough to trigger a match; do not require a fully-formed
+   question.
+3. EVERY time you answer from an entry that has an [IMAGE_ID: key],
+   you MUST set showMedia.key to that key in the SAME response that
+   contains the spoken answer — never answer the question and leave
+   showMedia null, and never send the photo change in a later turn.
+   This applies whether the buyer tapped the category or spoke the
+   question, in any phrasing.
+4. Speak the Answer content in your own conversational phrasing,
+   under 40 words — do not just read it verbatim if it reads stiff.
+
+ANSWERING PRIORITY:
+1. ASK ME ABOUT (see matching rules above) — check first, always.
+2. KNOWLEDGE BASE — use only if no ASK ME ABOUT entry matches.
+3. If neither source covers it, say so honestly and redirect to
+   2-3 categories that ARE covered (e.g. "I don't have that handy,
+   but ask me about the Kitchen Upgrades or the Backyard!"), and
+   offer an agent follow-up.
+Never invent or extrapolate facts not present in either source.
+
+GENERAL RULES:
+- Answer in {language} only. Never switch languages mid-answer.
+- Keep spokenReply under 40 words, conversational, not a brochure.
+  Never say "according to the data" or "based on the Q&A" — speak
+  as if you simply know it.
+- Periodically remind the buyer they can swipe the photo or tap the
+  bold white arrows on either side to browse on their own, in
+  addition to asking you.
+
+ASK ME ABOUT: {askMeAbout}
 KNOWLEDGE BASE: {knowledgeBase}
 MEDIA MANIFEST KEYS: {manifestKeys}
 
@@ -1528,6 +1735,59 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
       ? (listing as any).keyHighlights.join(", ") 
       : ((listing as any)?.talkingPoints?.length ? (listing as any).talkingPoints.join(", ") : "None available");
     
+    let askMeAboutVal = "None available";
+    const askMeAboutArray = (listing as any)?.askMeAbout || (tourConfig as any)?.askMeAbout || [];
+    if (Array.isArray(askMeAboutArray) && askMeAboutArray.length > 0) {
+      const activeSorted = askMeAboutArray
+        .filter((entry: any) => entry.active === true)
+        .sort((a: any, b: any) => {
+          const orderA = typeof a.sortOrder === 'number' ? a.sortOrder : 999;
+          const orderB = typeof b.sortOrder === 'number' ? b.sortOrder : 999;
+          return orderA - orderB;
+        })
+        .slice(0, 12);
+
+      if (activeSorted.length > 0) {
+        askMeAboutVal = activeSorted.map((entry: any) => {
+          const category = entry.category || "";
+          const question = entry.sampleQuestion || entry.question || "";
+          const answer = entry.answer || "";
+          const imageLine = entry.mediaKey ? `[IMAGE_ID: ${entry.mediaKey}]\n` : "";
+          return `## ${category}\n*${question}*\n${imageLine}Answer: ${answer}`;
+        }).join("\n---\n");
+      }
+    }
+    
+    if (askMeAboutVal === "None available") {
+      const isFrench = langVal.toLowerCase() === "fr" || langVal.toLowerCase() === "french";
+      const fallbackRows = [
+        {
+          category: isFrench ? "Chambres & Salles de bain" : "Bedrooms & Bathrooms",
+          question: isFrench ? "Combien de chambres et de salles de bain possède cette maison ?" : "How many bedrooms and bathrooms does this home have?",
+          answer: isFrench 
+            ? `Cette maison possède ${listing?.beds || "N/A"} chambres et ${listing?.baths || "N/A"} salles de bain.` 
+            : `This home features ${listing?.beds || "N/A"} bedrooms and ${listing?.baths || "N/A"} bathrooms.`,
+        },
+        {
+          category: isFrench ? "Améliorations de la cuisine" : "Kitchen Upgrades",
+          question: isFrench ? "Quelles sont les caractéristiques et les appareils de la cuisine ?" : "What are the key features and appliances in the kitchen?",
+          answer: isFrench
+            ? "La cuisine est équipée d'appareils modernes haut de gamme et de finitions de qualité."
+            : "The kitchen features premium modern appliances and high-quality finishes.",
+        },
+        {
+          category: isFrench ? "Superficie en pieds carrés" : "Square Footage",
+          question: isFrench ? "Quelle est la superficie totale approximative de l'intérieur ?" : "What is the approximate total interior square footage?",
+          answer: isFrench
+            ? `La superficie totale est d'environ ${listing?.sqft || "N/A"} pieds carrés.`
+            : `The total interior area is approximately ${listing?.sqft || "N/A"} square feet.`,
+        }
+      ];
+      askMeAboutVal = fallbackRows.map((entry) => {
+        return `## ${entry.category}\n*${entry.question}*\nAnswer: ${entry.answer}`;
+      }).join("\n---\n");
+    }
+
     let kbVal = "None available";
     if (tourConfig?.knowledgeBase && Array.isArray(tourConfig.knowledgeBase)) {
       kbVal = tourConfig.knowledgeBase.map((k: any) => `Q: ${k.question}\nA: ${k.answer}`).join("\n");
@@ -1554,6 +1814,7 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
       .replace(/{address}/g, addressVal)
       .replace(/{language}/g, langVal)
       .replace(/{highlights}/g, highlightsVal)
+      .replace(/{askMeAbout}/g, askMeAboutVal)
       .replace(/{knowledgeBase}/g, kbVal)
       .replace(/{manifestKeys}/g, manifestKeysVal);
 
@@ -1573,6 +1834,47 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
   const photoInteractionModeInstruction = capabilities.photoInteractionMode === "Manual Swipe Only"
     ? "\n- CRITICAL ENFORCED LIMIT: You are operating in Free Solo mode. You are STRICTLY FORBIDDEN from attempting to change, show, or navigate photos or rooms. You do NOT have the show_property_feature tool registered. If the visitor asks you to show a different room, view, or photo, explain politely that they can swipe through the listing photos manually using the navigation arrows on the image slideshow at the top of the screen."
     : "\n- PRO FEATURE ACTIVE: You have the 'show_property_feature' tool registered. You can automatically and dynamically navigate and change the photos on the visitor's screen to match the room or feature you are actively discussing (e.g., kitchen, bedroom, backyard, etc.). Use this tool whenever relevant to create an immersive contextual experience.";
+
+  const openHouseSessionContext = (() => {
+    const nowStr = new Date().toISOString();
+    const scheduled = sessions.filter(s => s.end_datetime > nowStr);
+    scheduled.sort((a, b) => a.start_datetime.localeCompare(b.start_datetime));
+    
+    let targetSession = scheduled[0];
+    if (!targetSession && sessions.length > 0) {
+      const sortedAll = [...sessions].sort((a, b) => b.start_datetime.localeCompare(a.start_datetime));
+      targetSession = sortedAll[0];
+    }
+
+    let displayOpenHouseDate = listing?.openHouseDate || "";
+    let displayOpenHouseTime = listing?.openHouseTime || "";
+
+    if (targetSession) {
+      const startDate = new Date(targetSession.start_datetime);
+      const endDate = new Date(targetSession.end_datetime);
+      
+      const year = startDate.getFullYear();
+      const month = String(startDate.getMonth() + 1).padStart(2, "0");
+      const day = String(startDate.getDate()).padStart(2, "0");
+      displayOpenHouseDate = `${year}-${month}-${day}`;
+      
+      const formatTimeLocal = (d: Date) => {
+        let h = d.getHours();
+        const m = String(d.getMinutes()).padStart(2, "0");
+        const ampm = h >= 12 ? "PM" : "AM";
+        h = h % 12;
+        h = h ? h : 12;
+        return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+      };
+      
+      displayOpenHouseTime = `${formatTimeLocal(startDate)} - ${formatTimeLocal(endDate)}`;
+    }
+    
+    if (displayOpenHouseDate || displayOpenHouseTime) {
+      return `\n- Open House Scheduled Date: ${displayOpenHouseDate || "N/A"}\n- Open House Scheduled Time: ${displayOpenHouseTime || "N/A"}`;
+    }
+    return "\n- Open House: No upcoming sessions scheduled at this moment.";
+  })();
 
   const systemInstruction = `${systemDateStr}
 
@@ -1619,7 +1921,7 @@ Listing context
 - Documents: None
 - Nearby amenities: Shopping, dining
 - Schools: Local school district
-- Transit: Public transit nearby
+- Transit: Public transit nearby${openHouseSessionContext}
 
 Import context
 - Import source URL: ${listing?.originatingSystemName || "None"}
@@ -1685,19 +1987,28 @@ Global rules
 - If the visitor requests a room, feature, brochure, floor plan, or map, trigger the correct UI tool first when supported.
 - If the visitor is highly interested or asks about next steps, offer a brochure, showing request, or agent contact.
 - Do not provide legal, mortgage, or contract advice.
-- Meeting Date Validation: When a client requests a date to meet the agent, you must verify that the requested date is not in the past. Always reference the current system date (${new Date().toLocaleDateString("en-US", dateOptions)}). If the requested date is in the past, politely inform them that the date is invalid and ask them to suggest a new time (e.g., "It looks like that date has already passed! Could you suggest a time for today or later?"). If the requested date is today or in the future, accept the date and proceed with scheduling.`;
+- Meeting Date Validation: When a client requests a date to meet the agent, you must verify that the requested date is not in the past. Always reference the current system date (${new Date().toLocaleDateString("en-US", dateOptions)}). If the requested date is in the past, politely inform them that the date is invalid and ask them to suggest a new time (e.g., "It looks like that date has already passed! Could you suggest a time for today or later?"). If the requested date is today or in the future, accept the date and proceed with scheduling.
+- Spoken / Clicked Q&A Image-Sync: When the user asks any question (such as Bedrooms & Bathrooms, In-Law Suite, Kitchen, Backyard, Basement, Parking/Garage, Transit/Highway, Nearby Amenities, Square Footage, MLS), you MUST immediately call the 'show_property_feature' tool with the key corresponding to their question before or while answering verbally. Use these keys: 'primary_bed' (for bedrooms/bathrooms), 'inlaw_suite' (for in-law suite), 'kitchen' (for kitchen), 'backyard' (for backyard/lot), 'basement' (for basement), 'driveway' (for parking/garage), 'neighbourhood_map' (for school/transit/amenities/neighborhood), 'floorplan' (for square footage or MLS).`;
 
   const liveVoiceTools = capabilities.photoInteractionMode === "Dynamic Contextual AI Photo Swaps"
-    ? [{ functionDeclarations: [show_property_feature, trigger_lead_capture, submit_ai_tour_lead] }]
-    : [{ functionDeclarations: [trigger_lead_capture, submit_ai_tour_lead] }];
+    ? [{ functionDeclarations: [show_property_feature, submit_ai_tour_lead] }]
+    : [{ functionDeclarations: [submit_ai_tour_lead] }];
 
-  const { connected, connecting, error, startSession, stopSession } =
+  const { connected, connecting, error, startSession, stopSession, sendTextMessage } =
     useLiveVoice(
       systemInstruction,
       liveVoiceTools,
       handleToolCall,
       getGeminiVoice(listing?.voiceName || "Professional Female Synthetic"),
     );
+
+  // When connection completes, send pending question if any
+  useEffect(() => {
+    if (connected && pendingQuestion) {
+      sendTextMessage(pendingQuestion);
+      setPendingQuestion(null);
+    }
+  }, [connected, pendingQuestion, sendTextMessage]);
 
 
 
@@ -1839,6 +2150,50 @@ Global rules
           />
         )}
 
+        {/* Navigation Arrows */}
+        {listing?.images && listing.images.length > 1 && (
+          <>
+            {/* Left Arrow Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveImageIndex((prevIdx) => 
+                  prevIdx === 0 ? listing.images.length - 1 : prevIdx - 1
+                );
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2.5 rounded-full bg-black/45 hover:bg-black/70 text-white transition-all cursor-pointer border border-white/10 shadow-lg focus:outline-none flex items-center justify-center group"
+              aria-label="Previous Image"
+              id="property-tour-prev-image"
+            >
+              <ChevronLeft className="h-6 w-6 sm:h-8 sm:w-8 text-white font-bold transition-transform group-hover:scale-110" />
+            </button>
+
+            {/* Right Arrow Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveImageIndex((prevIdx) => 
+                  prevIdx === listing.images.length - 1 ? 0 : prevIdx + 1
+                );
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2.5 rounded-full bg-black/45 hover:bg-black/70 text-white transition-all cursor-pointer border border-white/10 shadow-lg focus:outline-none flex items-center justify-center group"
+              aria-label="Next Image"
+              id="property-tour-next-image"
+            >
+              <ChevronRight className="h-6 w-6 sm:h-8 sm:w-8 text-white font-bold transition-transform group-hover:scale-110" />
+            </button>
+
+            {/* Image Indicator Badge */}
+            <div className="absolute bottom-6 sm:bottom-12 right-6 sm:right-12 z-30 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/10 select-none">
+              <span className="text-[11px] font-mono font-medium text-white/90">
+                {activeImageIndex + 1} / {listing.images.length}
+              </span>
+            </div>
+          </>
+        )}
+
         {/* Overlays */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
 
@@ -1946,81 +2301,119 @@ Global rules
             })()}
 
             {/* Clean Open House block inside the card */}
-            {(listing.openHouseDate || listing.openHouseTime) && (
-              <>
-                <style
-                  dangerouslySetInnerHTML={{
-                    __html: `
-                  @keyframes borderFluctuateRedWhite {
-                    0% {
-                      border-color: #ef4444;
-                      box-shadow: 0 0 6px rgba(239, 68, 68, 0.7);
+            {(() => {
+              const nowStr = new Date().toISOString();
+              const scheduled = sessions.filter(s => s.end_datetime > nowStr);
+              scheduled.sort((a, b) => a.start_datetime.localeCompare(b.start_datetime));
+              
+              let targetSession = scheduled[0];
+              if (!targetSession && sessions.length > 0) {
+                const sortedAll = [...sessions].sort((a, b) => b.start_datetime.localeCompare(a.start_datetime));
+                targetSession = sortedAll[0];
+              }
+
+              let displayOpenHouseDate = listing?.openHouseDate || "";
+              let displayOpenHouseTime = listing?.openHouseTime || "";
+
+              if (targetSession) {
+                const startDate = new Date(targetSession.start_datetime);
+                const endDate = new Date(targetSession.end_datetime);
+                
+                const year = startDate.getFullYear();
+                const month = String(startDate.getMonth() + 1).padStart(2, "0");
+                const day = String(startDate.getDate()).padStart(2, "0");
+                displayOpenHouseDate = `${year}-${month}-${day}`;
+                
+                const formatTimeLocal = (d: Date) => {
+                  let h = d.getHours();
+                  const m = String(d.getMinutes()).padStart(2, "0");
+                  const ampm = h >= 12 ? "PM" : "AM";
+                  h = h % 12;
+                  h = h ? h : 12;
+                  return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+                };
+                
+                displayOpenHouseTime = `${formatTimeLocal(startDate)} - ${formatTimeLocal(endDate)}`;
+              }
+
+              if (!displayOpenHouseDate && !displayOpenHouseTime) return null;
+
+              return (
+                <>
+                  <style
+                    dangerouslySetInnerHTML={{
+                      __html: `
+                    @keyframes borderFluctuateRedWhite {
+                      0% {
+                        border-color: #ef4444;
+                        box-shadow: 0 0 6px rgba(239, 68, 68, 0.7);
+                      }
+                      50% {
+                        border-color: #ffffff;
+                        box-shadow: 0 0 10px rgba(255, 255, 255, 1);
+                      }
+                      100% {
+                        border-color: #ef4444;
+                        box-shadow: 0 0 6px rgba(239, 68, 68, 0.7);
+                      }
                     }
-                    50% {
-                      border-color: #ffffff;
-                      box-shadow: 0 0 10px rgba(255, 255, 255, 1);
+                    @keyframes starFlashBrighterPulse {
+                      0% {
+                        transform: scale(0.9);
+                        opacity: 0.7;
+                        filter: brightness(1.5) drop-shadow(0 0 4px rgba(253, 224, 71, 0.8));
+                      }
+                      50% {
+                        transform: scale(1.35);
+                        opacity: 1.0;
+                        filter: brightness(3.5) drop-shadow(0 0 16px rgba(253, 224, 71, 1));
+                      }
+                      100% {
+                        transform: scale(0.9);
+                        opacity: 0.7;
+                        filter: brightness(1.5) drop-shadow(0 0 4px rgba(253, 224, 71, 0.8));
+                      }
                     }
-                    100% {
-                      border-color: #ef4444;
-                      box-shadow: 0 0 6px rgba(239, 68, 68, 0.7);
+                    .fluctuating-red-white-border {
+                      border: 2px solid #ef4444 !important;
+                      animation: borderFluctuateRedWhite 1.5s infinite ease-in-out !important;
                     }
-                  }
-                  @keyframes starFlashBrighterPulse {
-                    0% {
-                      transform: scale(0.9);
-                      opacity: 0.7;
-                      filter: brightness(1.5) drop-shadow(0 0 4px rgba(253, 224, 71, 0.8));
+                    .star-flash-brighter {
+                      animation: starFlashBrighterPulse 1s infinite ease-in-out !important;
                     }
-                    50% {
-                      transform: scale(1.35);
-                      opacity: 1.0;
-                      filter: brightness(3.5) drop-shadow(0 0 16px rgba(253, 224, 71, 1));
-                    }
-                    100% {
-                      transform: scale(0.9);
-                      opacity: 0.7;
-                      filter: brightness(1.5) drop-shadow(0 0 4px rgba(253, 224, 71, 0.8));
-                    }
-                  }
-                  .fluctuating-red-white-border {
-                    border: 2px solid #ef4444 !important;
-                    animation: borderFluctuateRedWhite 1.5s infinite ease-in-out !important;
-                  }
-                  .star-flash-brighter {
-                    animation: starFlashBrighterPulse 1s infinite ease-in-out !important;
-                  }
-                `,
-                  }}
-                />
-                <div className="flex items-center gap-2 bg-blue-600/30 backdrop-blur-sm px-2.5 py-1.5 rounded-lg fluctuating-red-white-border mt-3">
-                  <Sparkles className="h-3.5 w-3.5 text-blue-200 star-flash-brighter flex-shrink-0" />
-                  <div className="flex flex-col text-left">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200 leading-none mb-0.5">
-                      Open House
-                    </span>
-                    <span className="text-xs font-bold leading-tight text-white">
-                      {listing.openHouseDate && (
-                        <span>
-                          {new Date(
-                            listing.openHouseDate + "T00:00:00",
-                          ).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </span>
-                      )}
-                      {listing.openHouseDate && listing.openHouseTime && (
-                        <span className="mx-1 opacity-60">|</span>
-                      )}
-                      {listing.openHouseTime && (
-                        <span>{listing.openHouseTime}</span>
-                      )}
-                    </span>
+                  `,
+                    }}
+                  />
+                  <div className="flex items-center gap-2 bg-blue-600/30 backdrop-blur-sm px-2.5 py-1.5 rounded-lg fluctuating-red-white-border mt-3">
+                    <Sparkles className="h-3.5 w-3.5 text-blue-200 star-flash-brighter flex-shrink-0" />
+                    <div className="flex flex-col text-left">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-blue-200 leading-none mb-0.5">
+                        Open House
+                      </span>
+                      <span className="text-xs font-bold leading-tight text-white">
+                        {displayOpenHouseDate && (
+                          <span>
+                            {new Date(
+                              displayOpenHouseDate + "T00:00:00",
+                            ).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </span>
+                        )}
+                        {displayOpenHouseDate && displayOpenHouseTime && (
+                          <span className="mx-1 opacity-60">|</span>
+                        )}
+                        {displayOpenHouseTime && (
+                          <span>{displayOpenHouseTime}</span>
+                        )}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </>
-            )}
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -2090,38 +2483,37 @@ Global rules
             )}
           </div>
 
-          <div className="relative flex flex-col gap-4 items-center justify-center">
+          <div className="relative flex flex-col gap-4 items-center justify-center w-full max-w-sm px-4">
             <div className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
                 <h4 className="text-center font-bold text-white text-sm sm:text-base mb-3 uppercase tracking-wider">
                   {trans.askMeAbout}
                 </h4>
-                <div className="grid grid-cols-2 gap-2 w-full mx-auto text-left">
-                  {listing.tourDescriptors && listing.tourDescriptors.length > 0 ? (
-                    listing.tourDescriptors.map((desc, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-slate-200 font-medium text-[11px] sm:text-xs hover:bg-white/10 transition-colors"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        <span className="truncate" title={localizeDescriptor(desc, language)}>
-                          {localizeDescriptor(desc, language)}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    trans.defaultKeywords.map((kw, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-slate-200 font-medium text-[11px] sm:text-xs hover:bg-white/10 transition-colors"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                        <span className="truncate" title={kw}>
-                          {kw}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <AskMeAboutTable 
+                  language={language} 
+                  askMeAbout={listing?.askMeAbout}
+                  onTopicClick={(question) => {
+                    // 1. Instantly change image on screen if matching key exists
+                    changeImageForQuestion(question);
+
+                    // 2. Playback verbally via active AI session
+                    if (connected) {
+                      toast.info(
+                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
+                          ? `Sora répond : "${question}"`
+                          : `Sora is responding: "${question}"`
+                      );
+                      sendTextMessage(question);
+                    } else {
+                      toast.info(
+                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
+                          ? `Connexion à Sora pour répondre à : "${question}"...`
+                          : `Connecting to Sora to answer: "${question}"...`
+                      );
+                      setPendingQuestion(question);
+                      startSession();
+                    }
+                  }} 
+                />
               </div>
 
             <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 mt-2 animate-in fade-in duration-700">
@@ -2428,7 +2820,12 @@ Global rules
 
                     // If still no "@" (e.g. just user typed a name like "jane" or "jane.doe"), auto-append "@gmail.com"
                     if (!corrected.includes("@")) {
-                      corrected = corrected + "@gmail.com";
+                      const suffixPattern = /\.(com|ca|net|org|co|io|edu|gov|me|info|biz|us)$/i;
+                      if (suffixPattern.test(corrected)) {
+                        corrected = "info@" + corrected;
+                      } else {
+                        corrected = corrected + "@gmail.com";
+                      }
                     }
 
                     // Clean any common typos

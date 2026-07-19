@@ -32,16 +32,23 @@ export const app = initializeApp(resolvedConfig);
 export const auth = getAuth(app);
 
 let initializedDb: any;
-try {
-  initializedDb = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-    }),
-  }, resolvedConfig.firestoreDatabaseId);
-  console.log("[Firebase Init] Firestore persistent multi-tab local cache initialized successfully.");
-} catch (err) {
-  console.warn("[Firebase Init] Failed to initialize persistent local cache, falling back to standard Firestore:", err);
+const isIframe = typeof window !== "undefined" && window.self !== window.top;
+
+if (isIframe) {
+  console.log("[Firebase Init] Operating inside an iframe sandbox. Initializing standard Firestore without local disk persistence to prevent cache lock contention.");
   initializedDb = getFirestore(app, resolvedConfig.firestoreDatabaseId);
+} else {
+  try {
+    initializedDb = initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    }, resolvedConfig.firestoreDatabaseId);
+    console.log("[Firebase Init] Firestore persistent multi-tab local cache initialized successfully.");
+  } catch (err) {
+    console.warn("[Firebase Init] Failed to initialize persistent local cache, falling back to standard Firestore:", err);
+    initializedDb = getFirestore(app, resolvedConfig.firestoreDatabaseId);
+  }
 }
 
 export const db = initializedDb;

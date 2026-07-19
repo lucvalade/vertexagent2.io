@@ -161,7 +161,8 @@ export default function ProtectedLayout() {
       path: "/app/openhouses",
       subLinks: [
         { label: "Scheduled", path: "/app/openhouses?tab=scheduled" },
-        { label: "Completed", path: "/app/openhouses?tab=completed" }
+        { label: "Completed", path: "/app/openhouses?tab=completed" },
+        { label: "Events & Results", path: "/app/openhouses?tab=results" }
       ]
     },
     { label: "Marketing Flyers", icon: LayoutTemplate, path: "/app/flyers" },
@@ -169,12 +170,10 @@ export default function ProtectedLayout() {
     { label: "Lenders", icon: Link2, path: "/app/lenders" },
     { label: "Teams", icon: Building2, path: "/app/team" },
     { label: "Settings", icon: Settings, path: "/app/settings" },
-    { label: "Pilot Admin", icon: Zap, path: "/app/pilot-admin" },
   ];
 
   const adminLinks = [
     { label: "Landing Page", icon: Globe, path: "/?no_redirect=true", external: true },
-    { label: "Clean Landing Page", icon: Globe, path: "/?clean=true", external: true },
     { label: "Dashboard", icon: Shield, path: "/app/admin" },
     { label: "Manage Agents", icon: Users, path: "/app/admin/users" },
     { label: "All Listings", icon: List, path: "/app/admin/listings" },
@@ -272,7 +271,8 @@ export default function ProtectedLayout() {
                       const searchTab = new URLSearchParams(location.search).get("tab");
                       const subActive = active && (
                         (sub.path.includes("tab=scheduled") && searchTab === "scheduled") || 
-                        (sub.path.includes("tab=completed") && searchTab === "completed")
+                        (sub.path.includes("tab=completed") && searchTab === "completed") ||
+                        (sub.path.includes("tab=results") && searchTab === "results")
                       );
                       return (
                         <Link
@@ -312,14 +312,14 @@ export default function ProtectedLayout() {
   );
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-50 text-slate-900 overflow-x-hidden">
+    <div className="flex min-h-screen w-full bg-slate-50 text-slate-900 overflow-x-hidden relative">
       {/* Desktop Sidebar */}
-      <div className="hidden border-r border-white/10 lg:block lg:w-72 shrink-0 h-screen sticky top-0" style={{ backgroundColor: '#50a2ff' }}>
+      <div className="hidden border-r border-white/10 lg:block lg:w-72 lg:fixed lg:inset-y-0 lg:left-0 z-20 shrink-0 h-screen" style={{ backgroundColor: '#50a2ff' }}>
         <SidebarContent />
       </div>
       
       {/* Mobile Topbar & Content */}
-      <div className="flex flex-col flex-1 min-w-0 max-w-full overflow-x-hidden">
+      <div className="flex flex-col flex-1 min-w-0 max-w-full overflow-x-hidden lg:pl-72">
         <header className="flex h-16 items-center gap-4 border-b border-white/20 px-4 lg:hidden sticky top-0 z-30" style={{ backgroundColor: '#50a2ff' }}>
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger>

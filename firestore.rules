@@ -165,6 +165,12 @@ service cloud.firestore {
       allow update: if true;
         
       allow delete: if isSignedIn();
+
+      match /tourConfig/{configId} {
+        allow get: if true;
+        allow list: if isSignedIn();
+        allow write: if isSignedIn() && (get(/databases/$(database)/documents/listings/$(listingId)).data.ownerId == request.auth.uid || isAdmin());
+      }
         
       match /leads/{leadId} {
         allow get, list: if isSignedIn() 

@@ -42,7 +42,7 @@ export default function Lenders() {
   const { user } = useAuth();
 
   const [complianceCountry, setComplianceCountry] = useState<"US" | "CA">(() => {
-    return (localStorage.getItem("compliance_country") as any) || "US";
+    return (localStorage.getItem("compliance_country") as any) || "CA";
   });
 
   const [canSponsorLender, setCanSponsorLender] = useState<boolean>(() => {
@@ -53,17 +53,8 @@ export default function Lenders() {
 
   useEffect(() => {
     if (!localStorage.getItem("compliance_country")) {
-      setGeoipLoading(true);
-      fetch("/api/geoip")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && (data.country === "US" || data.country === "CA")) {
-            setComplianceCountry(data.country);
-            localStorage.setItem("compliance_country", data.country);
-          }
-        })
-        .catch((err) => console.error("GeoIP error:", err))
-        .finally(() => setGeoipLoading(false));
+      setComplianceCountry("CA");
+      localStorage.setItem("compliance_country", "CA");
     }
   }, []);
 
@@ -203,6 +194,8 @@ export default function Lenders() {
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [pendingUnpairAgent, setPendingUnpairAgent] = useState<{ id: string; name: string } | null>(null);
   const [pendingDeleteRegionIdx, setPendingDeleteRegionIdx] = useState<number | null>(null);
+  const [deleteSavedLenderConfirm, setDeleteSavedLenderConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [showUnpairLenderConfirm, setShowUnpairLenderConfirm] = useState(false);
 
   // Capitalization helper to enforce title case format
   const capitalizeWords = (str: string) => {
@@ -416,12 +409,19 @@ export default function Lenders() {
 
   const handleUnpairActiveLender = () => {
     if (activeLender) {
+      setShowUnpairLenderConfirm(true);
+    }
+  };
+
+  const handleExecuteUnpairActiveLender = () => {
+    if (activeLender) {
       toast.success(`✨ Unpaired lending partner ${activeLender.name} successfully.`, {
         description: "Your listings will automatically hide lender co-branding and mortgage questions until a new lender is paired."
       });
       setActiveLender(null);
       localStorage.setItem("agent_active_lender", "null");
     }
+    setShowUnpairLenderConfirm(false);
   };
 
   const handleActivateSavedLender = (targetLender: typeof activeLender) => {
@@ -500,10 +500,17 @@ export default function Lenders() {
   };
 
   const handleDeleteSavedLender = (id: string, name: string) => {
+    setDeleteSavedLenderConfirm({ id, name });
+  };
+
+  const handleExecuteDeleteSavedLender = () => {
+    if (!deleteSavedLenderConfirm) return;
+    const { id, name } = deleteSavedLenderConfirm;
     const updated = savedLenders.filter(l => l.id !== id);
     setSavedLenders(updated);
     localStorage.setItem("agent_saved_lenders", JSON.stringify(updated));
     toast.success(`Deleted saved relationship with ${name}.`);
+    setDeleteSavedLenderConfirm(null);
   };
 
   return (
@@ -567,8 +574,8 @@ export default function Lenders() {
               }}
               className="bg-white border border-slate-200 text-xs font-bold rounded-lg px-2.5 py-1.5 text-slate-800 cursor-pointer"
             >
-              <option value="US">🇺🇸 USA (RESPA Strict)</option>
               <option value="CA">🇨🇦 Canada (Flexible)</option>
+              <option value="US">🇺🇸 USA (RESPA Strict)</option>
             </select>
           </div>
 
@@ -596,10 +603,10 @@ export default function Lenders() {
       </div>
 
       {activeTab === "agent-desk" && (
-        <div className="grid lg:grid-cols-12 gap-8 animate-in fade-in duration-300 animate-duration-150">
+        <div className="space-y-8 animate-in fade-in duration-300 animate-duration-150">
           
           {/* Left Column: Plan and Policy Overrides */}
-          <div className="lg:col-span-5 space-y-6">
+          <div className="w-full max-w-7xl mx-auto space-y-6">
             
             {/* Account Plan & Pricing Selector */}
             <Card className="rounded-2xl border-slate-200/80 shadow-sm overflow-hidden bg-white">
@@ -765,7 +772,7 @@ export default function Lenders() {
           </div>
 
           {/* Right Column: Active and Saved relationships */}
-          <div className="lg:col-span-12 xl:col-span-7 space-y-6">
+          <div className="w-full max-w-7xl mx-auto space-y-6">
             
             {/* Active Paired Lender Card */}
             <Card className="rounded-2xl border-slate-200/80 shadow-sm overflow-hidden bg-white">
@@ -1580,6 +1587,72 @@ export default function Lenders() {
                 className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs h-10 px-4 font-black cursor-pointer shadow-md"
               >
                 Yes, Disconnect & Swap
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Convenience Relationship Confirmation Modal */}
+      {deleteSavedLenderConfirm && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full border border-slate-100 shadow-2xl p-6 text-left animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-base font-black text-rose-600 uppercase tracking-wider flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Delete Relationship?
+            </h3>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Are you sure you want to delete your saved convenience backup relationship with <strong className="text-slate-900">{deleteSavedLenderConfirm.name}</strong>?
+            </p>
+            <p className="text-[10px] text-slate-400 mt-2 leading-normal">
+              This action cannot be undone. You will need to re-add their representative profile parameters manually to restore this entry.
+            </p>
+            <div className="flex items-center justify-end gap-3 mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setDeleteSavedLenderConfirm(null)} 
+                className="rounded-xl text-xs h-10 px-4 cursor-pointer font-bold border-slate-200 hover:bg-slate-50 text-slate-800"
+              >
+                Cancel, Keep It
+              </Button>
+              <Button 
+                onClick={handleExecuteDeleteSavedLender} 
+                className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs h-10 px-4 font-black cursor-pointer shadow-md"
+              >
+                Yes, Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unpair Active Lender Confirmation Modal */}
+      {showUnpairLenderConfirm && activeLender && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full border border-slate-100 shadow-2xl p-6 text-left animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-base font-black text-rose-600 uppercase tracking-wider flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              Unpair Active Lender?
+            </h3>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Are you sure you want to completely unpair <strong className="text-slate-900">{activeLender.name}</strong> as your active rate sponsor?
+            </p>
+            <p className="text-[10px] text-slate-400 mt-2 leading-normal">
+              This will disable active lender co-branding and hide mortgage-related question sections on all live sign-in kiosks until you connect another lending partner.
+            </p>
+            <div className="flex items-center justify-end gap-3 mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowUnpairLenderConfirm(false)} 
+                className="rounded-xl text-xs h-10 px-4 cursor-pointer font-bold border-slate-200 hover:bg-slate-50 text-slate-800"
+              >
+                Cancel, Keep Lender
+              </Button>
+              <Button 
+                onClick={handleExecuteUnpairActiveLender} 
+                className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs h-10 px-4 font-black cursor-pointer shadow-md"
+              >
+                Yes, Unpair Lender
               </Button>
             </div>
           </div>

@@ -48,6 +48,44 @@ const FALLBACK_CRMS: CRMItem[] = [
   { name: "Zoho CRM", url: "https://www.zoho.com/crm/" }
 ];
 
+const PRESET_ASK_ME_ABOUT_TEMPLATES = [
+  { category: "Backyard & Lot Size", sampleQuestion: "Can you describe the backyard space and overall lot dimensions?" },
+  { category: "Basement Status", sampleQuestion: "Is the basement fully finished and does it have a separate entrance?" },
+  { category: "Bedrooms & Bathrooms", sampleQuestion: "How many bedrooms & bathrooms does this home have?" },
+  { category: "Heating & Cooling", sampleQuestion: "What type of heating & air conditioning systems are installed?" },
+  { category: "In-Law Suite", sampleQuestion: "Does this property feature a separate in-law suite?" },
+  { category: "Kitchen Upgrades", sampleQuestion: "What are the key features and appliances in the kitchen?" },
+  { category: "Local Transit & Highway", sampleQuestion: "How close is the public transportation and the nearest highway?" },
+  { category: "MLS Listing Number", sampleQuestion: "What is the active MLS number for this property?" },
+  { category: "Mortgage & Financing", sampleQuestion: "What are the financing options or paired lender incentives?" },
+  { category: "Nearby Amenities", sampleQuestion: "Are there grocery stores, parks or shopping malls nearby?" },
+  { category: "Parking & Garage", sampleQuestion: "How many parking spaces are available on the driveway and garage?" },
+  { category: "Property Taxes", sampleQuestion: "What are the annual property taxes for this address?" },
+  { category: "School District", sampleQuestion: "Which local schools serve this neighborhood?" },
+  { category: "Showing & Offers", sampleQuestion: "How can I book a private showing or submit an offer?" },
+  { category: "Square Footage", sampleQuestion: "What is the approximate total interior square footage?" },
+  { category: "Year Built", sampleQuestion: "When was this home constructed and has it been renovated?" },
+];
+
+const MEDIA_MANIFEST_KEYS = [
+  "exterior_front",
+  "driveway",
+  "front_porch",
+  "living",
+  "dining",
+  "kitchen",
+  "primary_bed",
+  "bedroom_2",
+  "bedroom_3",
+  "bathroom",
+  "ensuite",
+  "inlaw_suite",
+  "basement",
+  "backyard",
+  "floorplan",
+  "neighbourhood_map"
+];
+
 function parseCSV(csvText: string): CRMItem[] {
   const lines = csvText.split(/\r?\n/);
   const result: CRMItem[] = [];
@@ -243,12 +281,32 @@ export default function EditListing() {
     const stepParam = searchParams.get("step");
     if (stepParam) {
       const parsed = parseInt(stepParam, 10);
-      if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) {
+      if (!isNaN(parsed) && parsed >= 1 && parsed <= 7) {
         return parsed;
       }
     }
     return isEdit ? 2 : 1;
   });
+
+  const [askMeAbout, setAskMeAbout] = useState<any[]>([]);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    id: "",
+    category: "",
+    sampleQuestion: "",
+    answer: "",
+    mediaKey: ""
+  });
+  const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    category: "",
+    sampleQuestion: "",
+    answer: "",
+    mediaKey: ""
+  });
+  const [deletingEntry, setDeletingEntry] = useState<any | null>(null);
+  const [activeLimitError, setActiveLimitError] = useState(false);
+
   const [setupMethod, setSetupMethod] = useState<"import" | "manual" | null>(
     isEdit ? "manual" : (isImportParam ? "import" : null)
   );
@@ -482,21 +540,19 @@ export default function EditListing() {
           baths.trim() !== ""
         );
       case 3:
-        return images.length > 0;
+        // Step 3: Ask Me About - automatically completed as we seed presets
+        return true;
       case 4:
-        return voiceId !== "" && voiceId !== "none";
+        // Guest Sign-In
+        return true;
       case 5:
-        // Guest Sign-In can have openHouseDate or default gate types; since isEdit or preset is active, it can be complete.
-        // Returning true since all inputs on this step are optional.
+        // Social share
         return true;
       case 6:
-        // Social share is optional/pre-configured
-        return true;
-      case 7:
         // Optional integrations
         return true;
-      case 8:
-        return setupMethod !== null && address.trim() !== "" && price.trim() !== "" && images.length > 0;
+      case 7:
+        return setupMethod !== null && address.trim() !== "" && price.trim() !== "";
       default:
         return false;
     }
@@ -532,7 +588,7 @@ export default function EditListing() {
     };
   }, []);
 
-  const playVoiceDemo = (id: string, name: string) => {
+  const playVoiceDemo = async (id: string, name: string) => {
     stopAndClearAudio();
     setPlayingVoiceId(id);
 
@@ -549,96 +605,108 @@ export default function EditListing() {
     const nameLower = name.toLowerCase();
     
     if (nameLower.includes("sarah")) { // Sarah's Clone
-      displayMessage = "Sarah: 'Welcome to this gorgeous Malibu property! Let's explore the custom ocean-view terrace first...'";
-    } else if (nameLower.includes("professional female")) {
-      displayMessage = "Professional Female Synthetic: 'Hello there, thank you for visiting. I can walk you through the listing details or explain the smart integrations.'";
-    } else if (nameLower.includes("warm") || nameLower.includes("friendly")) {
-      displayMessage = "Warm Male: 'Hey, welcome. Come on in and make yourself at home. Let me know if you want details on the kitchen or master suite.'";
+      displayMessage = "Welcome to this gorgeous Malibu property! Let's explore the custom ocean-view terrace first.";
+    } else if (nameLower.includes("professional female") || nameLower.includes("sora") || nameLower.includes("kore")) {
+      displayMessage = "Hello there, thank you for visiting. I can walk you through the listing details or explain the smart integrations.";
+    } else if (nameLower.includes("warm") || nameLower.includes("friendly") || nameLower.includes("puck")) {
+      displayMessage = "Hey, welcome. Come on in and make yourself at home. Let me know if you want details on the kitchen or master suite.";
     } else if (nameLower.includes("luc")) { // Luc's Clone
-      displayMessage = "Luc: 'Welcome to our featured estate representation. I am here to help guide your walkthrough and answer any regulatory contract questions.'";
+      displayMessage = "Welcome to our featured estate representation. I am here to help guide your walkthrough and answer any regulatory contract questions.";
     } else if (nameLower.includes("executive british") || (nameLower.includes("british") && nameLower.includes("female") && !nameLower.includes("storyteller"))) {
-      displayMessage = "Executive Female: 'Good day. We are currently viewing this exquisite high-end listing. I shall narrate each highlight for your pleasure...'";
+      displayMessage = "Good day. We are currently viewing this exquisite high-end listing. I shall narrate each highlight for your pleasure.";
     } else if (nameLower.includes("midwest")) {
-      displayMessage = "Midwest voice: 'Hi, welcome to the open house. Take a look around. I can point out the key features like the garage and laundry layout.'";
+      displayMessage = "Hi, welcome to the open house. Take a look around. I can point out the key features like the garage and laundry layout.";
     } else if (nameLower.includes("storyteller")) {
-      displayMessage = "Dynamic Storyteller: 'Wow! This home is an absolute showstopper. Let's dive into the fascinating history and high-end design of this property!'";
-    } else if (nameLower.includes("calm")) {
-      displayMessage = "Calm Narrator: 'Take a deep breath and settle in. This residence offers quiet elegance. Let's begin our journey in the living space...'";
+      displayMessage = "Wow! This home is an absolute showstopper. Let's dive into the fascinating history and high-end design of this property!";
+    } else if (nameLower.includes("calm") || nameLower.includes("charon")) {
+      displayMessage = "Take a deep breath and settle in. This residence offers quiet elegance. Let's begin our journey in the living space.";
+    } else if (nameLower.includes("deep narrator") || nameLower.includes("fenrir")) {
+      displayMessage = "Welcome. Settle in and prepare to discover a stunning residence designed with care and attention to every detail.";
     } else {
-      displayMessage = `${name}: 'Hello! I am speaking in a custom-tailored synthetic AI character profile.'`;
+      displayMessage = "Hello! I am speaking in a custom-tailored synthetic AI character profile.";
     }
 
-    toast.info("Synthesized Voice Intro Playing", {
-      description: displayMessage,
-      duration: 7000,
+    toast.info("Connecting to Sora premium voice servers...", {
+      description: `Synthesizing neural audio: "${displayMessage}"`,
+      duration: 5000,
     });
 
-    // Speak using browser's native text to speech (SpeechSynthesis API)
-    if (window.speechSynthesis) {
-      try {
-        const quoteStartIndex = displayMessage.indexOf("'");
-        const quoteEndIndex = displayMessage.lastIndexOf("'");
-        const cleanSpeechText = quoteStartIndex !== -1 && quoteEndIndex !== -1
-          ? displayMessage.substring(quoteStartIndex + 1, quoteEndIndex)
-          : displayMessage;
+    try {
+      const response = await fetch("/api/tts-simple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: displayMessage,
+          lang: "English",
+          voiceName: id
+        })
+      });
 
-        const utterance = new SpeechSynthesisUtterance(cleanSpeechText);
+      if (!response.ok) {
+        throw new Error("Failed to synthesize demo voice via server.");
+      }
+
+      const data = await response.json();
+      if (data.success && data.base64Audio) {
+        const mimeType = data.mimeType || "audio/wav";
+        const binary = atob(data.base64Audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
         
-        // Find best local voice match
+        // Add to active playing sources so stopAndClearAudio can abort
+        playingAudioSourcesRef.current.push({
+          stop: () => {
+            audio.pause();
+            URL.revokeObjectURL(url);
+          }
+        });
+
+        audio.onended = () => {
+          setPlayingVoiceId(null);
+          URL.revokeObjectURL(url);
+        };
+
+        audio.onerror = () => {
+          setPlayingVoiceId(null);
+          URL.revokeObjectURL(url);
+        };
+
+        await audio.play();
+      } else {
+        throw new Error(data.error || "No base64Audio returned.");
+      }
+    } catch (err) {
+      console.error("[Voice Demo Error]:", err);
+      toast.error("Failed to play voice demo using Gemini servers. Falling back to local synthesis.");
+      
+      // Local SpeechSynthesis fallback if the server fails
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(displayMessage);
         const speechVoices = window.speechSynthesis.getVoices();
+        
+        let bestVoice = null;
         if (speechVoices && speechVoices.length > 0) {
-          let bestVoice = null;
-          const isFemaleVoice = nameLower.includes("female") || nameLower.includes("sarah") || nameLower.includes("storyteller");
-          const isMaleVoice = nameLower.includes("male") || nameLower.includes("luc") || nameLower.includes("narrator") || nameLower.includes("midwest");
-          const isBritishVoice = nameLower.includes("british");
-
+          const isFemaleVoice = nameLower.includes("female") || nameLower.includes("sora") || nameLower.includes("kore") || nameLower.includes("sarah") || nameLower.includes("storyteller");
           if (isFemaleVoice) {
-            if (isBritishVoice) {
-              // Try British Female specific matching
-              bestVoice = speechVoices.find(v => v.lang.toLowerCase().startsWith("en-gb") && 
-                (v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("hazel") || v.name.toLowerCase().includes("susan") || v.name.toLowerCase().includes("samantha") || !v.name.toLowerCase().includes("george"))
-              );
-            }
-            if (!bestVoice) {
-              // Standard Female voices list
-              bestVoice = speechVoices.find(v => v.lang.toLowerCase().startsWith("en") && 
-                (v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("zira") || v.name.toLowerCase().includes("samantha") || v.name.toLowerCase().includes("sara") || v.name.toLowerCase().includes("hazel") || v.name.toLowerCase().includes("karen") || v.name.toLowerCase().includes("victoria") || v.name.toLowerCase().includes("google us english female"))
-              );
-            }
-            if (!bestVoice) {
-              // Any female matching voice name
-              bestVoice = speechVoices.find(v => v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("zira") || v.name.toLowerCase().includes("samantha") || v.name.toLowerCase().includes("sara") || v.name.toLowerCase().includes("hazel"));
-            }
-          } else if (isMaleVoice) {
-            if (!bestVoice) {
-              // Try English Male voices specifically
-              bestVoice = speechVoices.find(v => v.lang.toLowerCase().startsWith("en") && 
-                (v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("david") || v.name.toLowerCase().includes("microsoft david") || v.name.toLowerCase().includes("google us english male") || v.name.toLowerCase().includes("mark") || v.name.toLowerCase().includes("daniel") || v.name.toLowerCase().includes("george"))
-              );
-            }
-            if (!bestVoice) {
-              // Any male voice name
-              bestVoice = speechVoices.find(v => v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("david") || v.name.toLowerCase().includes("george") || v.name.toLowerCase().includes("mark"));
-            }
-          }
-
-          // Ultimate fallback (any english voice)
-          if (!bestVoice) {
-            bestVoice = speechVoices.find(v => v.lang.toLowerCase().startsWith("en"));
-          }
-
-          if (bestVoice) {
-            utterance.voice = bestVoice;
+            bestVoice = speechVoices.find(v => v.lang.toLowerCase().startsWith("en") && 
+              (v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("zira") || v.name.toLowerCase().includes("samantha") || v.name.toLowerCase().includes("sara")));
+          } else {
+            bestVoice = speechVoices.find(v => v.lang.toLowerCase().startsWith("en") && 
+              (v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("david") || v.name.toLowerCase().includes("mark")));
           }
         }
-
-        // Adjust parameters to feel warmth and less robotic
-        utterance.rate = nameLower.includes("calm") ? 0.82 : nameLower.includes("storyteller") ? 1.05 : nameLower.includes("warm") ? 0.90 : 0.95;
-        utterance.pitch = nameLower.includes("luc") ? 0.85 : nameLower.includes("british") ? 1.05 : nameLower.includes("warm") ? 0.95 : 1.0;
-        
+        if (bestVoice) utterance.voice = bestVoice;
+        utterance.onend = () => setPlayingVoiceId(null);
+        utterance.onerror = () => setPlayingVoiceId(null);
         window.speechSynthesis.speak(utterance);
-      } catch (err) {
-        console.warn("SpeechSynthesis error:", err);
+      } else {
+        setPlayingVoiceId(null);
       }
     }
 
@@ -702,6 +770,7 @@ export default function EditListing() {
   const [documents, setDocuments] = useState<{ name: string; url: string }[]>([]);
   const [documentToDelete, setDocumentToDelete] = useState<{ index: number; name: string } | null>(null);
   const [newDocName, setNewDocName] = useState("");
+  const [docNameError, setDocNameError] = useState(false);
   const [newDocUrl, setNewDocUrl] = useState("");
   const [pendingPdfName, setPendingPdfName] = useState("");
   const [openHouseDate, setOpenHouseDate] = useState("");
@@ -712,6 +781,8 @@ export default function EditListing() {
   const [enforcePhoneGate, setEnforcePhoneGate] = useState(true);
   const [enforceOptInConsent, setEnforceOptInConsent] = useState(true);
   const [socialShareEnabled, setSocialShareEnabled] = useState(true);
+  const [socialShareTitle, setSocialShareTitle] = useState("");
+  const [socialShareDescription, setSocialShareDescription] = useState("");
   const [socialShareFacebook, setSocialShareFacebook] = useState(true);
   const [socialShareInstagram, setSocialShareInstagram] = useState(true);
   const [socialShareWhatsapp, setSocialShareWhatsapp] = useState(true);
@@ -824,6 +895,65 @@ export default function EditListing() {
     };
   }, []);
 
+  const latestSaveRef = useRef<(() => void) | undefined>(undefined);
+  
+  useEffect(() => {
+    latestSaveRef.current = () => {
+      if (address) {
+        handleSave(undefined, undefined, true);
+      }
+    };
+  }, [
+    address, city, province, postalCode, price, beds, baths, sqft, sqftMin, sqftMax, useSqftRange,
+    mlsNumber, mlsCountry, originatingSystemName, country, brokerageName, brokerageLogo,
+    agentName, description, images, talkingPoints, tourDescriptors, webhookUrl, documents,
+    voiceId, voiceName, welcomeEn, welcomeFr, openHouseDate, openHouseDateFormat,
+    openHouseStartTime, openHouseEndTime, enforcePhoneGate, enforceOptInConsent, qrBrandingOption,
+    socialShareEnabled, socialShareFacebook, socialShareInstagram, socialShareWhatsapp,
+    socialShareTextMessage, socialShareEmail, socialShareCopyLink, askMeAbout
+  ]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden" && latestSaveRef.current) {
+        latestSaveRef.current();
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (latestSaveRef.current) {
+        latestSaveRef.current();
+      }
+    };
+  }, []);
+
+  // Dynamic Open House date & time reactive re-validation
+  useEffect(() => {
+    const todayStr = getTodayDateString();
+    const currentHour = new Date().getHours();
+
+    // 1. If date is selected and is in the past, reset it and warn
+    if (openHouseDate && openHouseDate < todayStr) {
+      setOpenHouseDate("");
+      toast.error("Selecting a past date is not allowed.");
+    }
+
+    // 2. If date is today, check if selected times are in the past and reset them
+    if (openHouseDate && openHouseDate === todayStr) {
+      if (openHouseStartTime && getHourFromTimeString(openHouseStartTime) < currentHour) {
+        setOpenHouseStartTime("");
+        toast.error("Selected start time is in the past. Resetting.");
+      }
+      if (openHouseEndTime && getHourFromTimeString(openHouseEndTime) < currentHour) {
+        setOpenHouseEndTime("");
+        toast.error("Selected end time is in the past. Resetting.");
+      }
+    }
+  }, [openHouseDate, openHouseStartTime, openHouseEndTime]);
+
   const times = [
     "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM"
   ];
@@ -843,6 +973,19 @@ export default function EditListing() {
   const getFirstDayOfCurrentMonth = (): string => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+  };
+
+  const getTodayDateString = (): string => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  };
+
+  const isPastDate = (dateStr: string): boolean => {
+    if (!dateStr) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dateToCheck = new Date(dateStr + "T00:00:00");
+    return dateToCheck < today;
   };
 
   const getFormattedDateHint = (dateString: string) => {
@@ -1135,9 +1278,30 @@ export default function EditListing() {
           if (idx < 16) descriptorsArray[idx] = val;
         });
         setTourDescriptors(descriptorsArray);
-        setOpenHouseDate(data.openHouseDate || "");
+
+        const loadedAskMeAbout = data.askMeAbout || [];
+        if (loadedAskMeAbout.length > 0) {
+          const sorted = [...loadedAskMeAbout].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+          setAskMeAbout(sorted);
+        } else {
+          const seeded = PRESET_ASK_ME_ABOUT_TEMPLATES.map((p, idx) => ({
+            id: `preset_${idx}_${Date.now()}`,
+            category: p.category,
+            sampleQuestion: p.sampleQuestion,
+            answer: "",
+            mediaKey: "",
+            isPreset: true,
+            active: false,
+            sortOrder: idx
+          }));
+          setAskMeAbout(seeded);
+        }
+        
+        const loadedDate = data.openHouseDate || "";
+        const dateIsPast = isPastDate(loadedDate);
+        setOpenHouseDate(dateIsPast ? "" : loadedDate);
         setOpenHouseDateFormat(data.openHouseDateFormat || "Standard");
-        if (data.openHouseTime) {
+        if (data.openHouseTime && !dateIsPast) {
           const [start, end] = data.openHouseTime.split(" - ");
           setOpenHouseStartTime(start || "");
           setOpenHouseEndTime(end || "");
@@ -1176,6 +1340,8 @@ export default function EditListing() {
         setEnforcePhoneGate(data.enforcePhoneGate !== undefined ? !!data.enforcePhoneGate : true);
         setEnforceOptInConsent(data.enforceOptInConsent !== undefined ? !!data.enforceOptInConsent : true);
         setSocialShareEnabled((data as any).socialShareEnabled !== undefined ? !!(data as any).socialShareEnabled : true);
+        setSocialShareTitle((data as any).socialShareTitle || "");
+        setSocialShareDescription((data as any).socialShareDescription || "");
         if ((data as any).socialShareOptions) {
           setSocialShareFacebook((data as any).socialShareOptions.facebook !== undefined ? !!(data as any).socialShareOptions.facebook : true);
           setSocialShareInstagram((data as any).socialShareOptions.instagram !== undefined ? !!(data as any).socialShareOptions.instagram : true);
@@ -1442,11 +1608,18 @@ export default function EditListing() {
         if (points.length > 0) setTalkingPoints(points);
 
         // Extract and normalize Open House Date and Times from ingested data
-        if (data.openHouseDate) {
-          setOpenHouseDate(data.openHouseDate);
-          toast.success(`Found Open House Date: ${data.openHouseDate}`);
+        const ingestedDate = data.openHouseDate || "";
+        const ingestedDateIsPast = isPastDate(ingestedDate);
+        if (ingestedDate) {
+          if (ingestedDateIsPast) {
+            setOpenHouseDate("");
+            toast.info("Ingested open house date is in the past; clearing session inputs.");
+          } else {
+            setOpenHouseDate(ingestedDate);
+            toast.success(`Found Open House Date: ${ingestedDate}`);
+          }
         }
-        if (data.openHouseStartTime) {
+        if (data.openHouseStartTime && !ingestedDateIsPast) {
           const normalizeExtractedTime = (timeStr: string): string => {
             if (!timeStr) return "";
             let clean = timeStr.trim().toUpperCase();
@@ -1476,6 +1649,9 @@ export default function EditListing() {
               setOpenHouseEndTime(normEnd);
             }
           }
+        } else {
+          setOpenHouseStartTime("");
+          setOpenHouseEndTime("");
         }
 
         if (data.importStatus === "partial") {
@@ -1506,6 +1682,162 @@ export default function EditListing() {
     if (numbers.length <= 3) return numbers;
     if (numbers.length <= 6) return `(${numbers.slice(0, 3)}) ${numbers.slice(3)}`;
     return `(${numbers.slice(0, 3)}) ${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
+  };
+
+  const getThumbnailForMediaKey = (key: string) => {
+    if (!key) return null;
+    const match = images.find(img => {
+      const nameLower = (img.name || "").toLowerCase();
+      const keyLower = key.toLowerCase();
+      return nameLower.includes(keyLower) || keyLower.includes(nameLower) || nameLower.replace(/_/g, " ").includes(keyLower.replace(/_/g, " "));
+    });
+    return match ? match.url : null;
+  };
+
+  const capitalizeCategory = (str: string) => {
+    if (!str) return "";
+    // Capitalize every word's first character (after spaces, hyphens, slashes)
+    return str.replace(/(^|[\s\-\/])([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
+  };
+
+  const capitalizeSentence = (str: string) => {
+    if (!str) return "";
+    // Capitalize first character of the sentence without trimming spaces
+    return str.replace(/^([a-z])/, char => char.toUpperCase());
+  };
+
+  const generateQuestionFromCategory = (category: string) => {
+    if (!category) return "";
+    const cat = category.trim();
+    return `Can you tell me about the ${cat}?`;
+  };
+
+  const handleToggleActive = async (id: string) => {
+    const entry = askMeAbout.find(e => e.id === id);
+    if (!entry) return;
+    
+    if (!entry.active) {
+      const activeCount = askMeAbout.filter(e => e.active).length;
+      if (activeCount >= 24) {
+        setActiveLimitError(true);
+        toast.error("You can only have 24 active at a time. Uncheck one first.");
+        return;
+      }
+    }
+    
+    setActiveLimitError(false);
+    const updated = askMeAbout.map(e => e.id === id ? { ...e, active: !e.active } : e);
+    await handleSaveAskMeAboutChange(updated);
+  };
+
+  const handleMoveOrder = async (index: number, direction: "up" | "down") => {
+    const sorted = [...askMeAbout].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
+    
+    // Swap sortOrder
+    const tempOrder = sorted[index].sortOrder;
+    sorted[index].sortOrder = sorted[targetIndex].sortOrder;
+    sorted[targetIndex].sortOrder = tempOrder;
+    
+    await handleSaveAskMeAboutChange(sorted);
+  };
+
+  const handleOpenEdit = (entry: any) => {
+    setEditForm({
+      id: entry.id,
+      category: entry.category || "",
+      sampleQuestion: entry.sampleQuestion || "",
+      answer: entry.answer || "",
+      mediaKey: entry.mediaKey || ""
+    });
+    setEditingEntryId(entry.id);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.category.trim()) {
+      toast.error("Category is required");
+      return;
+    }
+    if (!editForm.sampleQuestion.trim()) {
+      toast.error("Sample question is required");
+      return;
+    }
+    
+    const formattedCategory = capitalizeCategory(editForm.category);
+    const formattedQuestion = capitalizeSentence(editForm.sampleQuestion);
+
+    const updated = askMeAbout.map(e => 
+      e.id === editForm.id 
+        ? { 
+            ...e, 
+            category: formattedCategory, 
+            sampleQuestion: formattedQuestion, 
+            answer: editForm.answer.trim(), 
+            mediaKey: editForm.mediaKey 
+          } 
+        : e
+    );
+    await handleSaveAskMeAboutChange(updated);
+    setEditingEntryId(null);
+    toast.success("Question updated successfully");
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingEntry) return;
+    const updated = askMeAbout.filter(e => e.id !== deletingEntry.id);
+    
+    // Re-normalize sortOrder
+    const sorted = updated
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+      .map((e, idx) => ({ ...e, sortOrder: idx }));
+      
+    await handleSaveAskMeAboutChange(sorted);
+    setDeletingEntry(null);
+    toast.success(`'${deletingEntry.category}' deleted successfully`);
+  };
+
+  const handleAddCustom = async () => {
+    if (!addForm.category.trim()) {
+      toast.error("Category is required");
+      return;
+    }
+    if (!addForm.sampleQuestion.trim()) {
+      toast.error("Sample question is required");
+      return;
+    }
+    
+    const formattedCategory = capitalizeCategory(addForm.category);
+    const formattedQuestion = capitalizeSentence(addForm.sampleQuestion);
+
+    const maxSortOrder = askMeAbout.reduce((max, e) => Math.max(max, e.sortOrder || 0), -1);
+    const newEntry = {
+      id: `custom_${Date.now()}`,
+      category: formattedCategory,
+      sampleQuestion: formattedQuestion,
+      answer: addForm.answer.trim(),
+      mediaKey: addForm.mediaKey,
+      isPreset: false,
+      active: false,
+      sortOrder: maxSortOrder + 1
+    };
+    
+    const updated = [...askMeAbout, newEntry];
+    await handleSaveAskMeAboutChange(updated);
+    setIsAddFormOpen(false);
+    setAddForm({ category: "", sampleQuestion: "", answer: "", mediaKey: "" });
+    toast.success("Custom question added successfully");
+  };
+
+  const handleSaveAskMeAboutChange = async (newAskMeAbout: any[]) => {
+    setAskMeAbout(newAskMeAbout);
+    const targetListingId = isEdit ? listingId! : activeListingId;
+    try {
+      await updateListing(targetListingId, { askMeAbout: newAskMeAbout });
+    } catch (err) {
+      console.error("Failed to autosave Ask Me About changes:", err);
+      toast.error("Failed to autosave changes");
+    }
   };
 
   const handleAddImage = () => {
@@ -1683,7 +2015,7 @@ export default function EditListing() {
     }
   };
 
-  async function handleSave(e?: React.FormEvent, nextStepOverride?: number): Promise<boolean> {
+  async function handleSave(e?: React.FormEvent, nextStepOverride?: number, isAutosave?: boolean): Promise<boolean> {
     if (e) e.preventDefault();
     if (!address) {
       toast.error("Address is required");
@@ -1811,6 +2143,8 @@ export default function EditListing() {
         enforceOptInConsent: !!enforceOptInConsent,
         qrBrandingOption: qrBrandingOption || "none",
         socialShareEnabled: !!socialShareEnabled,
+        socialShareTitle: socialShareTitle || "",
+        socialShareDescription: socialShareDescription || "",
         socialShareOptions: {
           facebook: !!socialShareFacebook,
           instagram: !!socialShareInstagram,
@@ -1819,12 +2153,13 @@ export default function EditListing() {
           email: !!socialShareEmail,
           copyLink: !!socialShareCopyLink,
         },
+        askMeAbout: askMeAbout || [],
         updatedAt: Date.now()
       };
 
       if (isEdit) {
         await updateListing(listingId!, payload);
-        toast.success("Listing updated");
+        toast.success(isAutosave ? "Changes autosaved successfully!" : "Listing updated");
       } else {
         const newId = activeListingId;
         const fullPayload = {
@@ -1837,7 +2172,7 @@ export default function EditListing() {
         
         await createListing(fullPayload);
         
-        toast.success("Listing created");
+        toast.success(isAutosave ? "Listing autosaved successfully!" : "Listing created");
         const targetStep = nextStepOverride || currentStep;
         navigate(`/app/listings/edit/${newId}?step=${targetStep}`);
       }
@@ -2046,6 +2381,26 @@ export default function EditListing() {
       toast.error("Please select start and end hours");
       return;
     }
+
+    // Verify that the date is not in the past
+    const todayStr = getTodayDateString();
+    if (openHouseDate < todayStr) {
+      toast.error("An open house session cannot be scheduled in the past.");
+      return;
+    }
+
+    // Verify that the start and end times are not in the past if the date is today
+    if (openHouseDate === todayStr) {
+      const currentHour = new Date().getHours();
+      if (getHourFromTimeString(openHouseStartTime) < currentHour) {
+        toast.error("Start time cannot be in the past.");
+        return;
+      }
+      if (getHourFromTimeString(openHouseEndTime) < currentHour) {
+        toast.error("End time cannot be in the past.");
+        return;
+      }
+    }
     
     // Validate if date is unreasonably far in the past or future (safeguard for typos)
     const parsedDate = new Date(openHouseDate + "T00:00:00");
@@ -2226,20 +2581,19 @@ export default function EditListing() {
       {/* Stepper Progress Bar */}
       <div className="bg-white border rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex justify-between items-center text-xs font-bold text-slate-400 mb-4 px-1">
-          <span>STEP {currentStep} OF 8</span>
+          <span>STEP {currentStep} OF 7</span>
           <span className="text-blue-600 font-mono">
             {currentStep === 1 && "Choose Setup Mode"}
             {currentStep === 2 && "Review Extracted Listing Data"}
-            {currentStep === 3 && "Label Room & View Assets"}
-            {currentStep === 4 && "Configure AI Voice & Behavior"}
-            {currentStep === 5 && "Configure Guest Sign-In & Flyers"}
-            {currentStep === 6 && "Social Share Setup"}
-            {currentStep === 7 && "Branding, Integrity & CRMs"}
-            {currentStep === 8 && "Interactive Preview & Publish Live"}
+            {currentStep === 3 && "Ask Me About Configuration"}
+            {currentStep === 4 && "Configure Guest Sign-In & Flyers"}
+            {currentStep === 5 && "Social Share Setup"}
+            {currentStep === 6 && "Branding, Integrity & CRMs"}
+            {currentStep === 7 && "Interactive Preview & Publish Live"}
           </span>
         </div>
-        <div className="grid grid-cols-8 gap-1.5 sm:gap-2 h-2.5 rounded-full overflow-hidden bg-slate-100">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2 h-2.5 rounded-full overflow-hidden bg-slate-100">
+          {[1, 2, 3, 4, 5, 6, 7].map((step) => (
             <button
               key={'step-' + step}
               type="button"
@@ -2259,16 +2613,15 @@ export default function EditListing() {
             />
           ))}
         </div>
-        <div className="hidden sm:grid grid-cols-8 gap-2 text-[10px] uppercase font-black tracking-widest mt-3 text-center">
+        <div className="hidden sm:grid grid-cols-7 gap-2 text-[10px] uppercase font-black tracking-widest mt-3 text-center">
           {[
             { id: 1, label: "Setup Method" },
             { id: 2, label: "Basic Info" },
-            { id: 3, label: "Assets & Labels" },
-            { id: 4, label: "AI Voices" },
-            { id: 5, label: "Sign-In + Open House" },
-            { id: 6, label: "Social Share" },
-            { id: 7, label: "CRMs & APIs" },
-            { id: 8, label: "Live Preview" }
+            { id: 3, label: "Ask Me About" },
+            { id: 4, label: "Sign-In + Open House" },
+            { id: 5, label: "Social Share" },
+            { id: 6, label: "CRMs & APIs" },
+            { id: 7, label: "Live Preview" }
           ].map((s) => {
             const isActive = currentStep === s.id;
             const isDone = isStepCompleted(s.id);
@@ -2308,7 +2661,7 @@ export default function EditListing() {
                   <div className="h-12 w-12 rounded-xl bg-blue-100 text-blue-700 font-bold text-xl flex items-center justify-center">⚡</div>
                   <h3 className="font-bold text-lg text-slate-800">Choose URL Ingest Setup</h3>
                   <p className="text-sm text-slate-500 leading-relaxed">
-                    Paste a public listing link (Zillow, Redfin, or brokerage url) and let Gemini scrape, retrieve, normalize and hydrate all information in 20 seconds.
+                    Just drop in a link from Zillow, Redfin, or any brokerage site. In less than 60 seconds, Gemini will pull the listing, clean up the messy data, and give you a complete, easy-to-read breakdown of the home.
                   </p>
                 </div>
                 <div className="flex justify-between items-center pt-4">
@@ -2682,171 +3035,315 @@ export default function EditListing() {
           </Card>
         )}
 
-        {/* STEP 3: REVIEW AND LABEL IMAGES */}
+        {/* STEP 3: ASK ME ABOUT CONFIGURATION */}
         {currentStep === 3 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-slate-800">Listing Media Room-Labeler/Labels</CardTitle>
-              <CardDescription>
-                Label photos correctly. Sora relies on room names (e.g., Kitchen, Living Room) to match dynamic audio tours accurately when guests ask questions about specifically labeled sectors.
-              </CardDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                <div>
+                  <CardTitle className="text-slate-800 flex items-center gap-2">
+                    Ask Me About Q&A Builder
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                      Step 3
+                    </span>
+                  </CardTitle>
+                  <CardDescription>
+                    Configure up to 24 active questions that Sora can speak answers for. When selected, the tour photo will automatically swap to the designated room. These preset will be synced with the AI Tour, Ask Me About section.
+                  </CardDescription>
+                </div>
+                <Button 
+                  type="button" 
+                  onClick={() => setIsAddFormOpen(true)}
+                  className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shrink-0 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Custom Q&A
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Add Image by URL</Label>
-                <div className="flex gap-2">
-                  <Input value={newImage} onChange={e => setNewImage(e.target.value)} placeholder="https://example.com/kitchen.jpg" />
-                  <Button type="button" variant="outline" onClick={handleAddImage}>
-                    Add Photo
-                  </Button>
-                </div>
-                <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 p-3 rounded-xl font-medium mt-2 animate-in fade-in duration-150 relative">
-                  ℹ️ <strong>NOTICE:</strong> The first image in the top-left row is the designated header image for the print-ready marketing flyer.
-                </div>
-              </div>
-
-              {images.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {images.map((img, i) => (
-                    <div key={'img-' + (img.name || 'no-name') + '-' + img.url + '-' + i} className="relative rounded-2xl overflow-hidden bg-slate-100 border aspect-[4/3] group shadow-inner">
-                      <img 
-                        src={img.url} 
-                        alt={img.name} 
-                        className="w-full h-full object-cover" 
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          const seed = img.name ? img.name.replace(/\s+/g, '_') : `estate_${i}`;
-                          target.src = `https://picsum.photos/seed/${seed}/600/400`;
-                        }}
-                      />
-                      
-                      {/* Interactive re-order controller overlays on top-left */}
-                      <div className="absolute top-2 left-2 flex gap-1 bg-black/60 backdrop-blur-xs p-1 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity z-10">
-                        <Button
-                          type="button"
-                          size="icon"
-                          onClick={() => moveImageInListing(i, 'left')}
-                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
-                          disabled={i === 0}
-                          title="Move Left"
-                        >
-                          <ArrowLeft className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          onClick={() => moveImageInListing(i, 'right')}
-                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
-                          disabled={i === images.length - 1}
-                          title="Move Right"
-                        >
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          onClick={() => moveImageInListing(i, 'up')}
-                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
-                          disabled={i < 2}
-                          title="Move Up"
-                        >
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          onClick={() => moveImageInListing(i, 'down')}
-                          className="h-6 w-6 rounded-full bg-white/20 hover:bg-white text-white hover:text-black p-0 cursor-pointer"
-                          disabled={i >= images.length - 2}
-                          title="Move Down"
-                        >
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-
-                      <div className="absolute top-2 right-2 flex gap-1.5 opacity-95 group-hover:opacity-105 transition-all">
-                        <Button 
-                          type="button" 
-                          size="icon" 
-                          variant="secondary" 
-                          className="h-8 w-8 bg-white/95 rounded-full" 
-                          onClick={() => { handleRenameImage(i); }}
-                        >
-                          <Pencil className="h-4 w-4 text-slate-700" />
-                        </Button>
-                        <Button 
-                          type="button" 
-                          size="icon" 
-                          variant="destructive" 
-                          className="h-8 w-8 rounded-full" 
-                          onClick={() => { handleDeleteImage(i); }}
-                        >
-                          <Trash2 className="h-4 w-4 text-white" />
-                        </Button>
-                      </div>
-                      <div className="absolute bottom-2 left-2 right-2 bg-black/70 backdrop-blur-sm p-2 rounded-lg text-white">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-bold truncate">{img.name}</span>
-                          <span className="text-[9px] uppercase font-black bg-blue-600 px-1.5 py-0.5 rounded leading-none shrink-0 text-white">
-                            Photo Label
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
-                  <ImageIcon className="h-10 w-10 mb-2 opacity-30 text-blue-500" />
-                  <p className="text-xs text-slate-500">No photos loaded yet. Run Ingestion or enter custom URL above.</p>
+              {activeLimitError && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs font-medium animate-in fade-in duration-150 flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>You can only have 24 active questions at a time. Please uncheck one before activating another.</span>
                 </div>
               )}
 
-              {/* MEDIA ROOM-LABELER/ASSETS SECTION */}
-              <div className="space-y-4 pt-6 mt-6 border-t font-sans">
+              {/* Card List of Questions */}
+              {askMeAbout.length > 0 ? (
+                <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+                  {askMeAbout
+                    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+                    .map((entry, index) => {
+                      const isCardActive = !!entry.active;
+                      const thumbnail = getThumbnailForMediaKey(entry.mediaKey);
+                      
+                      return (
+                        <div 
+                          key={entry.id || `entry-${index}`}
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all gap-4 ${
+                            isCardActive 
+                              ? "border-blue-500 bg-blue-50/5 shadow-xs" 
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          {/* Left Checkbox & Info */}
+                          <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                            <div className="pt-0.5">
+                              <input 
+                                type="checkbox"
+                                checked={isCardActive}
+                                onChange={() => handleToggleActive(entry.id)}
+                                className="h-4.5 w-4.5 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                              />
+                            </div>
+                            
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-slate-800 text-sm leading-tight">{entry.category}</span>
+                                {entry.isPreset && (
+                                  <span className="text-[9px] uppercase tracking-wider bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded">
+                                    Preset
+                                  </span>
+                                )}
+                                {isCardActive && (
+                                  <span className="text-[9px] uppercase tracking-wider bg-blue-100 text-blue-700 font-bold px-1.5 py-0.5 rounded animate-pulse">
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 italic font-medium truncate" title={entry.sampleQuestion}>
+                                "{entry.sampleQuestion}"
+                              </p>
+                              {entry.answer ? (
+                                <p className="text-xs text-slate-600 line-clamp-1">{entry.answer}</p>
+                              ) : (
+                                <p className="text-xs text-amber-500 font-semibold flex items-center gap-1">
+                                  ⚠️ No Sora spoken answer configured yet. Edit to configured!
+                                </p>
+                              )}
+                            </div>
+                            
+                            {/* Thumbnail if mediaKey is set */}
+                            {entry.mediaKey && (
+                              <div className="hidden sm:flex flex-col items-center shrink-0 border rounded-lg overflow-hidden bg-slate-50 p-1 select-none" title={`Linked to: ${entry.mediaKey}`}>
+                                {thumbnail ? (
+                                  <img src={thumbnail} className="h-9 w-12 object-cover rounded" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="h-9 w-12 flex items-center justify-center text-[9px] text-slate-400 font-black bg-slate-100 uppercase">
+                                    {entry.mediaKey.split('_')[0].slice(0, 4)}
+                                  </div>
+                                )}
+                                <span className="text-[8px] font-mono font-bold text-slate-500 mt-1 uppercase tracking-wide truncate max-w-[50px]">
+                                  {entry.mediaKey.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Right Reorder & Edit Buttons */}
+                          <div className="flex items-center justify-end gap-1 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0">
+                            {/* Move Up */}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleMoveOrder(index, "up")}
+                              disabled={index === 0}
+                              className="h-8 w-8 text-slate-500 hover:text-slate-800 disabled:opacity-35 cursor-pointer"
+                              title="Move Up"
+                            >
+                              <ArrowUp className="h-4 w-4" />
+                            </Button>
+                            
+                            {/* Move Down */}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleMoveOrder(index, "down")}
+                              disabled={index === askMeAbout.length - 1}
+                              className="h-8 w-8 text-slate-500 hover:text-slate-800 disabled:opacity-35 cursor-pointer"
+                              title="Move Down"
+                            >
+                              <ArrowDown className="h-4 w-4" />
+                            </Button>
+                            
+                            {/* Edit */}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenEdit(entry)}
+                              className="h-8 w-8 text-blue-600 hover:text-blue-800 hover:bg-blue-50 cursor-pointer rounded-lg"
+                              title="Edit Question & Answer"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            
+                            {/* Delete */}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeletingEntry(entry)}
+                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer rounded-lg"
+                              title="Delete Question"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (
+                <div className="py-12 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
+                  <Sparkles className="h-10 w-10 mb-2 opacity-30 text-blue-500" />
+                  <p className="text-xs text-slate-500 font-medium">No Ask Me About questions found. Add or load defaults.</p>
+                </div>
+              )}
+
+              {/* PROPERTY PHOTOS & MEDIA MANAGER */}
+              <div className="border-t pt-6 mt-6 space-y-4 text-left">
                 <div>
-                  <h3 className="font-bold text-base text-slate-800 flex items-center gap-2">
-                    Media Room-Labeler/Assets
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                      Automated
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    This section automatically maps physical asset and property features from photo labels to guide interactive virtual tours.
+                  <h4 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-blue-600" />
+                    Property Photos & Media Manager
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Manage the photos ingested for this property. Reorder, rename, delete, or add additional photo URLs.
                   </p>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/40 p-3 rounded-xl border border-blue-100">
-                  <div>
-                    <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1">
-                      <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-                      Tour Feature Descriptors (16 total slots)
-                    </h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      These slots are fully automated and synchronized in real-time to match your Listing Media Room-Labeler/Labels above.
-                    </p>
+
+                {/* Add Photo Input */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div className="flex-1">
+                    <Input
+                      type="text"
+                      placeholder="Paste image URL (https://...)"
+                      value={newImage}
+                      onChange={(e) => setNewImage(e.target.value)}
+                      className="h-10 text-xs bg-white"
+                    />
                   </div>
-                  <div className="text-[10px] font-bold text-blue-600 bg-white border border-blue-200 px-2.5 py-1 rounded-lg shadow-xs shrink-0 select-none flex items-center gap-1">
-                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                    Synced with Labels
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      onClick={handleAddImage}
+                      className="h-10 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Add Photo
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => autoFillDescriptorsFromImages()}
+                      className="h-10 text-xs text-slate-600 border-slate-200 cursor-pointer bg-white"
+                      title="Generate voice descriptors and tag photos"
+                    >
+                      <Sparkles className="h-4 w-4 mr-1 text-amber-500" /> Auto-Fill Tags
+                    </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {tourDescriptors.map((desc, idx) => (
-                    <div key={'descriptor-' + idx} className="space-y-1">
-                      <span className="text-[10px] font-mono text-slate-400 font-bold">Slot {idx+1}</span>
-                      <Input 
-                        value={desc} 
-                        readOnly
-                        placeholder={`Empty Slot`}
-                        className="h-9 text-xs bg-slate-50 border-slate-150 text-slate-500 font-medium select-none focus:ring-0 focus:border-slate-150 cursor-not-allowed"
-                      />
-                    </div>
-                  ))}
-                </div>
+
+                {/* Ingested Images Grid */}
+                {images && images.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-1">
+                    {images.map((img, idx) => (
+                      <div
+                        key={`listing-img-${idx}`}
+                        className="group relative flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs hover:border-slate-300 transition-all"
+                      >
+                        {/* Image Preview */}
+                        <div className="relative aspect-video bg-slate-100 overflow-hidden">
+                          <img
+                            src={img.url}
+                            alt={img.name || `Photo ${idx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded-md text-[9px] font-mono font-bold text-white">
+                            #{idx + 1}
+                          </div>
+                        </div>
+
+                        {/* Title & Actions */}
+                        <div className="p-2.5 flex-1 flex flex-col justify-between gap-2 bg-slate-50/50">
+                          <div className="min-w-0">
+                            <p
+                              className="text-[11px] font-bold text-slate-800 truncate"
+                              title={img.name}
+                            >
+                              {img.name || `Photo ${idx + 1}`}
+                            </p>
+                          </div>
+
+                          {/* Control Actions Row */}
+                          <div className="flex items-center justify-between border-t border-slate-100 pt-2 gap-1">
+                            {/* Reordering */}
+                            <div className="flex items-center gap-0.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => moveImageInListing(idx, 'left')}
+                                disabled={idx === 0}
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                                title="Move Left"
+                              >
+                                <ArrowLeft className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => moveImageInListing(idx, 'right')}
+                                disabled={idx === images.length - 1}
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                                title="Move Right"
+                              >
+                                <ArrowRight className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+
+                            {/* Rename & Delete */}
+                            <div className="flex items-center gap-0.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRenameImage(idx)}
+                                className="h-6 w-6 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
+                                title="Rename photo"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteImage(idx)}
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer"
+                                title="Delete photo"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 border border-dashed rounded-xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
+                    <ImageIcon className="h-8 w-8 mb-1.5 opacity-30 text-slate-400" />
+                    <p className="text-xs text-slate-500 font-medium">No photos ingested yet. Paste a URL above to add.</p>
+                  </div>
+                )}
               </div>
 
-              <div className="flex justify-between pt-6 border-t">
+              <div className="flex justify-between pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setCurrentStep(2)}>Back</Button>
                 <Button 
                   type="button" 
@@ -2857,7 +3354,7 @@ export default function EditListing() {
                       navigate(`/app/listings/edit/${listingId || activeListingId}?step=4`);
                     }
                   }} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold"
                 >
                   Save & Continue
                 </Button>
@@ -2866,91 +3363,8 @@ export default function EditListing() {
           </Card>
         )}
 
-        {/* STEP 4: CONFIGURE OLIVIA/SORA AND TOUR MODES */}
+        {/* STEP 4: GUEST SIGN-IN AND AUTOMATIONS */}
         {currentStep === 4 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-slate-800">AI Voice Assistant Character For The AI Tour</CardTitle>
-              <CardDescription>Select the exact narration tone and setup interactive points representing your brokerage.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {availableVoices.map((v) => (
-                  v.id !== 'none' && (
-                    <div 
-                      key={'voice-' + v.id}
-                      onClick={() => handleVoiceSelect(v.id, v.name)}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer hover:shadow-md flex flex-col justify-between min-h-[155px] py-3.5 ${voiceId === v.id ? 'border-blue-600 bg-blue-50/25' : 'border-slate-100 bg-white'}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="h-9 w-9 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold">🎙</div>
-                        {voiceId === v.id && <CheckCircle2 className="h-5 w-5 text-blue-600" />}
-                      </div>
-                      <div className="space-y-1 mt-2">
-                        <h4 className="font-bold text-slate-800 text-sm leading-tight">{v.name}</h4>
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] text-slate-500 tracking-wider uppercase font-black">{v.type}</p>
-                          {playingVoiceId === v.id && (
-                            <span className="flex gap-0.5 items-end h-2 shrink-0 pr-1">
-                              <span className="w-0.5 bg-blue-600 animate-[pulse_0.6s_infinite_alternate]" style={{ height: "40%" }} />
-                              <span className="w-0.5 bg-blue-600 animate-[pulse_0.8s_infinite_alternate]" style={{ height: "100%" }} />
-                              <span className="w-0.5 bg-blue-600 animate-[pulse_0.5s_infinite_alternate]" style={{ height: "60%" }} />
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-2.5 pt-2 border-t border-slate-50 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                        {playingVoiceId === v.id ? (
-                          <Button 
-                            type="button" 
-                            size="sm" 
-                            variant="destructive" 
-                            className="h-7 text-[10px] px-2.5 rounded-lg flex items-center gap-1"
-                            onClick={() => stopAndClearAudio()}
-                          >
-                            <Square className="h-2.5 w-2.5 fill-current" />
-                            Stop Demo
-                          </Button>
-                        ) : (
-                          <Button 
-                            type="button" 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-7 text-[10px] px-2.5 rounded-lg flex items-center gap-1 text-slate-700 bg-white hover:bg-slate-50 border-slate-200"
-                            onClick={() => playVoiceDemo(v.id, v.name)}
-                          >
-                            <Play className="h-2.5 w-2.5 text-emerald-600 fill-emerald-600" />
-                            Play Intro (7s)
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                ))}
-              </div>
-
-              <div className="flex justify-between pt-6 border-t">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(3)}>Back</Button>
-                <Button 
-                  type="button" 
-                  onClick={async () => { 
-                    const success = await handleSave(undefined, 5); 
-                    if (success) {
-                      setCurrentStep(5); 
-                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=5`);
-                    }
-                  }} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Save & Continue
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* STEP 5: GUEST SIGN-IN AND AUTOMATIONS */}
-        {currentStep === 5 && (
           <Card>
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full">
@@ -2976,15 +3390,13 @@ export default function EditListing() {
                         type="date"
                         className="h-10 text-sm font-medium border border-slate-200 focus-visible:ring-blue-500 bg-white"
                         value={openHouseDate}
-                        min={getFirstDayOfCurrentMonth()}
+                        min={getTodayDateString()}
                         onChange={e => {
                           const nextDate = e.target.value;
                           if (nextDate) {
-                            const firstDayStr = getFirstDayOfCurrentMonth();
-                            const selected = new Date(nextDate + "T00:00:00");
-                            const firstDay = new Date(firstDayStr + "T00:00:00");
-                            if (selected < firstDay) {
-                              toast.error("The open house date cannot go to previous months.");
+                            const todayStr = getTodayDateString();
+                            if (nextDate < todayStr) {
+                              toast.error("Selecting a past date is not allowed.");
                               setOpenHouseDate("");
                               return;
                             }
@@ -3003,7 +3415,20 @@ export default function EditListing() {
                           onChange={e => setOpenHouseStartTime(e.target.value)}
                         >
                           <option value="">Start</option>
-                          {times.map(t => <option key={'start-' + t} value={t}>{t}</option>)}
+                          {times.map(t => {
+                            const isToday = openHouseDate === getTodayDateString();
+                            const isPast = isToday && getHourFromTimeString(t) < new Date().getHours();
+                            return (
+                              <option 
+                                key={'start-' + t} 
+                                value={t}
+                                disabled={isPast}
+                                className={isPast ? "text-slate-300 bg-slate-50 cursor-not-allowed" : ""}
+                              >
+                                {t}
+                              </option>
+                            );
+                          })}
                         </select>
                         <span>-</span>
                         <select 
@@ -3012,7 +3437,20 @@ export default function EditListing() {
                           onChange={e => setOpenHouseEndTime(e.target.value)}
                         >
                           <option value="">End</option>
-                          {times.map(t => <option key={'end-' + t} value={t}>{t}</option>)}
+                          {times.map(t => {
+                            const isToday = openHouseDate === getTodayDateString();
+                            const isPast = isToday && getHourFromTimeString(t) < new Date().getHours();
+                            return (
+                              <option 
+                                key={'end-' + t} 
+                                value={t}
+                                disabled={isPast}
+                                className={isPast ? "text-slate-300 bg-slate-50 cursor-not-allowed" : ""}
+                              >
+                                {t}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                     </div>
@@ -3258,7 +3696,7 @@ export default function EditListing() {
               </div>
 
               <div className="flex justify-between pt-6 border-t">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(4)}>Back</Button>
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(3)}>Back</Button>
                 <Button type="button" onClick={async () => { 
                   // Extra validation step on submit to block progression
                   if (openHouseDate) {
@@ -3289,10 +3727,10 @@ export default function EditListing() {
                     return;
                   }
 
-                  const success = await handleSave(undefined, 6); 
+                  const success = await handleSave(undefined, 5); 
                   if (success) {
-                    setCurrentStep(6); 
-                    navigate(`/app/listings/edit/${listingId || activeListingId}?step=6`);
+                    setCurrentStep(5); 
+                    navigate(`/app/listings/edit/${listingId || activeListingId}?step=5`);
                   }
                 }} className="bg-blue-600 hover:bg-blue-700 text-white">
                   Save & Continue
@@ -3302,8 +3740,8 @@ export default function EditListing() {
           </Card>
         )}
 
-        {/* STEP 6: SOCIAL SHARE */}
-        {currentStep === 6 && (
+        {/* STEP 5: SOCIAL SHARE */}
+        {currentStep === 5 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-slate-800 flex items-center gap-2 font-bold">
@@ -3439,18 +3877,120 @@ export default function EditListing() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Social Share Customization and Preview */}
+                  <div className="border-t border-slate-100 pt-6 mt-6 space-y-6">
+                    <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Social Share Preview & Metadata</h4>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                      {/* Left Side: Form Inputs */}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label htmlFor="social-share-title" className="text-xs font-bold text-slate-700 block text-left">
+                            Custom Share Title
+                          </label>
+                          <Input
+                            id="social-share-title"
+                            value={socialShareTitle}
+                            onChange={(e) => setSocialShareTitle(e.target.value)}
+                            placeholder={address || "Beautiful Property Tour"}
+                            className="h-10 text-sm"
+                          />
+                          <p className="text-[10px] text-slate-400 text-left">
+                            The title displayed when sharing on Facebook, WhatsApp, LinkedIn, or text messages. Defaults to the listing address.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label htmlFor="social-share-description" className="text-xs font-bold text-slate-700 block text-left">
+                            Custom Share Description
+                          </label>
+                          <Textarea
+                            id="social-share-description"
+                            value={socialShareDescription}
+                            onChange={(e) => setSocialShareDescription(e.target.value)}
+                            placeholder="Explore this gorgeous home and take an interactive AI voice tour guided by Sora, your custom digital showing assistant."
+                            className="min-h-[100px] text-sm resize-none"
+                          />
+                          <p className="text-[10px] text-slate-400 text-left">
+                            A brief paragraph highlighting key features. This acts as the subtitle or post content in shared preview cards.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Right Side: Social Media Live Card Preview */}
+                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block text-left">
+                          Live Social Preview Card
+                        </span>
+                        
+                        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm max-w-sm mx-auto text-left">
+                          {/* Header of post */}
+                          <div className="p-3 flex items-center gap-2.5">
+                            <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs uppercase overflow-hidden">
+                              {agentPhoto ? (
+                                <img src={agentPhoto} alt="Agent" className="h-full w-full object-cover" />
+                              ) : (
+                                "RE"
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-slate-800">
+                                {agentName || "Real Estate Advisor"}
+                              </div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
+                                Just now · 🌎
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Post description text */}
+                          <div className="px-3 pb-3 text-xs text-slate-700 leading-normal line-clamp-3">
+                            {socialShareDescription || "Explore this gorgeous home and take an interactive AI voice tour guided by Sora, your custom digital showing assistant."}
+                          </div>
+
+                          {/* Interactive preview image and title */}
+                          <div className="border-t border-slate-150 bg-slate-50">
+                            {/* Listing image mock */}
+                            <div className="aspect-[1.91/1] w-full bg-slate-200 relative overflow-hidden flex items-center justify-center">
+                              {images && images[0] ? (
+                                <img src={images[0].url} alt="Listing primary" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-xs text-slate-400">No listing photo uploaded yet</span>
+                              )}
+                              <div className="absolute bottom-2 right-2 bg-black/70 text-white font-bold text-[9px] uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center gap-1">
+                                <span>🎙️ AI Guided Tour</span>
+                              </div>
+                            </div>
+                            
+                            {/* Title & Domain info */}
+                            <div className="p-3 bg-slate-100 space-y-0.5 border-t border-slate-200">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">
+                                AIOPENHOUSECONNECT.COM
+                              </span>
+                              <div className="text-xs font-bold text-slate-800 line-clamp-1">
+                                {socialShareTitle || address || "Beautiful Property Tour"}
+                              </div>
+                              <div className="text-[10px] text-slate-500 line-clamp-1">
+                                Take an interactive tour of this stunning home with Sora.
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               <div className="flex justify-between pt-6 border-t font-bold">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(5)}>Back</Button>
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(4)}>Back</Button>
                 <Button 
                   type="button" 
                   onClick={async () => {
-                    const success = await handleSave(undefined, 7);
+                    const success = await handleSave(undefined, 6);
                     if (success) {
-                      setCurrentStep(7);
-                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=7`);
+                      setCurrentStep(6);
+                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=6`);
                     }
                   }} 
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6"
@@ -3462,8 +4002,8 @@ export default function EditListing() {
           </Card>
         )}
 
-        {/* STEP 7: BRANDING AND INTEGRATIONS */}
-        {currentStep === 7 && (
+        {/* STEP 6: BRANDING AND INTEGRATIONS */}
+        {currentStep === 6 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-slate-800">Connected Hub & Lead Exporters</CardTitle>
@@ -3557,15 +4097,27 @@ export default function EditListing() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Document Name input */}
                     <div className="space-y-1.5 text-left">
-                      <Label htmlFor="pdf-doc-name" className="text-xs font-bold text-slate-700 block">
-                        Document Name
-                      </Label>
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor="pdf-doc-name" className="text-xs font-bold text-slate-700 block">
+                          Document Name
+                        </Label>
+                        {docNameError && (
+                          <span className="text-xs font-bold text-red-650 animate-pulse">
+                            Please enter a document name first!
+                          </span>
+                        )}
+                      </div>
                       <Input 
                         id="pdf-doc-name"
                         placeholder="e.g. HOA Disclosures, Property brochure" 
                         value={newDocName} 
-                        onChange={e => setNewDocName(e.target.value)} 
-                        className="bg-white text-xs h-9"
+                        onChange={e => {
+                          setNewDocName(e.target.value);
+                          if (e.target.value.trim()) {
+                            setDocNameError(false);
+                          }
+                        }} 
+                        className={`bg-white text-xs h-9 ${docNameError ? "border-red-500 focus-visible:ring-red-500 ring-offset-red-500" : ""}`}
                       />
                     </div>
 
@@ -3643,9 +4195,11 @@ export default function EditListing() {
                       className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9 px-4 rounded-xl flex items-center justify-center cursor-pointer gap-1.5"
                       onClick={() => {
                         if (!newDocName.trim()) {
+                          setDocNameError(true);
                           toast.error("Please enter a Document Name first.");
                           return;
                         }
+                        setDocNameError(false);
                         if (!newDocUrl) {
                           toast.error("Please select and upload a valid PDF file first.");
                           return;
@@ -3902,15 +4456,15 @@ export default function EditListing() {
                 </div>
               </div>
 
-              <div className="flex justify-between pt-6 border-t">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(6)}>Back</Button>
+              <div className="flex justify-between pt-6 border-t font-bold">
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(5)}>Back</Button>
                 <Button 
                   type="button" 
                   onClick={async () => { 
-                    const success = await handleSave(undefined, 8); 
+                    const success = await handleSave(undefined, 7); 
                     if (success) {
-                      setCurrentStep(8); 
-                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=8`);
+                      setCurrentStep(7); 
+                      navigate(`/app/listings/edit/${listingId || activeListingId}?step=7`);
                     }
                   }} 
                   className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -3922,8 +4476,8 @@ export default function EditListing() {
           </Card>
         )}
  
-        {/* STEP 8: PREVIEW AND PUBLISH */}
-        {currentStep === 8 && (
+        {/* STEP 7: PREVIEW AND PUBLISH */}
+        {currentStep === 7 && (
           <Card className="border-emerald-200">
             <CardHeader className="bg-emerald-50/10">
               <CardTitle className="text-slate-800 text-base flex items-center gap-2">
@@ -3949,7 +4503,7 @@ export default function EditListing() {
               </div>
  
               <div className="flex justify-between pt-6 border-t">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(7)}>Back</Button>
+                <Button type="button" variant="outline" onClick={() => setCurrentStep(6)}>Back</Button>
                 <Button 
                   type="submit" 
                   disabled={saving}
@@ -3965,11 +4519,210 @@ export default function EditListing() {
         {/* Stepper Navigation controls at bottom when not step 1 */}
         {currentStep > 1 && (
           <div className="pt-4 flex justify-between items-center text-xs text-slate-400 bg-slate-50 -mx-4 -mb-6 p-4 rounded-b-2xl border-t">
-            <span>Progress: {Math.round(([1, 2, 3, 4, 5, 6, 7, 8].filter(s => isStepCompleted(s)).length / 8) * 100)}% Complete</span>
+            <span>Progress: {Math.round(([1, 2, 3, 4, 5, 6, 7].filter(s => isStepCompleted(s)).length / 7) * 100)}% Complete</span>
             <span className="font-mono">AI Open House Ingestion v2.1</span>
           </div>
         )}
       </form>
+
+      {/* Dialog for Adding Custom Q&A */}
+      <Dialog open={isAddFormOpen} onOpenChange={setIsAddFormOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-slate-800 flex items-center gap-2 font-bold">
+              <Plus className="h-5 w-5 text-blue-600" />
+              Add Custom Q&A
+            </DialogTitle>
+            <DialogDescription>
+              Create a custom Ask Me About question and answer for Sora to present to visitors during the tour.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4 text-left">
+            <div className="space-y-2">
+              <Label htmlFor="add-category" className="font-bold text-slate-700">Category Name</Label>
+              <Input 
+                id="add-category"
+                value={addForm.category}
+                onChange={(e) => setAddForm({ ...addForm, category: capitalizeCategory(e.target.value) })}
+                onBlur={() => setAddForm(prev => ({ ...prev, category: capitalizeCategory(prev.category) }))}
+                placeholder="e.g. Backyard Oasis, Smart Home Features"
+                className="h-10 text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="add-question" className="font-bold text-slate-700">Sample Question</Label>
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  size="sm" 
+                  onClick={() => {
+                    if (addForm.category) {
+                      const generated = generateQuestionFromCategory(addForm.category);
+                      setAddForm(prev => ({ ...prev, sampleQuestion: capitalizeSentence(generated) }));
+                    } else {
+                      toast.error("Please enter a category name first");
+                    }
+                  }}
+                  className="text-xs text-blue-600 h-auto p-0 cursor-pointer hover:underline"
+                >
+                  Generate from Category
+                </Button>
+              </div>
+              <Input 
+                id="add-question"
+                value={addForm.sampleQuestion}
+                onChange={(e) => setAddForm({ ...addForm, sampleQuestion: capitalizeSentence(e.target.value) })}
+                onBlur={() => setAddForm(prev => ({ ...prev, sampleQuestion: capitalizeSentence(prev.sampleQuestion) }))}
+                placeholder="e.g. Is there a pool in the backyard?"
+                className="h-10 text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="add-media-key" className="font-bold text-slate-700">Linked photo (from Assets & Labels)</Label>
+                <div className="group relative inline-block">
+                  <HelpCircle className="h-4 w-4 text-slate-400 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2.5 bg-slate-900 text-white text-[11px] font-normal rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 leading-normal">
+                    Select a photo label. Sora will automatically swap to this photo in the live tour when this question is asked or tapped.
+                  </div>
+                </div>
+              </div>
+              <select
+                id="add-media-key"
+                value={addForm.mediaKey}
+                onChange={(e) => setAddForm({ ...addForm, mediaKey: e.target.value })}
+                className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
+              >
+                <option value="">-- No Image Swap --</option>
+                {MEDIA_MANIFEST_KEYS.map((key) => (
+                  <option key={`add-opt-${key}`} value={key}>
+                    {key.replace(/_/g, ' ').toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsAddFormOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddCustom} className="bg-blue-600 hover:bg-blue-700 font-bold px-6 text-white cursor-pointer">
+              Add Question
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog for Editing Q&A */}
+      <Dialog open={editingEntryId !== null} onOpenChange={(open) => !open && setEditingEntryId(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-slate-800 flex items-center gap-2 font-bold">
+              <Pencil className="h-5 w-5 text-blue-600" />
+              Edit Ask Me About Question
+            </DialogTitle>
+            <DialogDescription>
+              Modify this question and how Sora answers it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4 text-left">
+            <div className="space-y-2">
+              <Label htmlFor="edit-category" className="font-bold text-slate-700">Category Name</Label>
+              <Input 
+                id="edit-category"
+                value={editForm.category}
+                onChange={(e) => setEditForm({ ...editForm, category: capitalizeCategory(e.target.value) })}
+                onBlur={() => setEditForm(prev => ({ ...prev, category: capitalizeCategory(prev.category) }))}
+                placeholder="e.g. Backyard Oasis, Smart Home Features"
+                className="h-10 text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-question" className="font-bold text-slate-700">Sample Question</Label>
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  size="sm" 
+                  onClick={() => {
+                    if (editForm.category) {
+                      const generated = generateQuestionFromCategory(editForm.category);
+                      setEditForm(prev => ({ ...prev, sampleQuestion: capitalizeSentence(generated) }));
+                    } else {
+                      toast.error("Please enter a category name first");
+                    }
+                  }}
+                  className="text-xs text-blue-600 h-auto p-0 cursor-pointer hover:underline"
+                >
+                  Generate from Category
+                </Button>
+              </div>
+              <Input 
+                id="edit-question"
+                value={editForm.sampleQuestion}
+                onChange={(e) => setEditForm({ ...editForm, sampleQuestion: capitalizeSentence(e.target.value) })}
+                onBlur={() => setEditForm(prev => ({ ...prev, sampleQuestion: capitalizeSentence(prev.sampleQuestion) }))}
+                placeholder="e.g. Is there a pool in the backyard?"
+                className="h-10 text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="edit-media-key" className="font-bold text-slate-700">Linked photo (from Assets & Labels)</Label>
+                <div className="group relative inline-block">
+                  <HelpCircle className="h-4 w-4 text-slate-400 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2.5 bg-slate-900 text-white text-[11px] font-normal rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-150 z-50 leading-normal">
+                    Select a photo label. Sora will automatically swap to this photo in the live tour when this question is asked or tapped.
+                  </div>
+                </div>
+              </div>
+              <select
+                id="edit-media-key"
+                value={editForm.mediaKey}
+                onChange={(e) => setEditForm({ ...editForm, mediaKey: e.target.value })}
+                className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
+              >
+                <option value="">-- No Image Swap --</option>
+                {MEDIA_MANIFEST_KEYS.map((key) => (
+                  <option key={`edit-opt-${key}`} value={key}>
+                    {key.replace(/_/g, ' ').toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditingEntryId(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} className="bg-blue-600 hover:bg-blue-700 font-bold px-6 text-white cursor-pointer">
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Alert Dialog for Confirming Deletion of Ask Me About Q&A */}
+      <AlertDialog open={deletingEntry !== null} onOpenChange={(open) => !open && setDeletingEntry(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-slate-800">Delete this question?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove <span className="font-semibold text-slate-900">'{deletingEntry?.category}'</span> from Ask Me About. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingEntry(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete} 
+              className="bg-red-600 hover:bg-red-700 font-bold text-white cursor-pointer"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
         <DialogContent className="sm:max-w-md">

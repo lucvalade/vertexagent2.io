@@ -109,6 +109,8 @@ export interface Listing {
   flyerAgentPhoneOverride?: string;
   flyerBrokerageNameOverride?: string;
   socialShareEnabled?: boolean;
+  socialShareTitle?: string;
+  socialShareDescription?: string;
   socialShareOptions?: {
     facebook?: boolean;
     instagram?: boolean;
@@ -117,6 +119,7 @@ export interface Listing {
     email?: boolean;
     copyLink?: boolean;
   };
+  askMeAbout?: any[];
 }
 
 export interface Lead {

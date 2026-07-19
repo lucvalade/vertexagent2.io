@@ -1,5 +1,5 @@
 import { Building2, Globe, Shield, Bell, Loader2, Mic2, CheckCircle2, ChevronDown, Plus, CreditCard, Sparkles, Video, Check, Upload, AlertCircle, Play, Pause, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getAgent, updateUser } from "@/lib/api";
 import { toast } from "sonner";
@@ -17,6 +17,101 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const getBoardNameByProvince = (province: string) => {
+  const p = province.toLowerCase().trim();
+  if (p.includes("ontario")) return "RECO";
+  if (p.includes("alberta")) return "RECA";
+  if (p.includes("british columbia") || p === "bc") return "BCFSA";
+  if (p.includes("quebec") || p === "qc") return "OACIQ";
+  if (p.includes("saskatchewan") || p === "sk") return "SREA";
+  if (p.includes("manitoba") || p === "mb") return "MSC";
+  if (p.includes("new brunswick") || p === "nb") return "FCNB";
+  if (p.includes("nova scotia") || p === "ns") return "NSREC";
+  if (p.includes("prince edward island") || p === "pei") return "PEICA";
+  if (p.includes("newfoundland") || p === "nl") return "Government of NL";
+  return "";
+};
+
+const CANADA_PROVINCES: Record<string, string> = {
+  "AB": "Alberta",
+  "BC": "British Columbia",
+  "MB": "Manitoba",
+  "NB": "New Brunswick",
+  "NL": "Newfoundland and Labrador",
+  "NT": "Northwest Territories",
+  "NS": "Nova Scotia",
+  "NU": "Nunavut",
+  "ON": "Ontario",
+  "PE": "Prince Edward Island",
+  "QC": "Quebec",
+  "SK": "Saskatchewan",
+  "YT": "Yukon"
+};
+
+const US_STATES: Record<string, string> = {
+  "AL": "Alabama",
+  "AK": "Alaska",
+  "AZ": "Arizona",
+  "AR": "Arkansas",
+  "CA": "California",
+  "CO": "Colorado",
+  "CT": "Connecticut",
+  "DE": "Delaware",
+  "DC": "District of Columbia",
+  "FL": "Florida",
+  "GA": "Georgia",
+  "HI": "Hawaii",
+  "ID": "Idaho",
+  "IL": "Illinois",
+  "IN": "Indiana",
+  "IA": "Iowa",
+  "KS": "Kansas",
+  "KY": "Kentucky",
+  "LA": "Louisiana",
+  "ME": "Maine",
+  "MD": "Maryland",
+  "MA": "Massachusetts",
+  "MI": "Michigan",
+  "MN": "Minnesota",
+  "MS": "Mississippi",
+  "MO": "Missouri",
+  "MT": "Montana",
+  "NE": "Nebraska",
+  "NV": "Nevada",
+  "NH": "New Hampshire",
+  "NJ": "New Jersey",
+  "NM": "New Mexico",
+  "NY": "New York",
+  "NC": "North Carolina",
+  "ND": "North Dakota",
+  "OH": "Ohio",
+  "OK": "Oklahoma",
+  "OR": "Oregon",
+  "PA": "Pennsylvania",
+  "RI": "Rhode Island",
+  "SC": "South Carolina",
+  "SD": "South Dakota",
+  "TN": "Tennessee",
+  "TX": "Texas",
+  "UT": "Utah",
+  "VT": "Vermont",
+  "VA": "Virginia",
+  "WA": "Washington",
+  "WV": "West Virginia",
+  "WI": "Wisconsin",
+  "WY": "Wyoming"
+};
+
+const ALL_PROVINCES_STATES_UPPER: Record<string, string> = {
+  ...CANADA_PROVINCES,
+  ...US_STATES
+};
+
+const LONG_NAME_LOOKUP: Record<string, string> = {};
+Object.entries(ALL_PROVINCES_STATES_UPPER).forEach(([abbr, name]) => {
+  LONG_NAME_LOOKUP[name.toLowerCase()] = name;
+});
+
 export default function Settings() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -30,6 +125,15 @@ export default function Settings() {
   const [brokerOfRecord, setBrokerOfRecord] = useState("");
   const [officePhone, setOfficePhone] = useState("");
   const [officeEmail, setOfficeEmail] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [birthTimeZone, setBirthTimeZone] = useState("America/Toronto");
+
+  // New Profile Address States
+  const [profileAddress, setProfileAddress] = useState("");
+  const [profileCity, setProfileCity] = useState("");
+  const [profileProvince, setProfileProvince] = useState("");
+  const [profileCountry, setProfileCountry] = useState("");
+  const [profilePostalCode, setProfilePostalCode] = useState("");
 
   // Global Brokerage File State (Admin Only)
   const [brokerageName, setBrokerageName] = useState("");
@@ -74,28 +178,60 @@ export default function Settings() {
 
   // Active audio preview ID
   const [activePreviewVoiceId, setActivePreviewVoiceId] = useState<string | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Stop synthesis on tab change or unmount
   useEffect(() => {
     return () => {
+      if (activeAudioRef.current) {
+        try { activeAudioRef.current.pause(); } catch (e) {}
+        activeAudioRef.current = null;
+      }
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
     };
   }, []);
 
-  const handleTogglePreview = (av: { id: string; name: string; voiceId: number }) => {
-    if (!window.speechSynthesis) {
-      toast.error("Speech Synthesis not supported in this browser.");
-      return;
+  // Auto-fill Issuing Jurisdiction and Board Name from Profile Province and Country
+  useEffect(() => {
+    if (profileProvince && profileCountry) {
+      setJurisdiction(`${profileProvince}, ${profileCountry}`);
+      const autoBoard = getBoardNameByProvince(profileProvince);
+      if (autoBoard) {
+        setBoardName(autoBoard);
+      }
+    } else if (profileProvince) {
+      setJurisdiction(profileProvince);
+      const autoBoard = getBoardNameByProvince(profileProvince);
+      if (autoBoard) {
+        setBoardName(autoBoard);
+      }
+    } else if (profileCountry) {
+      setJurisdiction(profileCountry);
     }
+  }, [profileProvince, profileCountry]);
 
+  const handleTogglePreview = async (av: { id: string; name: string; voiceId: number }) => {
     if (activePreviewVoiceId === av.id) {
-      window.speechSynthesis.cancel();
+      if (activeAudioRef.current) {
+        try { activeAudioRef.current.pause(); } catch (e) {}
+        activeAudioRef.current = null;
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       setActivePreviewVoiceId(null);
       toast.info("Audio preview stopped.");
     } else {
-      window.speechSynthesis.cancel();
+      // Stop any existing playing audio first
+      if (activeAudioRef.current) {
+        try { activeAudioRef.current.pause(); } catch (e) {}
+        activeAudioRef.current = null;
+      }
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       
       const utteranceText = av.id === "kore" 
         ? "Hello! I am Sora, your real estate AI guide. I will help you explore this beautiful property."
@@ -105,44 +241,100 @@ export default function Settings() {
         ? "Welcome. I am Sophia. It is my pleasure to guide you through this exquisite residence today."
         : "Hello, welcome in. My name is Marcus. Let me share a few details about this tranquil property.";
 
-      const utterance = new SpeechSynthesisUtterance(utteranceText);
-      
-      const voicesList = window.speechSynthesis.getVoices();
-      let voiceToUse = null;
-      if (av.id === "kore" || av.id === "zephyr") {
-        voiceToUse = voicesList.find(v => v.lang.startsWith("en-GB") && v.name.toLowerCase().includes("female")) || 
-                     voicesList.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("female"));
-      } else {
-        voiceToUse = voicesList.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male"));
-      }
-      if (voiceToUse) {
-        utterance.voice = voiceToUse;
-      }
-
-      if (av.id === "kore") {
-        utterance.rate = 0.95;
-        utterance.pitch = 1.0;
-      } else if (av.id === "puck") {
-        utterance.rate = 1.1;
-        utterance.pitch = 1.1;
-      } else if (av.id === "zephyr") {
-        utterance.rate = 0.9;
-        utterance.pitch = 1.02;
-      } else if (av.id === "charon") {
-        utterance.rate = 0.85;
-        utterance.pitch = 0.85;
-      }
-
-      utterance.onend = () => {
-        setActivePreviewVoiceId(null);
-      };
-      utterance.onerror = () => {
-        setActivePreviewVoiceId(null);
-      };
-
+      const toastId = toast.loading(`Generating premium neural voice preview for ${av.name}...`);
       setActivePreviewVoiceId(av.id);
-      window.speechSynthesis.speak(utterance);
-      toast.success(`Playing preview for ${av.name} (Voice ID: ${av.voiceId})...`);
+
+      try {
+        const response = await fetch("/api/tts-simple", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: utteranceText,
+            lang: "English",
+            voiceName: av.id
+          })
+        });
+
+        toast.dismiss(toastId);
+
+        if (!response.ok) {
+          throw new Error("Failed to synthesize preview via server.");
+        }
+
+        const data = await response.json();
+        if (data.success && data.base64Audio) {
+          const mimeType = data.mimeType || "audio/wav";
+          const binary = atob(data.base64Audio);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          activeAudioRef.current = audio;
+
+          audio.onended = () => {
+            setActivePreviewVoiceId(null);
+            URL.revokeObjectURL(url);
+          };
+
+          audio.onerror = () => {
+            setActivePreviewVoiceId(null);
+            URL.revokeObjectURL(url);
+          };
+
+          await audio.play();
+          toast.success(`Playing premium preview for ${av.name}...`);
+        } else {
+          throw new Error(data.error || "No audio returned.");
+        }
+      } catch (err) {
+        toast.dismiss(toastId);
+        console.error("[Voice Settings Preview Error]:", err);
+        toast.error("Failed to generate premium neural preview. Falling back to local synthesis.");
+
+        // Fallback to speech synthesis
+        if (window.speechSynthesis) {
+          const utterance = new SpeechSynthesisUtterance(utteranceText);
+          const voicesList = window.speechSynthesis.getVoices();
+          let voiceToUse = null;
+          if (av.id === "kore" || av.id === "zephyr") {
+            voiceToUse = voicesList.find(v => v.lang.startsWith("en-GB") && v.name.toLowerCase().includes("female")) || 
+                         voicesList.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("female"));
+          } else {
+            voiceToUse = voicesList.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male"));
+          }
+          if (voiceToUse) {
+            utterance.voice = voiceToUse;
+          }
+
+          if (av.id === "kore") {
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+          } else if (av.id === "puck") {
+            utterance.rate = 1.1;
+            utterance.pitch = 1.1;
+          } else if (av.id === "zephyr") {
+            utterance.rate = 0.9;
+            utterance.pitch = 1.02;
+          } else if (av.id === "charon") {
+            utterance.rate = 0.85;
+            utterance.pitch = 0.85;
+          }
+
+          utterance.onend = () => {
+            setActivePreviewVoiceId(null);
+          };
+          utterance.onerror = () => {
+            setActivePreviewVoiceId(null);
+          };
+
+          window.speechSynthesis.speak(utterance);
+        } else {
+          setActivePreviewVoiceId(null);
+        }
+      }
     }
   };
 
@@ -199,16 +391,23 @@ export default function Settings() {
 
   // Tab State
   const viewMode = location.pathname.startsWith('/app/admin') ? 'ADMIN' : 'CLIENT';
-  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications" | "welcome_defaults" | "avatars" | "billing" | "admin">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "branding" | "compliance" | "notifications" | "welcome_defaults" | "avatars" | "billing" | "admin">(viewMode === 'ADMIN' ? 'branding' : 'profile');
   const [adminSubTab, setAdminSubTab] = useState<"overview" | "company" | "plans" | "stripe">("overview");
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab");
     if (tab && ["profile", "branding", "compliance", "notifications", "welcome_defaults", "avatars", "billing", "admin"].includes(tab)) {
-      setActiveTab(tab as any);
+      // Ensure avatars can only be accessed under ADMIN mode
+      if (tab === "avatars" && viewMode === "CLIENT") {
+        setActiveTab("profile");
+      } else {
+        setActiveTab(tab as any);
+      }
+    } else {
+      setActiveTab(viewMode === 'ADMIN' ? 'branding' : 'profile');
     }
-  }, [location.search]);
+  }, [location.search, viewMode]);
 
   // Sora Welcome Defaults Management State (Removed/Commented out for standalone iFrame migration)
   /*
@@ -413,6 +612,137 @@ export default function Settings() {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [allowRegistrations, setAllowRegistrations] = useState(true);
 
+  // Auto-save logic
+  const isDirtyRef = useRef(false);
+  const latestStateRef = useRef<any>(null);
+  const isInitialLoadFinishedRef = useRef(false);
+
+  // Keep latestStateRef.current in sync on every render
+  latestStateRef.current = {
+    legalName, recoId, brokerOfRecord, officePhone, officeEmail, birthDate, birthTimeZone,
+    primaryColor, logoUrl, logoStoragePath, accentColor, agentPhotoUrl,
+    disclaimer, privacyUrl, licenseNumber, jurisdiction, boardName, licenseType,
+    emailAlerts, smsAlerts, dailyDigest, defaultVoiceId, maintenanceMode, allowRegistrations,
+    plans, pricingTitle, pricingDescription, stripeConnected, webhookSecret,
+    profileAddress, profileCity, profileProvince, profileCountry, profilePostalCode,
+    avatarSettings: {
+      addonPaid: avatarAddonPaid,
+      enableClientAvatar,
+      enableVoiceAvatar,
+      avatarType,
+      selectedGalleryId,
+      digitalTwinStatus,
+      digitalTwinAvatarId,
+      consentApproved
+    }
+  };
+
+  // Flag changes as dirty
+  useEffect(() => {
+    if (!loading && user?.id) {
+      if (!isInitialLoadFinishedRef.current) {
+        isInitialLoadFinishedRef.current = true;
+        isDirtyRef.current = false;
+        return;
+      }
+      isDirtyRef.current = true;
+    }
+  }, [
+    legalName, recoId, brokerOfRecord, officePhone, officeEmail, birthDate, birthTimeZone,
+    primaryColor, logoUrl, logoStoragePath, accentColor, agentPhotoUrl,
+    disclaimer, privacyUrl, licenseNumber, jurisdiction, boardName, licenseType,
+    emailAlerts, smsAlerts, dailyDigest, defaultVoiceId, maintenanceMode, allowRegistrations,
+    plans, pricingTitle, pricingDescription, stripeConnected, webhookSecret,
+    avatarAddonPaid, enableClientAvatar, enableVoiceAvatar, avatarType,
+    selectedGalleryId, digitalTwinStatus, digitalTwinAvatarId, consentApproved, loading,
+    profileAddress, profileCity, profileProvince, profileCountry, profilePostalCode
+  ]);
+
+  // Unmount effect for auto-saving changes
+  useEffect(() => {
+    return () => {
+      if (isDirtyRef.current && latestStateRef.current && user) {
+        const state = latestStateRef.current;
+        updateUser(user.id, {
+          brokerageProfile: {
+            legalName: state.legalName,
+            recoId: state.recoId,
+            brokerOfRecord: state.brokerOfRecord,
+            officePhone: state.officePhone,
+            officeEmail: state.officeEmail,
+            birthDate: state.birthDate,
+            birthTimeZone: state.birthTimeZone,
+            address: state.profileAddress,
+            city: state.profileCity,
+            province: state.profileProvince,
+            country: state.profileCountry,
+            postalCode: state.profilePostalCode,
+            updatedAt: Date.now()
+          },
+          branding: {
+            primaryColor: state.primaryColor,
+            imageUrl: state.logoUrl,
+            storagePath: state.logoStoragePath,
+            accentColor: state.accentColor,
+            agentPhotoUrl: state.agentPhotoUrl
+          },
+          compliance: {
+            disclaimer: state.disclaimer,
+            privacyUrl: state.privacyUrl,
+            reciprocity: {
+              licenseNumber: state.licenseNumber,
+              jurisdiction: state.jurisdiction,
+              boardName: state.boardName,
+              licenseType: state.licenseType
+            }
+          },
+          notifications: {
+            emailAlerts: state.emailAlerts,
+            smsAlerts: state.smsAlerts,
+            dailyDigest: state.dailyDigest
+          },
+          defaultVoiceId: state.defaultVoiceId,
+          avatarSettings: {
+            ...state.avatarSettings,
+            updatedAt: Date.now()
+          },
+          updatedAt: Date.now()
+        }).then(() => {
+          console.log("Auto-save on unmount completed successfully");
+        }).catch(err => {
+          console.error("Auto-save on unmount failed:", err);
+        });
+
+        if (user.role === 'ADMIN') {
+          const adminData = {
+            maintenanceMode: state.maintenanceMode,
+            allowRegistrations: state.allowRegistrations,
+            plans: state.plans,
+            brokerageName,
+            brokerageAddress,
+            brokerageCity,
+            brokerageProvince,
+            brokerageCountry,
+            brokeragePostalCode,
+            brokeragePhone,
+            brokerageEmail,
+            adminEmail,
+            socials,
+            pricingTitle: state.pricingTitle,
+            pricingDescription: state.pricingDescription,
+            stripeConnected: state.stripeConnected,
+            webhookSecret: state.webhookSecret,
+            updatedBy: user.id,
+            updatedAt: Date.now()
+          };
+          setDoc(doc(db, "settings", "global"), adminData).catch(err => {
+            console.error("Auto-save global admin settings on unmount failed:", err);
+          });
+        }
+      }
+    };
+  }, [user?.id]);
+
   useEffect(() => {
     if (user?.id) {
       loadProfile();
@@ -461,6 +791,13 @@ export default function Settings() {
         setBrokerOfRecord(bp.brokerOfRecord || "Luc Valade");
         setOfficePhone(bp.officePhone || "(289) 659-5170");
         setOfficeEmail(bp.officeEmail || "ops@aiopenhouseconnect.com");
+        setBirthDate(bp.birthDate || "");
+        setBirthTimeZone(bp.birthTimeZone || "America/Toronto");
+        setProfileAddress(bp.address || "");
+        setProfileCity(bp.city || "");
+        setProfileProvince(bp.province || "");
+        setProfileCountry(bp.country || "");
+        setProfilePostalCode(bp.postalCode || "");
       } else {
         // Defaults if none exist
         setLegalName("AI Open House Connect HQ");
@@ -468,6 +805,13 @@ export default function Settings() {
         setBrokerOfRecord("Luc Valade");
         setOfficePhone("(289) 659-5170");
         setOfficeEmail("ops@aiopenhouseconnect.com");
+        setBirthDate("");
+        setBirthTimeZone("America/Toronto");
+        setProfileAddress("");
+        setProfileCity("");
+        setProfileProvince("");
+        setProfileCountry("");
+        setProfilePostalCode("");
       }
 
       if (data?.branding) {
@@ -606,6 +950,37 @@ export default function Settings() {
     return str.replace(/\b\w/g, char => char.toUpperCase());
   };
 
+  const capitalizeAddressWord = (val: string) => {
+    return val.split(" ").map(w => {
+      if (!w) return "";
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(" ");
+  };
+
+  const formatPostalCodeInput = (val: string) => {
+    let formatted = val.toUpperCase();
+    if (/^[A-Z]/.test(formatted)) {
+      // Canada
+      formatted = formatted.replace(/-/g, " ");
+      formatted = formatted.replace(/[^A-Z0-9 ]/g, "");
+      formatted = formatted.replace(/\s+/g, " ");
+      const noSpace = formatted.replace(/\s/g, "");
+      if (noSpace.length === 6 && /^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(noSpace)) {
+        formatted = `${noSpace.slice(0, 3)} ${noSpace.slice(3)}`;
+      }
+    } else {
+      // US
+      formatted = formatted.replace(/[^0-9-]/g, "");
+      const cleanDigits = formatted.replace(/-/g, "");
+      if (cleanDigits.length > 5) {
+        formatted = `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 9)}`;
+      } else {
+        formatted = cleanDigits;
+      }
+    }
+    return formatted;
+  };
+
   const handleBlur = (field: string, value: string) => {
     let error = "";
     switch (field) {
@@ -636,7 +1011,15 @@ export default function Settings() {
         }
         break;
       case "privacyUrl":
-        if (value.trim() && !validateUrl(value)) error = "Invalid URL (must start with http/https)";
+        if (!value.trim()) {
+          error = "Privacy Policy URL is required";
+        } else if (!validateUrl(value)) {
+          error = "Invalid URL (must start with http/https)";
+        } else if (!value.startsWith("https://")) {
+          error = "Privacy Policy URL must start with https://";
+        } else if (!value.includes("/privacy")) {
+          error = "Privacy Policy URL must contain '/privacy'";
+        }
         break;
       case "disclaimer":
         if (value.length > 0 && !/^[A-Z]/.test(value)) error = "Disclaimer must start with a capital letter";
@@ -645,10 +1028,106 @@ export default function Settings() {
         if (value.trim() && !/^[a-zA-Z0-9-]{3,30}$/.test(value)) error = "Invalid License Number (alphanumeric)";
         break;
       case "licenseType":
-      case "jurisdiction":
-      case "boardName":
-        if (value.trim() && !isTitleCase(value)) error = "First letter of each word must be capitalized";
+        if (!value.trim()) error = "Type Of Licence is required";
+        else if (!isTitleCase(value)) error = "First letter of each word must be capitalized";
         break;
+      case "jurisdiction":
+        if (!value.trim()) error = "Issuing Jurisdiction is required";
+        else if (!isTitleCase(value)) error = "First letter of each word must be capitalized";
+        break;
+      case "boardName":
+        if (!value.trim()) error = "Board Name is required";
+        else if (!isTitleCase(value)) error = "First letter of each word must be capitalized";
+        break;
+      case "profileAddress":
+        if (!value.trim()) {
+          error = "Address is required";
+        } else {
+          const capitalized = capitalizeAddressWord(value);
+          setProfileAddress(capitalized);
+        }
+        break;
+      case "profileCity":
+        if (!value.trim()) {
+          error = "City is required";
+        } else {
+          const capitalized = capitalizeAddressWord(value);
+          setProfileCity(capitalized);
+          if (!isTitleCase(capitalized)) {
+            error = "First letter of each word must be capitalized";
+          }
+        }
+        break;
+      case "profileProvince": {
+        const valTrimmed = value.trim();
+        if (!valTrimmed) {
+          error = "Province/State is required";
+        } else {
+          const valUpper = valTrimmed.toUpperCase();
+          const valLower = valTrimmed.toLowerCase();
+          if (ALL_PROVINCES_STATES_UPPER[valUpper] !== undefined) {
+            setProfileProvince(valUpper);
+          } else if (LONG_NAME_LOOKUP[valLower] !== undefined) {
+            setProfileProvince(LONG_NAME_LOOKUP[valLower]);
+          } else {
+            const capitalized = capitalizeAddressWord(valTrimmed);
+            setProfileProvince(capitalized);
+            error = "Invalid Province or State abbreviation or full name. Please provide a valid Canadian Province or US State.";
+          }
+        }
+        break;
+      }
+      case "profileCountry":
+        if (!value.trim()) {
+          error = "Country is required";
+        } else {
+          const capitalized = capitalizeAddressWord(value);
+          setProfileCountry(capitalized);
+          if (!isTitleCase(capitalized)) {
+            error = "First letter of each word must be capitalized";
+          }
+        }
+        break;
+      case "profilePostalCode": {
+        let cleanVal = value.trim().toUpperCase();
+        if (/^[A-Z]/.test(cleanVal)) {
+          // Canada format
+          cleanVal = cleanVal.replace(/-/g, " ");
+          cleanVal = cleanVal.replace(/[^A-Z0-9 ]/g, "");
+          cleanVal = cleanVal.replace(/\s+/g, " ");
+          const noSpace = cleanVal.replace(/\s/g, "");
+          if (noSpace.length === 6 && /^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(noSpace)) {
+            cleanVal = `${noSpace.slice(0, 3)} ${noSpace.slice(3)}`;
+          }
+        } else {
+          // US format
+          cleanVal = cleanVal.replace(/[^0-9-]/g, "");
+          const cleanDigits = cleanVal.replace(/-/g, "");
+          if (cleanDigits.length > 5) {
+            cleanVal = `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 9)}`;
+          } else {
+            cleanVal = cleanDigits;
+          }
+        }
+        setProfilePostalCode(cleanVal);
+
+        if (!cleanVal) {
+          error = "Postal/Zip Code is required";
+        } else {
+          if (/^[A-Z]/.test(cleanVal)) {
+            const canadaRegex = /^[A-Z]\d[A-Z] \d[A-Z]\d$/;
+            if (!canadaRegex.test(cleanVal)) {
+              error = "Canada Postal Code must be in the format: A1A 1A1 (alternating letter-digit with exactly one space, no hyphens)";
+            }
+          } else {
+            const usRegex = /^\d{5}$|^\d{5}-\d{4}$/;
+            if (!usRegex.test(cleanVal)) {
+              error = "US ZIP Code must be a 5-digit number (12345) or a 9-digit format with a hyphen (12345-6789)";
+            }
+          }
+        }
+        break;
+      }
     }
     setErrors(prev => ({ ...prev, [field]: error }));
     if (error) toast.error(error);
@@ -752,21 +1231,148 @@ export default function Settings() {
     }
   };
 
-  async function handleSave() {
+  const switchTab = async (newTab: any) => {
+    if (isDirtyRef.current) {
+      toast.info("Auto-saving your changes...");
+      await handleSave(true);
+    }
+    setActiveTab(newTab);
+  };
+
+  async function handleSave(isAutoSave: boolean | React.MouseEvent<HTMLButtonElement> = false) {
+    const autoSave = typeof isAutoSave === 'boolean' ? isAutoSave : false;
     // Final Validations
     if (activeTab === "profile") {
-      // Profile tab no longer requires validation as it only contains dev tools or info message
+      const newErrors = { ...errors };
+
+      if (!profileAddress.trim()) {
+        newErrors.profileAddress = "Address is required";
+      } else {
+        const capitalized = capitalizeAddressWord(profileAddress);
+        if (profileAddress !== capitalized) setProfileAddress(capitalized);
+        delete newErrors.profileAddress;
+      }
+
+      if (!profileCity.trim()) {
+        newErrors.profileCity = "City is required";
+      } else {
+        const capitalized = capitalizeAddressWord(profileCity);
+        if (profileCity !== capitalized) setProfileCity(capitalized);
+        if (!isTitleCase(capitalized)) {
+          newErrors.profileCity = "First letter of each word must be capitalized";
+        } else {
+          delete newErrors.profileCity;
+        }
+      }
+
+      if (!profileProvince.trim()) {
+        newErrors.profileProvince = "Province/State is required";
+      } else {
+        const valTrimmed = profileProvince.trim();
+        const valUpper = valTrimmed.toUpperCase();
+        const valLower = valTrimmed.toLowerCase();
+        if (ALL_PROVINCES_STATES_UPPER[valUpper] !== undefined) {
+          if (profileProvince !== valUpper) setProfileProvince(valUpper);
+          delete newErrors.profileProvince;
+        } else if (LONG_NAME_LOOKUP[valLower] !== undefined) {
+          const matchedName = LONG_NAME_LOOKUP[valLower];
+          if (profileProvince !== matchedName) setProfileProvince(matchedName);
+          delete newErrors.profileProvince;
+        } else {
+          const capitalized = capitalizeAddressWord(valTrimmed);
+          if (profileProvince !== capitalized) setProfileProvince(capitalized);
+          newErrors.profileProvince = "Invalid Province or State abbreviation or full name. Please provide a valid Canadian Province or US State.";
+        }
+      }
+
+      if (!profileCountry.trim()) {
+        newErrors.profileCountry = "Country is required";
+      } else {
+        const capitalized = capitalizeAddressWord(profileCountry);
+        if (profileCountry !== capitalized) setProfileCountry(capitalized);
+        if (!isTitleCase(capitalized)) {
+          newErrors.profileCountry = "First letter of each word must be capitalized";
+        } else {
+          delete newErrors.profileCountry;
+        }
+      }
+
+      if (!profilePostalCode.trim()) {
+        newErrors.profilePostalCode = "Postal/Zip Code is required";
+      } else {
+        let cleanVal = profilePostalCode.trim().toUpperCase();
+        if (/^[A-Z]/.test(cleanVal)) {
+          // Canada format
+          cleanVal = cleanVal.replace(/-/g, " ");
+          cleanVal = cleanVal.replace(/[^A-Z0-9 ]/g, "");
+          cleanVal = cleanVal.replace(/\s+/g, " ");
+          const noSpace = cleanVal.replace(/\s/g, "");
+          if (noSpace.length === 6 && /^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(noSpace)) {
+            cleanVal = `${noSpace.slice(0, 3)} ${noSpace.slice(3)}`;
+          }
+        } else {
+          // US format
+          cleanVal = cleanVal.replace(/[^0-9-]/g, "");
+          const cleanDigits = cleanVal.replace(/-/g, "");
+          if (cleanDigits.length > 5) {
+            cleanVal = `${cleanDigits.slice(0, 5)}-${cleanDigits.slice(5, 9)}`;
+          } else {
+            cleanVal = cleanDigits;
+          }
+        }
+        if (profilePostalCode !== cleanVal) setProfilePostalCode(cleanVal);
+
+        if (/^[A-Z]/.test(cleanVal)) {
+          const canadaRegex = /^[A-Z]\d[A-Z] \d[A-Z]\d$/;
+          if (!canadaRegex.test(cleanVal)) {
+            newErrors.profilePostalCode = "Canada Postal Code must be in the format: A1A 1A1 (alternating letter-digit with exactly one space, no hyphens)";
+          } else {
+            delete newErrors.profilePostalCode;
+          }
+        } else {
+          const usRegex = /^\d{5}$|^\d{5}-\d{4}$/;
+          if (!usRegex.test(cleanVal)) {
+            newErrors.profilePostalCode = "US ZIP Code must be a 5-digit number (12345) or a 9-digit format with a hyphen (12345-6789)";
+          } else {
+            delete newErrors.profilePostalCode;
+          }
+        }
+      }
+
+      setErrors(newErrors);
+
+      if (!legalName.trim() || !recoId.trim() || !brokerOfRecord.trim() || !officePhone.trim() || !officeEmail.trim() ||
+          !profileAddress.trim() || !profileCity.trim() || !profileProvince.trim() || !profileCountry.trim() || !profilePostalCode.trim() ||
+          Object.values(newErrors).some(e => e)) {
+        if (!autoSave) {
+          toast.error("Please fill in all required fields and fix validation errors in the Account Profile");
+        }
+        return;
+      }
+    }
+
+    if (activeTab === "compliance") {
+      if (!licenseType.trim() || !jurisdiction.trim() || !boardName.trim() || !privacyUrl.trim()) {
+        if (!autoSave) {
+          toast.error("Please fill in all required fields in Compliance (Type Of Licence, Issuing Jurisdiction, Board Name, and Privacy Policy URL)");
+        }
+        return;
+      }
     }
 
     if (user?.role === 'ADMIN' && activeTab === 'admin' && adminSubTab === 'company') {
       if (!brokerageName || !brokerageAddress || !brokerageCity || !brokerageCountry || !brokerageProvince || !brokeragePostalCode || !brokeragePhone || !brokerageEmail || !adminEmail) {
-        toast.error("Please fill in all mandatory fields in the AI Open House Connect File");
+        if (!autoSave) {
+          toast.error("Please fill in all mandatory fields in the AI Open House Connect File");
+        }
         return;
       }
     }
 
     if (Object.values(errors).some(e => e)) {
-      toast.error("Please fix validation errors before saving");
+      if (!autoSave) {
+        toast.error("Please fix validation errors before saving");
+      }
       return;
     }
 
@@ -843,6 +1449,13 @@ export default function Settings() {
           brokerOfRecord,
           officePhone,
           officeEmail,
+          birthDate,
+          birthTimeZone,
+          address: profileAddress,
+          city: profileCity,
+          province: profileProvince,
+          country: profileCountry,
+          postalCode: profilePostalCode,
           updatedAt: Date.now()
         },
         branding: {
@@ -923,7 +1536,12 @@ export default function Settings() {
         });
       }
 
-      toast.success("Changes have been saved");
+      if (autoSave) {
+        toast.success("Changes auto-saved");
+      } else {
+        toast.success("Changes have been saved");
+      }
+      isDirtyRef.current = false;
     } catch (err: any) {
       console.error("Save Error:", err);
       toast.error("Failed to save changes. Please try again.");
@@ -957,60 +1575,62 @@ export default function Settings() {
           {viewMode !== 'ADMIN' ? (
             <>
               <button 
-                onClick={() => setActiveTab("avatars")}
-                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'avatars' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
-              >
-                <Video className="h-4 w-4" /> AI Video Avatars
-              </button>
-              <button 
-                onClick={() => setActiveTab("profile")}
+                onClick={() => switchTab("profile")}
                 className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'profile' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 <Building2 className="h-4 w-4" /> Account Profile
               </button>
               <button 
-                onClick={() => setActiveTab("billing")}
+                onClick={() => switchTab("billing")}
                 className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'billing' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 <CreditCard className="h-4 w-4" /> Billings & Plans
               </button>
               <button 
-                onClick={() => setActiveTab("branding")}
+                onClick={() => switchTab("branding")}
                 className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'branding' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 <Globe className="h-4 w-4" /> Branding & UI
               </button>
               <button 
-                onClick={() => setActiveTab("compliance")}
+                onClick={() => switchTab("compliance")}
                 className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'compliance' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 <Shield className="h-4 w-4" /> Compliance
               </button>
               <button 
-                onClick={() => setActiveTab("notifications")}
+                onClick={() => switchTab("notifications")}
                 className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'notifications' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 <Bell className="h-4 w-4" /> Notifications
               </button>
               <button 
-                onClick={() => setActiveTab("welcome_defaults")}
+                onClick={() => switchTab("welcome_defaults")}
                 className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'welcome_defaults' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
               >
                 <Mic2 className="h-4 w-4" /> Sora Welcome Defaults
               </button>
             </>
           ) : (
-            <button 
-              onClick={() => setActiveTab("profile")}
-              className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'profile' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
-            >
-              <Building2 className="h-4 w-4" /> My Profile
-            </button>
+            <>
+              <button 
+                onClick={() => switchTab("profile")}
+                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'profile' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <Building2 className="h-4 w-4" /> My Profile
+              </button>
+              <button 
+                onClick={() => switchTab("avatars")}
+                className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === 'avatars' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <Video className="h-4 w-4" /> AI Video Avatars
+              </button>
+            </>
           )}
           
           {user?.role === 'ADMIN' && viewMode === 'ADMIN' && (
             <button 
-              onClick={() => setActiveTab("admin" as any)}
+              onClick={() => switchTab("admin" as any)}
               className={`w-full flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg text-left transition-colors ${activeTab === ('admin' as any) ? 'bg-red-50 text-red-700' : 'text-slate-600 hover:bg-slate-50'}`}
             >
               <Shield className="h-4 w-4 text-red-500" /> Admin Control Panel
@@ -1038,7 +1658,6 @@ export default function Settings() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
                       <span>Legal Representative / Corporate Name</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Title Case</span>
                     </label>
                     <input 
                       type="text" 
@@ -1058,7 +1677,6 @@ export default function Settings() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
                       <span>License ID / RECO</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Alphanumeric</span>
                     </label>
                     <input 
                       type="text" 
@@ -1076,25 +1694,105 @@ export default function Settings() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
                       <span>Broker of Record</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Title Case</span>
                     </label>
-                    <input 
-                      type="text" 
-                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.brokerOfRecord ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
-                      value={brokerOfRecord}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const formatted = val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-                        setBrokerOfRecord(formatted);
-                      }}
-                      onBlur={(e) => handleBlur("brokerOfRecord", e.target.value)}
-                      placeholder="e.g., Luc Valade"
-                    />
+                    {viewMode !== 'ADMIN' ? (
+                      <select 
+                        className={`w-full px-3 py-2 border rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.brokerOfRecord ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                        value={brokerOfRecord || "Agent of Record"}
+                        onChange={(e) => setBrokerOfRecord(e.target.value)}
+                      >
+                        <option value="Agent of Record">Agent of Record</option>
+                        <option value="Broker of Record">Broker of Record</option>
+                      </select>
+                    ) : (
+                      <input 
+                        type="text" 
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.brokerOfRecord ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
+                        value={brokerOfRecord}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const formatted = val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                          setBrokerOfRecord(formatted);
+                        }}
+                        onBlur={(e) => handleBlur("brokerOfRecord", e.target.value)}
+                        placeholder="e.g., Luc Valade"
+                      />
+                    )}
                     {errors.brokerOfRecord && <p className="text-xs text-red-500 font-medium">{errors.brokerOfRecord}</p>}
                   </div>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="pt-4 border-t border-slate-100">
+                  <h3 className="text-sm font-bold text-slate-900 mb-3">Office Address</h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className={`text-sm font-medium ${errors.profileAddress ? 'text-red-600 font-bold' : 'text-slate-700'}`}>Address <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.profileAddress ? 'border-red-600 ring-red-100' : 'border-slate-200'}`} 
+                        value={profileAddress}
+                        onChange={(e) => setProfileAddress(capitalizeAddressWord(e.target.value))}
+                        onBlur={(e) => handleBlur("profileAddress", e.target.value)}
+                        placeholder="e.g., 760 Upper James St"
+                      />
+                      {errors.profileAddress && <p className="text-xs text-red-600 font-bold mt-1">{errors.profileAddress}</p>}
+                    </div>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4 mt-4">
+                    <div className="space-y-1.5">
+                      <label className={`text-sm font-medium ${errors.profileCity ? 'text-red-600 font-bold' : 'text-slate-700'}`}>City <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.profileCity ? 'border-red-600 ring-red-100' : 'border-slate-200'}`} 
+                        value={profileCity}
+                        onChange={(e) => setProfileCity(capitalizeAddressWord(e.target.value))}
+                        onBlur={(e) => handleBlur("profileCity", e.target.value)}
+                        placeholder="e.g., Hamilton"
+                      />
+                      {errors.profileCity && <p className="text-xs text-red-600 font-bold mt-1">{errors.profileCity}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`text-sm font-medium ${errors.profileProvince ? 'text-red-600 font-bold' : 'text-slate-700'}`}>Province/State <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.profileProvince ? 'border-red-600 ring-red-100' : 'border-slate-200'}`} 
+                        value={profileProvince}
+                        onChange={(e) => setProfileProvince(capitalizeAddressWord(e.target.value))}
+                        onBlur={(e) => handleBlur("profileProvince", e.target.value)}
+                        placeholder="e.g., Ontario"
+                      />
+                      {errors.profileProvince && <p className="text-xs text-red-600 font-bold mt-1">{errors.profileProvince}</p>}
+                    </div>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4 mt-4">
+                    <div className="space-y-1.5">
+                      <label className={`text-sm font-medium ${errors.profileCountry ? 'text-red-600 font-bold' : 'text-slate-700'}`}>Country <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.profileCountry ? 'border-red-600 ring-red-100' : 'border-slate-200'}`} 
+                        value={profileCountry}
+                        onChange={(e) => setProfileCountry(capitalizeAddressWord(e.target.value))}
+                        onBlur={(e) => handleBlur("profileCountry", e.target.value)}
+                        placeholder="e.g., Canada"
+                      />
+                      {errors.profileCountry && <p className="text-xs text-red-600 font-bold mt-1">{errors.profileCountry}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={`text-sm font-medium ${errors.profilePostalCode ? 'text-red-600 font-bold' : 'text-slate-700'}`}>Postal/Zip Code <span className="text-red-500">*</span></label>
+                      <input 
+                        type="text" 
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.profilePostalCode ? 'border-red-600 ring-red-100' : 'border-slate-200'}`} 
+                        value={profilePostalCode}
+                        onChange={(e) => setProfilePostalCode(formatPostalCodeInput(e.target.value))}
+                        onBlur={(e) => handleBlur("profilePostalCode", e.target.value)}
+                        placeholder="e.g., L9C 3A2"
+                      />
+                      {errors.profilePostalCode && <p className="text-xs text-red-600 font-bold mt-1">{errors.profilePostalCode}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
                       <span>Office Phone</span>
@@ -1114,7 +1812,6 @@ export default function Settings() {
                   <div className="space-y-1.5">
                     <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
                       <span>Office Email</span>
-                      <span className="text-[10px] text-slate-400 font-mono">Format matching</span>
                     </label>
                     <input 
                       type="text" 
@@ -1126,6 +1823,75 @@ export default function Settings() {
                     />
                     {errors.officeEmail && <p className="text-xs text-red-500 font-medium">{errors.officeEmail}</p>}
                   </div>
+                </div>
+
+                <div className="space-y-4 border border-slate-100 bg-slate-50/50 p-4 rounded-lg">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                        <span>Birthday Date</span>
+                        <span className="text-[10px] text-slate-400 font-mono">YYYY-MM-DD</span>
+                      </label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                        <span>Time Zone</span>
+                        <span className="text-[10px] text-slate-400 font-mono">For Scheduled Alerts</span>
+                      </label>
+                      <select
+                        className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        value={birthTimeZone}
+                        onChange={(e) => setBirthTimeZone(e.target.value)}
+                      >
+                        <option value="America/Toronto">Eastern Time (America/Toronto - Toronto/Montreal)</option>
+                        <option value="America/New_York">Eastern Time (America/New_York - New York)</option>
+                        <option value="America/Winnipeg">Central Time (America/Winnipeg - Winnipeg)</option>
+                        <option value="America/Chicago">Central Time (America/Chicago - Chicago)</option>
+                        <option value="America/Edmonton">Mountain Time (America/Edmonton - Edmonton/Calgary)</option>
+                        <option value="America/Denver">Mountain Time (America/Denver - Denver)</option>
+                        <option value="America/Vancouver">Pacific Time (America/Vancouver - Vancouver)</option>
+                        <option value="America/Los_Angeles">Pacific Time (America/Los_Angeles - Los Angeles)</option>
+                        <option value="America/Halifax">Atlantic Time (America/Halifax - Halifax)</option>
+                        <option value="America/St_Johns">Newfoundland Time (America/St_Johns - St. John's)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {viewMode === 'ADMIN' && (
+                    <div className="pt-3 border-t border-slate-100 flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-500">Birthday notification service runs automatically in the background.</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/admin/trigger-birthday-check", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ force: true })
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              toast.success(`Birthday notification service triggered successfully! Checked user accounts.`);
+                            } else {
+                              toast.error("Failed to run birthday service check.");
+                            }
+                          } catch (err) {
+                            toast.error("Error communicating with birthday service.");
+                          }
+                        }}
+                        className="text-xs font-semibold bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 rounded-md transition-all cursor-pointer whitespace-nowrap"
+                      >
+                        Run Birthday Service Check Now
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 border-t flex justify-end">
@@ -1176,7 +1942,7 @@ export default function Settings() {
               <h2 className="text-lg font-bold mb-4">Branding & UI</h2>
 
               {/* Dynamic QR Code & Branding Assets Verification Banner */}
-              <div className="mb-6 p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="mb-6 p-4 bg-slate-50/70 border border-slate-200/80 rounded-2xl flex flex-col gap-4">
                 <div className="space-y-1">
                   <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Branding Asset Verification Status</h3>
                   <p className="text-xs text-slate-600 leading-normal">
@@ -1444,38 +2210,50 @@ export default function Settings() {
                       {errors.licenseNumber && <p className="text-xs text-red-500 font-medium">{errors.licenseNumber}</p>}
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-700">Type of Licence</label>
+                      <label className="text-sm font-medium text-slate-700">Type of Licence <span className="text-red-500">*</span></label>
                       <input 
                         type="text" 
                         className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.licenseType ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
                         value={licenseType}
-                        onChange={(e) => setLicenseType(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const formatted = val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                          setLicenseType(formatted);
+                        }}
                         onBlur={(e) => handleBlur("licenseType", e.target.value)}
-                        placeholder="e.g., Registered Architect, CPA"
+                        placeholder="e.g., Real Estate Broker"
                       />
                       {errors.licenseType && <p className="text-xs text-red-500 font-medium">{errors.licenseType}</p>}
                     </div>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-700">Issuing Jurisdiction</label>
+                      <label className="text-sm font-medium text-slate-700">Issuing Jurisdiction <span className="text-red-500">*</span></label>
                       <input 
                         type="text" 
                         className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.jurisdiction ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
                         value={jurisdiction}
-                        onChange={(e) => setJurisdiction(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const formatted = val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                          setJurisdiction(formatted);
+                        }}
                         onBlur={(e) => handleBlur("jurisdiction", e.target.value)}
                         placeholder="e.g., Ontario, Canada"
                       />
                       {errors.jurisdiction && <p className="text-xs text-red-500 font-medium">{errors.jurisdiction}</p>}
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-medium text-slate-700">Board Name</label>
+                      <label className="text-sm font-medium text-slate-700">Board Name <span className="text-red-500">*</span></label>
                       <input 
                         type="text" 
                         className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.boardName ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
                         value={boardName}
-                        onChange={(e) => setBoardName(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const formatted = val.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                          setBoardName(formatted);
+                        }}
                         onBlur={(e) => handleBlur("boardName", e.target.value)}
                         placeholder="e.g., RECO, TRREB"
                       />
@@ -1486,14 +2264,17 @@ export default function Settings() {
 
                 <div className="grid md:grid-cols-1 gap-4 pt-4 border-t">
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-slate-700">Privacy Policy URL</label>
+                    <label className="text-sm font-medium text-slate-700 flex items-center justify-between">
+                      <span>Privacy Policy URL <span className="text-red-500">*</span></span>
+                      <span className="text-[10px] text-slate-400">Must start with https:// and contain /privacy</span>
+                    </label>
                     <input 
                       type="text" 
                       className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.privacyUrl ? 'border-red-300 ring-red-100' : 'border-slate-200'}`} 
                       value={privacyUrl}
                       onChange={(e) => setPrivacyUrl(e.target.value)}
                       onBlur={(e) => handleBlur("privacyUrl", e.target.value)}
-                      placeholder="https://vertexrealty.ca/privacy"
+                      placeholder="https://www.yoursitename/privacy"
                     />
                     {errors.privacyUrl && <p className="text-xs text-red-500 font-medium">{errors.privacyUrl}</p>}
                   </div>

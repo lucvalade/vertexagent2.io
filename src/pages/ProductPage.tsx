@@ -392,7 +392,7 @@ export default function ProductPage() {
                 
                 <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-xs font-mono">
                   <span>SPEECH PROCESSOR NODE</span>
-                  <span className="text-blue-500">VOICE ACTIVE (KORE)</span>
+                  <span className="text-blue-500">VOICE ACTIVE</span>
                 </div>
 
                 <div className="space-y-4">

@@ -489,19 +489,23 @@ export default function Leads() {
                   <td className="px-6 py-4">
                     <div className="font-semibold text-slate-900 group-hover:text-blue-600 flex items-center gap-1.5 flex-wrap">
                       {lead.name}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRecordingLeadId(lead.id);
-                          setIsAgentVoiceOpen(true);
-                        }}
-                        className="p-1.5 rounded-full text-blue-600 bg-blue-50/80 hover:bg-blue-100/90 transition-all cursor-pointer inline-flex items-center justify-center border-2 border-blue-600 animate-pulse hover:scale-110 shadow-[0_0_8px_rgba(37,99,235,0.2)] hover:animate-none"
-                        title="Record Private/Team Voice Note"
-                        id={`mic-list-desktop-${lead.id}`}
-                      >
-                        <Mic className="h-[18px] w-[18px] text-blue-600 shrink-0" />
-                      </button>
+                      <div className="relative group/mic inline-block">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRecordingLeadId(lead.id);
+                            setIsAgentVoiceOpen(true);
+                          }}
+                          className="p-1.5 rounded-full text-blue-600 bg-blue-50/80 hover:bg-blue-100/90 transition-all cursor-pointer inline-flex items-center justify-center border-2 border-blue-600 animate-pulse hover:scale-110 shadow-[0_0_8px_rgba(37,99,235,0.2)] hover:animate-none"
+                          id={`mic-list-desktop-${lead.id}`}
+                        >
+                          <Mic className="h-[18px] w-[18px] text-blue-600 shrink-0" />
+                        </button>
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/mic:block bg-slate-900 text-white text-[11px] py-1 px-2.5 rounded shadow-lg z-50 whitespace-nowrap">
+                          <strong className="text-white font-extrabold">Agent</strong> - Record Private/Team Voice Note
+                        </div>
+                      </div>
                       {lead.isShared && lead.agentId === user?.id && (
                         <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[8px] font-bold uppercase tracking-wider" title="Captured by you during cross-hosted open house">
                           Co-Hosted
@@ -609,19 +613,23 @@ export default function Leads() {
                   <div>
                     <div className="font-bold text-slate-900 leading-tight flex items-center gap-1.5 flex-wrap">
                       {lead.name}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRecordingLeadId(lead.id);
-                          setIsAgentVoiceOpen(true);
-                        }}
-                        className="p-1.5 rounded-full text-blue-600 bg-blue-50/80 hover:bg-blue-100/90 transition-all cursor-pointer inline-flex items-center justify-center border-2 border-blue-600 animate-pulse hover:scale-110 shadow-[0_0_8px_rgba(37,99,235,0.2)] hover:animate-none"
-                        title="Record Private/Team Voice Note"
-                        id={`mic-list-mobile-${lead.id}`}
-                      >
-                        <Mic className="h-[18px] w-[18px] text-blue-600 shrink-0" />
-                      </button>
+                      <div className="relative group/mic inline-block">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRecordingLeadId(lead.id);
+                            setIsAgentVoiceOpen(true);
+                          }}
+                          className="p-1.5 rounded-full text-blue-600 bg-blue-50/80 hover:bg-blue-100/90 transition-all cursor-pointer inline-flex items-center justify-center border-2 border-blue-600 animate-pulse hover:scale-110 shadow-[0_0_8px_rgba(37,99,235,0.2)] hover:animate-none"
+                          id={`mic-list-mobile-${lead.id}`}
+                        >
+                          <Mic className="h-[18px] w-[18px] text-blue-600 shrink-0" />
+                        </button>
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/mic:block bg-slate-900 text-white text-[11px] py-1 px-2.5 rounded shadow-lg z-50 whitespace-nowrap">
+                          <strong className="text-white font-extrabold">Agent</strong> - Record Private/Team Voice Note
+                        </div>
+                      </div>
                       {lead.isShared && lead.agentId === user?.id && (
                         <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[8px] font-bold uppercase tracking-wider">
                           Co-Hosted

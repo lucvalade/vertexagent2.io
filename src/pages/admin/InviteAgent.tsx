@@ -50,9 +50,40 @@ export default function InviteAgent() {
 
     setIsInviting(true);
     try {
-      // Simulate invitation process
-      // In a real app, this would trigger a cloud function to send an email
-      // and create a pending user document
+      const invitationUrl = `${window.location.origin}/register?invite=${btoa(email)}`;
+      
+      // Send real email via SMTP route using Hostinger configuration
+      const mailRes = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: email,
+          subject: `Join AI Open House Connect — Invitation from ${user?.email?.split('@')[0] || 'your office'}`,
+          html: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 32px; color: #1e293b; background-color: #f8fafc; line-height: 1.7; max-width: 600px; margin: 0 auto; border-radius: 24px; border: 1px solid #e2e8f0;">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <span style="font-size: 28px; font-weight: 900; letter-spacing: -0.05em; color: #155dfc; text-transform: uppercase; font-style: italic;">AI Open House Connect</span>
+              </div>
+              <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 0; margin-bottom: 12px; text-transform: uppercase; letter-spacing: -0.025em;">You have been invited!</h2>
+              <p style="margin-top: 0; margin-bottom: 16px;">Hi <strong>${fullName}</strong>,</p>
+              <p style="margin-top: 0; margin-bottom: 16px;"><strong>${user?.email || 'Your Office Admin'}</strong> has invited you to join their secure brokerage team workspace on <strong>AI Open House Connect</strong> with the role of <strong>${role}</strong>.</p>
+              <p style="margin-top: 0; margin-bottom: 24px;">AI Open House Connect is the ultimate AI-powered open house orchestration platform. Convert visitors into qualified clients with intelligent Sora guides, QR-based routing, and immediate consent logs.</p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${invitationUrl}" style="background-color: #155dfc; color: #ffffff; padding: 14px 32px; font-size: 14px; text-decoration: none; font-weight: 900; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(21, 93, 252, 0.2); text-transform: uppercase; letter-spacing: 0.05em;">Accept Invitation</a>
+              </div>
+              <p style="font-size: 11px; color: #64748b; margin-top: 32px; border-t: 1px solid #e2e8f0; padding-top: 16px; margin-bottom: 0;">
+                If you did not expect this invitation, you can safely disregard this email.
+              </p>
+            </div>
+          `,
+          text: `Hi ${fullName},\n\n${user?.email} has invited you to join their team on AI Open House Connect.\n\nAccept Invitation: ${invitationUrl}`
+        })
+      });
+
+      if (!mailRes.ok) {
+        const errData = await mailRes.json();
+        throw new Error(errData.error || "SMTP dispatch failed");
+      }
       
       // 1. Create a log of the invitation
       await addDoc(collection(db, "system_logs"), {
@@ -68,7 +99,7 @@ export default function InviteAgent() {
         }
       });
 
-      // 2. Log simulated email
+      // 2. Log simulated email record
       await addDoc(collection(db, "system_logs"), {
         type: "EMAIL_SIM",
         message: `Invitation Email: ${email}`,
@@ -77,19 +108,19 @@ export default function InviteAgent() {
           recipient: email,
           template: "AGENT_INVITATION",
           subject: `You've been invited to join ${user?.email?.split('@')[1] || 'the brokerage'} on AI Open House Connect`,
-          body: `Hi ${fullName},\n\n${user?.email} has invited you to join their team on AI Open House Connect.\n\nAI Open House Connect is an AI-powered assistant for modern real estate professionals.\n\nClick here to accept: https://aiopenhouseconnect.com/register?invite=${btoa(email)}`,
+          body: `Hi ${fullName},\n\n${user?.email} has invited you to join their team on AI Open House Connect.\n\nAI Open House Connect is an AI-powered assistant for modern real estate professionals.\n\nClick here to accept: ${invitationUrl}`,
           metadata: { sender: user?.email, role }
         }
       });
 
-      toast.success("Invitation sent successfully!");
+      toast.success("Invitation sent and email dispatched via Hostinger SMTP!");
       setIsSuccess(true);
       
       // After 3 seconds go back
       setTimeout(() => navigate("/app/admin/users"), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Invitation failed:", err);
-      toast.error("Failed to send invitation. Please try again.");
+      toast.error(`Failed to send invitation: ${err.message || err}`);
     } finally {
       setIsInviting(false);
     }
@@ -173,7 +204,7 @@ export default function InviteAgent() {
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Access Role</label>
               <Select value={role} onValueChange={setRole}>
-                <SelectTrigger className="h-12 bg-white border-slate-200 font-bold">
+                <SelectTrigger className="h-12 bg-white border-slate-200 font-bold sm:w-[5px] md:w-[5px] sm:max-w-[5px] md:max-w-[5px] lg:w-full w-full min-w-0 overflow-hidden">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-slate-200">

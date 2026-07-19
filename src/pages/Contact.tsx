@@ -7,10 +7,13 @@ import { toast } from "sonner";
 import { Loader2, Mail, Phone, MapPin, Send, HelpCircle, Shield, Building } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Logo from "@/components/Logo";
+import { useAuth } from "@/hooks/useAuth";
+import PublicLayout from "@/components/PublicLayout";
 
 export default function Contact() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -20,6 +23,16 @@ export default function Contact() {
   });
 
   const tab = searchParams.get("tab") || "";
+
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        name: prev.name || user.name || "",
+        email: prev.email || user.email || ""
+      }));
+    }
+  }, [user]);
 
   useEffect(() => {
     let subjectText = "";
@@ -39,6 +52,13 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    
+    // Email rules check
+    if (!formData.email.includes("@") || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast.error("Please enter a valid email address containing '@' and a domain (e.g. jane@example.com).");
+      setSubmitting(false);
+      return;
+    }
     
     // Send real email
     try {
@@ -80,18 +100,8 @@ export default function Contact() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-50">
-        <div 
-          className="cursor-pointer" 
-          onClick={() => navigate("/")}
-        >
-          <Logo variant="blue" />
-        </div>
-        <Button variant="ghost" onClick={() => navigate("/")}>Back to Home</Button>
-      </header>
-
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 pt-[63px] md:pt-[95px] pb-12 md:pb-20 grid md:grid-cols-2 gap-12 items-start">
+    <PublicLayout>
+      <div className="max-w-7xl mx-auto w-full px-6 pb-12 md:pb-20 grid md:grid-cols-2 gap-12 items-start">
         <div className="space-y-8">
           <div className="space-y-4">
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900">
@@ -176,9 +186,20 @@ export default function Contact() {
                 <Label htmlFor="email">Email Address</Label>
                 <Input 
                   id="email" 
-                  type="email"
+                  type="text"
                   value={formData.email}
                   onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  onBlur={() => {
+                    const emailVal = formData.email.trim();
+                    if (emailVal && !emailVal.includes("@")) {
+                      const domainPattern = /\.(com|ca|net|org|co|io|edu|gov|me|info|biz|us)$/i;
+                      if (domainPattern.test(emailVal)) {
+                        setFormData({ ...formData, email: "info@" + emailVal });
+                      } else {
+                        setFormData({ ...formData, email: emailVal + "@gmail.com" });
+                      }
+                    }
+                  }}
                   placeholder="jane@example.com" 
                   required 
                   maxLength={100}
@@ -203,16 +224,25 @@ export default function Contact() {
               <Textarea 
                 id="message" 
                 value={formData.message}
-                onChange={e => setFormData({ ...formData, message: e.target.value })}
-                placeholder="Tell us more about your needs (min 20 chars)..." 
+                onChange={e => {
+                  let val = e.target.value;
+                  if (val.length > 500) {
+                    val = val.substring(0, 500);
+                  }
+                  if (val.length > 0) {
+                    val = val.charAt(0).toUpperCase() + val.slice(1);
+                  }
+                  setFormData({ ...formData, message: val });
+                }}
+                placeholder="Tell us more about your needs..." 
                 className="min-h-[150px] bg-slate-50"
                 required 
                 minLength={20}
-                maxLength={200}
+                maxLength={500}
               />
               <div className="flex justify-end">
-                <span className={`text-[10px] font-bold ${formData.message.length >= 150 ? 'text-amber-600 animate-pulse' : formData.message.length < 20 ? 'text-amber-500' : 'text-slate-400'}`}>
-                  {formData.message.length}/200 {formData.message.length >= 150 && " (75% Reached)"}
+                <span className="text-xs text-slate-400 font-medium">
+                  {formData.message.length}/500 characters
                 </span>
               </div>
             </div>
@@ -235,11 +265,7 @@ export default function Contact() {
             </Button>
           </form>
         </div>
-      </main>
-
-      <footer className="py-8 text-center text-slate-400 text-sm border-t border-slate-200 bg-white">
-        &copy; {new Date().getFullYear()} AI Open House Connect. All rights reserved.
-      </footer>
-    </div>
+      </div>
+    </PublicLayout>
   );
 }

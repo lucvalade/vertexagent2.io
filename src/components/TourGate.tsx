@@ -112,7 +112,7 @@ export default function TourGate({ listing, agent, onSuccess }: TourGateProps) {
                 if (errors.email) setErrors(prev => { const { email, ...rest } = prev; return rest; });
               }}
               onBlur={e => {
-                let value = e.target.value;
+                let value = e.target.value.trim();
                 if (value && !value.includes("@")) {
                   const domains = ["gmail.com", "cogeco.ca", "sympatico.ca", "outlook.com", "hotmail.com", "yahoo.com"];
                   const foundDomain = domains.find(d => value.toLowerCase().endsWith(d));
@@ -120,12 +120,17 @@ export default function TourGate({ listing, agent, onSuccess }: TourGateProps) {
                   if (foundDomain) {
                     value = value.slice(0, -foundDomain.length) + "@" + foundDomain;
                   } else {
-                    value = value + "@";
+                    const suffixPattern = /\.(com|ca|net|org|co|io|edu|gov|me|info|biz|us)$/i;
+                    if (suffixPattern.test(value)) {
+                      value = "info@" + value;
+                    } else {
+                      value = value + "@gmail.com";
+                    }
                   }
                   setFormData(prev => ({ ...prev, email: value }));
                 }
 
-                if (!value.includes("@")) {
+                if (!value.includes("@") || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
                   setErrors(prev => ({ ...prev, email: "Invalid email format." }));
                 } else {
                   setErrors(prev => { const { email, ...rest } = prev; return rest; });

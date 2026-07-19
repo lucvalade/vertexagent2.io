@@ -401,8 +401,14 @@ async function startServer() {
    * API Proxy for Google Spreadsheet CRM list (Avoid CORS issues in browser fetch)
    */
   app.get("/api/crm-sheet", async (req, res) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     try {
-      const response = await fetch("https://docs.google.com/spreadsheets/d/1m7tvG7sehev6E3WhrUSooNYJ0rz23RLbbVOzHpD5eFg/export?format=csv");
+      const response = await fetch("https://docs.google.com/spreadsheets/d/1m7tvG7sehev6E3WhrUSooNYJ0rz23RLbbVOzHpD5eFg/export?format=csv", {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
       if (!response.ok) {
         throw new Error(`Google Sheets responded with status: ${response.status}`);
       }
@@ -410,8 +416,20 @@ async function startServer() {
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.send(csvText);
     } catch (err: any) {
-      console.error("[CORS Sheet Proxy Error]:", err);
-      res.status(500).json({ error: err.message || "Failed to fetch CRM spreadsheet data" });
+      clearTimeout(timeoutId);
+      console.warn("[CORS Sheet Proxy Warning] Spreadsheet fetch failed or timed out. Gracefully returning local verified database. Error:", err.message || err);
+      
+      const fallbackCSV = 
+        "Name,URL\n" +
+        "HubSpot,https://www.hubspot.com\n" +
+        "Follow Up Boss,https://www.followupboss.com\n" +
+        "Salesforce,https://www.salesforce.com\n" +
+        "Wise Agent,https://wiseagent.com\n" +
+        "LionDesk,https://www.liondesk.com\n" +
+        "kvCORE,https://www.kvcore.com";
+        
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.send(fallbackCSV);
     }
   });
 
@@ -501,6 +519,20 @@ async function startServer() {
    */
   app.get("/api/email-history", (req, res) => {
     res.json({ emails: globalEmailHistory });
+  });
+
+  /**
+   * API Route for manual trigger or testing of the Birthday Notification Service
+   */
+  app.post("/api/admin/trigger-birthday-check", async (req, res) => {
+    const { force } = req.body;
+    try {
+      const result = await checkBirthdays(!!force);
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      console.error("[Manual Birthday Check Trigger Failed]:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   /**
@@ -1561,6 +1593,11 @@ ${input ? input.substring(0, 15000) : "[MISSING CONTENT - USE SEARCH TOOL TO FIN
           });
         } else if (payload.type === "input" && aiSession) {
           aiSession.sendRealtimeInput(payload.data);
+        } else if (payload.type === "text" && aiSession) {
+          aiSession.sendClientContent({
+            turns: [{ role: "user", parts: [{ text: payload.text }] }],
+            turnComplete: true
+          });
         } else if (payload.type === "tool_response" && aiSession) {
           aiSession.sendToolResponse(payload.data);
         }
@@ -2131,18 +2168,29 @@ SCRIPT TO CONDENSE:
       const ai = getAi();
       
       // Dynamically map voiceName to corresponding prebuilt Gemini voice config
-      let geminiVoice = "Aoede";
+      let geminiVoice = "Kore"; // Default to Kore (Sora)
       if (requestedVoiceName) {
-        const name = requestedVoiceName.toLowerCase();
-        if (name.includes("professional female") || name.includes("sora") || name.includes("calm reassuring") || name.includes("charon") || name.includes("deep narrator") || name.includes("fenrir")) geminiVoice = "Kore";
-        else if (name.includes("executive british")) geminiVoice = "Zephyr";
-        else if (name.includes("storyteller") || name.includes("aoede")) geminiVoice = "Aoede";
-        else if (name.includes("warm energetic") || name.includes("warm male") || name.includes("puck")) geminiVoice = "Puck";
+        const name = String(requestedVoiceName).toLowerCase();
+        if (name === "2" || name.includes("professional female") || name.includes("sora") || name.includes("kore")) {
+          geminiVoice = "Kore";
+        } else if (name === "3" || name.includes("warm energetic") || name.includes("warm male") || name.includes("puck") || name.includes("alex")) {
+          geminiVoice = "Puck";
+        } else if (name === "6" || name.includes("calm reassuring") || name.includes("calm male") || name.includes("charon") || name.includes("marcus")) {
+          geminiVoice = "Charon";
+        } else if (name === "8" || name.includes("deep narrator") || name.includes("fenrir")) {
+          geminiVoice = "Fenrir";
+        } else if (name === "5" || name.includes("executive british") || name.includes("zephyr")) {
+          geminiVoice = "Zephyr";
+        } else if (name === "7" || name.includes("storyteller") || name.includes("aoede")) {
+          geminiVoice = "Aoede";
+        } else {
+          geminiVoice = "Kore";
+        }
       }
 
       const response = await callAiWithRetry(() => 
         ai.models.generateContent({
-          model: "gemini-3.1-flash-tts-preview",
+          model: "gemini-2.5-flash-preview-tts",
           contents: [{ parts: [{ text }] }],
           config: {
             responseModalities: [Modality.AUDIO],
@@ -2175,6 +2223,397 @@ SCRIPT TO CONDENSE:
     } catch (err: any) {
       console.error("[TTS Simple Endpoint Error]:", err);
       res.status(500).json({ error: err.message || "Failed to synthesize speech in backend" });
+    }
+  });
+
+  const PUBLIC_SITE_CORPUS = `
+AI Open House Connect (VertexAgent) Platform Documentation:
+
+PRODUCT NAME: AI Open House Connect
+TAGLINE / POSITIONING: Rela builds beautiful signs. VertexAgent makes them talk.
+MISSION / SUMMARY: AI Open House Connect is a premium real estate platform for agents, teams, brokerages, lenders, and buyers that combines AI-guided property tours, open house sign-in, QR-based entry, flyer-driven marketing, lead capture, and consent-based lender routing into one connected workflow. The in-app AI assistant is Sora, and the product is built using Google AI Studio with Firebase Authentication, Firestore, and Cloud Functions as the core application stack.
+
+CORE WORKFLOWS & KEY FEATURES:
+1. AI Property Tours (with Sora):
+   - Interactive smart guided media voice narrates homes room-by-room (Guided AI Tour Mode) or as the buyer explores freely (Self-Guided/Room-by-Room mode), automatically syncing photos based on conversation.
+   - Powered by Gemini 2.5 Flash for Q&A and Gemini 2.5 Flash Preview TTS for audio.
+   - Sora is bilingual (English/French) and supports 15 languages: Arabic, Chinese (Simplified/Traditional), Dutch, English, French, German, Hindi, Italian, Japanese, Korean, Portuguese, Russian, Spanish, Vietnamese.
+   - Voice identity is always "Kore" (Sora Classic) — female, warm, multilingual.
+   - Every buyer interaction is transcribed, analyzed for intent, and pushed to the agent's CRM.
+   - Room detection with conversational UI hints, completely hardware-free.
+
+2. Open House Sign-In (Kiosk UX):
+   - Tablet kiosk mode locked for consumer use (Attendee-Facing Lock Mode). Prevents accidental app exploration.
+   - Exit PIN Verification: Requires a secure agent-configured PIN to unlock the kiosk and return to the backend.
+   - Thank-You Auto-Reset Loop: Resets the screens to the welcome state exactly 5 seconds after a successful submission so the next visitor can sign in smoothly.
+   - Offline Event Buffer UI: Real-time status reporting showing when the tablet is offline ("Local Cache Sync Pending: N leads"). Automatically queues submissions in localStorage/IndexedDB and syncs to Firestore once browser reconnects.
+   - Customizable liability waivers and legal disclaimers that attendees must accept before submitting their information (PIPEDA + Quebec Law 25 compliant).
+
+3. Advanced Paired Lender & Mortgage Logic:
+   - "My Paired Lender" Settings Page: Agents invite or accept pairing requests from active subscribed lenders. 
+   - The Consent Gate: A mandatory mortgage interest checkbox ("Would you like information on financing options?").
+   - Dynamic Question Logic: Disabling a paired lender, or selecting "No paired lender", immediately removes the mortgage questions and lender co-branding from the consumer-facing sign-in kiosk. No lender sees lead information unless mortgageConsent is recorded as true with the visitor's record.
+   - Precedence Stack: 1. Listing override, 2. Team policy, 3. Agent's Preferred, 4. Market Default, 5. No lender (hides mortgage opt-in).
+
+4. Direct CRM Integration:
+   - Direct Follow Up Boss sync with full API key authentication and interactive field mapping.
+   - Stored lead canonical local copy is preserved first; CRM downtime or failed sync states never crash the browser or lose data. Failed sync logs display retry count parameters and errors cleanly with manual retry buttons.
+   - Automatically translates "Mortgage Opt-In: Yes" into a dedicated label or system tag (e.g. fub-mortgage-interest).
+
+5. Shared Listings & Cross-Hosting:
+   - Shared Listing is available from the ellipsis menu on each listing inside Your Listings.
+   - Listing ownership remains with listingOwnerAgentId, but open-house execution can be delegated to a hostingAgentId.
+   - Leads captured at the event track both owners, hosts, and routing. Specialized assignments are saved in shared_listing_assignments and automated email notifications are dispatched.
+
+6. Data Enrichment & Verification:
+   - Validates submitted emails and phone numbers against third-party identity APIs to assign a "Verified" confidence badge.
+   - Extracts public background data like occupation, employer, education, and social media links.
+
+PRICING PLANS & TIERS:
+- Agent Starter (Solo): Free ($0/mo). 1 active listing, sign-in kiosk, basic Sora (scripted, 3-5 turns), English only, 1 paired lender, 50 sessions/mo, 7-day storage.
+- Agent Starter with CRM: $14/mo. Includes CRM integration and sync capabilities.
+- Agent Pro: $29/mo. 25 listings, all 15 languages, advanced Sora (unlimited Q&A and memory), full branding, photo swaps, Media Manifest, follow-up automation, buyer intent analytics, CRM sync (Follow Up Boss, kvCORE), 500 sessions/mo, 12-month storage.
+- Team Pro: From $149/mo. Manage rosters, team configs, enforce routing policies and overrides globally.
+- Brokerage: From $249/mo (or $399/mo). White-label branding, subdomains, team admin controls, unlimited listings, custom domains, multi-avatar support.
+- Lenders (Subscribed B2B seats):
+  - 1 Paired Agent: $20/month
+  - 3 Paired Agents: $45/month
+  - 10 Paired Agents: $80/month
+  - 20 Paired Agents: $100/month
+
+FAQ:
+- How do AI Guided tours work? Sora uses Gemini 2.5 Flash to narrate properties room-by-room or answer free-form questions. It syncs the screen photo dynamically with whatever feature is discussed.
+- Can we use the sign-in kiosk offline? Yes, the kiosk supports a secure offline buffer. Any captured sign-ins are stored in localStorage/IndexedDB and synced immediately once connection is restored.
+- Does it comply with real estate regulations? Yes, unbranded MLS-compliant modes are available, along with PIPEDA / Quebec Law 25 compliance audits and custom liability waivers.
+- How are leads sent to lenders? Lenders only receive leads if the attendee explicitly opts-in via the "mortgage consent gate". If they opt-in, the lead data is cleanly routed and logged in compliance audits.
+
+SUPPORTING LINKS:
+- How It Works: /how-it-works
+- Pricing: /pricing
+- AI Tours & Voice Chat: /product#narrator
+- Open House Sign-In: /open-houses
+- Use Cases: /#features
+- Demo: /demo
+- Contact & Support: /contact
+- Playbooks: /guides
+`;
+
+  /**
+   * API Route for Public site-wide search
+   * Path: POST /api/public-search
+   */
+  app.post("/api/public-search", async (req, res) => {
+    const { query, lang = "English" } = req.body;
+    if (!query || typeof query !== "string") {
+      return res.status(400).json({ error: "Query is required" });
+    }
+
+    try {
+      const ai = getAi();
+      const prompt = `You are the Search AI Assistant for AI Open House Connect.
+The user is searching the public marketing website for info on: "${query}".
+Answer in ${lang}. If the query is in French, reply in French.
+Use ONLY the provided PUBLIC_SITE_CORPUS to generate a direct, highly concise, friendly and professional answer (under 80 words).
+Do NOT include any private user data, agent data, or listing data in your answer.
+Select between 1 to 3 relevant supporting links from the SUPPORTING LINKS list provided in the corpus. Each link must have a valid URL and a helpful short label.
+If no relevant info is found, return an empty links array, and direct the user to try the AI Tour demo or contact support.
+
+PUBLIC_SITE_CORPUS:
+${PUBLIC_SITE_CORPUS}
+
+Generate a JSON object matching the schema: { "answer": "string", "links": [ { "label": "string", "url": "string" } ] }`;
+
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          answer: { type: Type.STRING },
+          links: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                label: { type: Type.STRING },
+                url: { type: Type.STRING }
+              },
+              required: ["label", "url"]
+            }
+          }
+        },
+        required: ["answer", "links"]
+      };
+
+      const result = await callAiWithRetry(() => 
+        ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: responseSchema as any,
+            temperature: 0.1
+          }
+        })
+      );
+
+      const data = JSON.parse(result.text || "{}");
+      res.json(data);
+    } catch (err: any) {
+      console.error("[Public Search Error]:", err);
+      res.status(500).json({ error: err.message || "Failed to search public site" });
+    }
+  });
+
+  /**
+   * API Route for Public AI Concierge Voice Chat
+   * Path: POST /api/public-concierge-chat
+   */
+  app.post("/api/public-concierge-chat", async (req, res) => {
+    const { message, history = [], lang = "English", voiceId = "2", isTextMode = false } = req.body;
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    try {
+      const ai = getAi();
+
+      if (message === "INTRO_WELCOME") {
+        const welcomeText = lang === "French"
+          ? "Bonjour ! Je suis Sora, votre concierge vocal IA de AI Open House Connect. Je suis ici pour vous aider à naviguer sur notre plateforme et répondre à vos questions sur nos fonctionnalités immobilières premium, nos bornes tactiles, nos intégrations CRM ou nos visites virtuelles personnalisées. Je peux également comprendre et parler plus de 65 langues différentes, alors n'hésitez pas à me parler dans la langue de votre choix. Comment puis-je vous aider aujourd'hui ?"
+          : "Hello! I am Sora, your AI voice concierge for AI Open House Connect. I am here to help you navigate our platform, answer questions about our premium real estate features, setup kiosks, CRM integrations, or customized property tours. I can also understand and speak over 65+ languages, so feel free to talk to me in whichever language you prefer. How can I help you today?";
+
+        // To achieve a super fast connection (under 3 seconds total), we generate the TTS audio
+        // only for a short, warm greeting, while displaying the full, rich explanation text in the chat bubble!
+        const audioText = lang === "French"
+          ? "Bonjour ! Je suis Sora, votre concierge vocal IA. Comment puis-je vous aider aujourd'hui ?"
+          : "Hello! I am Sora, your AI voice concierge. How can I help you today?";
+
+        let geminiVoice = "Kore";
+        const name = String(voiceId).toLowerCase();
+        if (name === "2" || name.includes("kore") || name.includes("sora")) {
+          geminiVoice = "Kore";
+        } else if (name === "3" || name.includes("puck")) {
+          geminiVoice = "Puck";
+        } else if (name === "6" || name.includes("charon")) {
+          geminiVoice = "Charon";
+        } else if (name === "8" || name.includes("fenrir")) {
+          geminiVoice = "Fenrir";
+        }
+
+        let base64Audio = "";
+        if (!isTextMode) {
+          const ttsResponse = await callAiWithRetry(() => 
+            ai.models.generateContent({
+              model: "gemini-2.5-flash-preview-tts",
+              contents: [{ parts: [{ text: audioText }] }],
+              config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: geminiVoice
+                    }
+                  }
+                }
+              }
+            }),
+            1
+          );
+
+          const audioPart = ttsResponse.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+          const rawBase64 = audioPart?.inlineData?.data;
+          if (rawBase64) {
+            const rawAudioBuffer = Buffer.from(rawBase64, "base64");
+            const wavAudioBuffer = addWavHeader(rawAudioBuffer, 24000);
+            base64Audio = wavAudioBuffer.toString("base64");
+          }
+        }
+
+        return res.json({
+          displayText: welcomeText,
+          spokenReply: audioText,
+          base64Audio,
+          mimeType: "audio/wav"
+        });
+      }
+
+      if (message === "ASK_ONCE_MORE") {
+        const followUpText = lang === "French"
+          ? "Avez-vous des questions sur ce site ?"
+          : "Do you have any questions about this site?";
+
+        let geminiVoice = "Kore";
+        const name = String(voiceId).toLowerCase();
+        if (name === "2" || name.includes("kore") || name.includes("sora")) {
+          geminiVoice = "Kore";
+        } else if (name === "3" || name.includes("puck")) {
+          geminiVoice = "Puck";
+        } else if (name === "6" || name.includes("charon")) {
+          geminiVoice = "Charon";
+        } else if (name === "8" || name.includes("fenrir")) {
+          geminiVoice = "Fenrir";
+        }
+
+        let base64Audio = "";
+        if (!isTextMode) {
+          const ttsResponse = await callAiWithRetry(() => 
+            ai.models.generateContent({
+              model: "gemini-2.5-flash-preview-tts",
+              contents: [{ parts: [{ text: followUpText }] }],
+              config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName: geminiVoice
+                    }
+                  }
+                }
+              }
+            }),
+            1
+          );
+
+          const audioPart = ttsResponse.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+          const rawBase64 = audioPart?.inlineData?.data;
+          if (rawBase64) {
+            const rawAudioBuffer = Buffer.from(rawBase64, "base64");
+            const wavAudioBuffer = addWavHeader(rawAudioBuffer, 24000);
+            base64Audio = wavAudioBuffer.toString("base64");
+          }
+        }
+
+        return res.json({
+          displayText: followUpText,
+          spokenReply: followUpText,
+          base64Audio,
+          mimeType: "audio/wav"
+        });
+      }
+
+      const chatHistoryText = history.map((h: any) => `${h.role === "user" ? "Visitor" : "Concierge"}: ${h.text}`).join("\n");
+      const prompt = `You are Sora, VertexAgent's AI voice concierge, speaking to an anonymous visitor on the public vertexagent.io landing page. You are the same Sora who guides buyers through property AI Tours, but right now no listing is selected and no one is logged in — your knowledge here is limited to public site content only.
+
+CONNECTION & GREETING (fires automatically, before the visitor speaks):
+- The moment the concierge modal opens, greet the visitor proactively and briefly explain what VertexAgent is and how you can help (pricing, features, how the AI Tour works, getting started). Keep spokenReply short so audio starts fast; you may put a longer, more detailed explanation in displayText for the visible chat bubble.
+
+ALWAYS LISTENING / BARGE-IN:
+You are always listening unless actively speaking. If the visitor starts speaking while you are talking, stop instantly — do not finish your sentence — and switch to listening.
+
+SILENCE FOLLOW-UP:
+If you finish speaking and the visitor is silent, the system may prompt you once to check in with: "Do you have any questions about this site?" (or the French equivalent if the visitor's language is French). Only ever say this once per silence period — never repeat it back-to-back if the visitor stays quiet again.
+
+TEXT VS. VOICE MODE:
+${isTextMode ? "The visitor is using TEXT mode. You MUST respond using very short, clear, and simple sentences optimized for reading — not your normal conversational spoken style." : "The visitor is using SPEECH voice mode. Respond conversationally as usual."}
+
+WHO YOU ARE NOT ABLE TO HELP WITH HERE:
+You have no listing data, no buyer transcripts, no agent account data, and no login session in this context. Never claim otherwise.
+
+WHAT YOU CAN ANSWER (public content only):
+- What VertexAgent is and how the AI Tour works, in general terms
+- Pricing tiers, features, and what's included at each tier
+- How Open House Sign-In works
+- Onboarding steps (Solo / Team / Brokerage)
+- FAQ content and brokerage template pages
+- General "how do I get started" / "book a demo" questions
+
+WHAT YOU MUST NOT DO:
+- Never answer questions about a specific address, listing, MLS number, or property detail — you have no access to any listings in this context.
+- Never access, describe, or imply access to any agent's dashboard, CRM data, buyer transcripts, or account information.
+- Never call or reference any authenticated Cloud Function or Firestore collection (listings/, agentProfile/, emails/, etc.).
+- If asked something listing-specific (e.g. "how many bedrooms does 4 Clifton Downs have" or "what's the price on this house"), respond honestly: explain that requires opening that listing's own AI Tour, and point them to the live demo link or sign-up CTA. Never guess or fabricate property details.
+
+ANSWERING RULES:
+- Answer in the visitor's spoken/typed language when detectable; default to English if unclear. Never switch languages mid-answer.
+- Keep spokenReply under 40 words, conversational, not a brochure (unless in text mode — see TEXT VS. VOICE MODE above).
+- If a question falls outside public marketing content entirely (e.g. personal/unrelated topics), politely redirect to what you can help with: VertexAgent's product, pricing, or getting started.
+- Encourage next steps naturally when relevant: try the live AI Tour demo, or start a free Solo Agent account.
+
+PUBLIC CONTENT REFERENCE:
+${PUBLIC_SITE_CORPUS}
+
+Conversation History so far:
+${chatHistoryText}
+
+Visitor: ${message}
+
+Generate a JSON object matching the schema: { "spokenReply": "string", "displayText": "string" }`;
+
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          spokenReply: { type: Type.STRING },
+          displayText: { type: Type.STRING }
+        },
+        required: ["spokenReply", "displayText"]
+      };
+
+      const result = await callAiWithRetry(() => 
+        ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: responseSchema as any,
+            temperature: 0.3
+          }
+        })
+      );
+
+      const data = JSON.parse(result.text || "{}");
+      const spokenReply = data.spokenReply || "Hello! How can I help you explore AI Open House Connect today?";
+      const displayText = data.displayText || spokenReply;
+
+      let base64Audio = "";
+      if (!isTextMode) {
+        // Map voiceId to prebuilt Gemini voice name
+        let geminiVoice = "Kore";
+        const name = String(voiceId).toLowerCase();
+        if (name === "2" || name.includes("kore") || name.includes("sora")) {
+          geminiVoice = "Kore";
+        } else if (name === "3" || name.includes("puck")) {
+          geminiVoice = "Puck";
+        } else if (name === "6" || name.includes("charon")) {
+          geminiVoice = "Charon";
+        } else if (name === "8" || name.includes("fenrir")) {
+          geminiVoice = "Fenrir";
+        }
+
+        // Generate TTS for the spokenReply
+        const ttsResponse = await callAiWithRetry(() => 
+          ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: spokenReply }] }],
+            config: {
+              responseModalities: [Modality.AUDIO],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: geminiVoice
+                  }
+                }
+              }
+            }
+          }),
+          1
+        );
+
+        const audioPart = ttsResponse.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        const rawBase64 = audioPart?.inlineData?.data;
+        if (rawBase64) {
+          const rawAudioBuffer = Buffer.from(rawBase64, "base64");
+          const wavAudioBuffer = addWavHeader(rawAudioBuffer, 24000);
+          base64Audio = wavAudioBuffer.toString("base64");
+        }
+      }
+
+      res.json({
+        spokenReply,
+        displayText,
+        base64Audio,
+        mimeType: "audio/wav"
+      });
+    } catch (err: any) {
+      console.error("[Public Concierge Chat Error]:", err);
+      res.status(500).json({ error: err.message || "Failed to process concierge request" });
     }
   });
 
@@ -2225,17 +2664,104 @@ If the visitor says no:
 - End politely
 `;
 
-      const rawPrompt = `You are Sora, a warm, professional female real-estate assistant for {brokerage} in {city}, {province}. You help buyers explore {address}.
+      const rawPrompt = `You are Sora, a warm, professional real-estate assistant acting
+directly on behalf of the listing agent for {brokerage} in {city},
+{province}, helping buyers explore {address}. You are always
+LISTENING unless actively speaking. If the buyer speaks while you
+are talking, stop instantly and listen (barge-in).
 
-RULES:
-- Answer in {language}. Never switch languages mid-answer.
-- Use facts from the KNOWLEDGE BASE only. Never invent details.
-- Reference KEY HIGHLIGHTS naturally at the start of the tour.
-- When the buyer asks about a specific room or area, set showMedia.key to the matching manifest key. Never fabricate URLs.
-- Keep spokenReply under 40 words. Speak like a helpful human, not a brochure.
-- If you don't know an answer, say so honestly and offer to have the agent follow up.
+OPENING GREETING (LOCKED RULE — fires automatically the instant
+the buyer presses Start, before the buyer speaks):
+Your very first spokenReply of every session MUST include a
+self-introduction by name — e.g. "Hi, I'm Sora, your AI guide for
+{address}." Never skip straight to the tour-mode question without
+introducing yourself first. After introducing yourself, ask if
+they'd like a guided tour or prefer to explore and ask questions as
+they go, and mention voice notes are available any time. This
+introduction is a single spokenReply, not two separate turns.
 
-KEY HIGHLIGHTS: {highlights}
+TOUR MODES:
+- Guided AI Tour: narrate room-by-room, set showMedia to match
+  whatever room/feature you are actively describing.
+- Self-Guided: buyer explores freely. Use the ROOM DETECTION rules
+  below to know their context.
+
+ROOM DETECTION & CONTEXT RULES:
+1. Prioritize explicit UI/system hints (e.g. "System Note: user is
+   viewing photo: kitchen_upgrades" or "User tapped: Kitchen
+   Upgrades"). Assume that is their current room/topic.
+2. If a room-specific question has no hint and you cannot infer the
+   room from their words, ask: "Which room are you in right now?"
+3. Once known, set showMedia to the matching manifest key.
+
+BARGE-IN + PHOTO SYNC (LOCKED RULE — the photo must follow the
+NEW question, not stay on the room you were narrating):
+1. If the buyer barges in mid-narration with a question naming or
+   implying a DIFFERENT room/feature than what you were currently
+   showing, you MUST set showMedia to that new room's manifest key
+   in your very next response — do not leave showMedia on the
+   interrupted room, and do not wait for the buyer to ask again.
+2. Resolve the new room the same way as any question: match it to
+   an ASK ME ABOUT entry's [IMAGE_ID] first, then a KNOWLEDGE BASE
+   fact, then the MEDIA MANIFEST KEYS list directly if neither has
+   an entry but the room name still maps to a known manifest key.
+3. If the buyer's interrupting question does NOT reference a room
+   or feature (e.g. "how much is it", "can I book a showing"),
+   leave showMedia as null and do not change the photo.
+4. After answering the barge-in question, resume Guided narration
+   from where you left off (or ask the buyer if they'd like you to
+   continue) — do not silently skip ahead.
+
+ASK ME ABOUT — HOW TO READ IT:
+The ASK ME ABOUT block below is structured data, formatted exactly
+as the buyer sees it on screen:
+  ## [Category]              <- tappable heading buyer may select
+  *[Sample question]*        <- italic suggested question
+  [IMAGE_ID: manifest_key]   <- photo to show when this is answered
+  Answer: [text]             <- what you say, in your own words
+  ---                        <- separates one entry from the next
+Each entry maps 1:1 to a category the buyer can tap OR ask aloud in
+their own words. Never speak the Markdown syntax, headings, dashes,
+or "[IMAGE_ID: ...]" tag out loud or in spokenReply — only the
+answer content, said naturally.
+
+ASK ME ABOUT — MATCHING RULES (apply first, before Knowledge Base):
+1. If the buyer taps a category or speaks its exact sample question,
+   go straight to that entry's Answer.
+2. If the buyer asks ANY free-form variation — including a single
+   bare topic word with no full sentence, e.g. just "kitchen?" or
+   "what about the kitchen" — match it to the closest ## Category
+   by topic/intent, then use that entry's Answer. A bare topic word
+   is enough to trigger a match; do not require a fully-formed
+   question.
+3. EVERY time you answer from an entry that has an [IMAGE_ID: key],
+   you MUST set showMedia.key to that key in the SAME response that
+   contains the spoken answer — never answer the question and leave
+   showMedia null, and never send the photo change in a later turn.
+   This applies whether the buyer tapped the category or spoke the
+   question, in any phrasing.
+4. Speak the Answer content in your own conversational phrasing,
+   under 40 words — do not just read it verbatim if it reads stiff.
+
+ANSWERING PRIORITY:
+1. ASK ME ABOUT (see matching rules above) — check first, always.
+2. KNOWLEDGE BASE — use only if no ASK ME ABOUT entry matches.
+3. If neither source covers it, say so honestly and redirect to
+   2-3 categories that ARE covered (e.g. "I don't have that handy,
+   but ask me about the Kitchen Upgrades or the Backyard!"), and
+   offer an agent follow-up.
+Never invent or extrapolate facts not present in either source.
+
+GENERAL RULES:
+- Answer in {language} only. Never switch languages mid-answer.
+- Keep spokenReply under 40 words, conversational, not a brochure.
+  Never say "according to the data" or "based on the Q&A" — speak
+  as if you simply know it.
+- Periodically remind the buyer they can swipe the photo or tap the
+  bold white arrows on either side to browse on their own, in
+  addition to asking you.
+
+ASK ME ABOUT: {askMeAbout}
 KNOWLEDGE BASE: {knowledgeBase}
 MEDIA MANIFEST KEYS: {manifestKeys}
 
@@ -2246,9 +2772,77 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
       const provinceVal = listing?.province || "Ontario";
       const addressVal = listing?.address || "this beautiful listing";
       const langVal = req.body.language || req.body.lang || "English";
-      const highlightsVal = listing?.keyHighlights?.join(", ") || listing?.talkingPoints?.join(", ") || "None available";
-      const kbVal = listing?.description || "None available";
-      const manifestKeysVal = "None";
+
+      let askMeAboutVal = "None available";
+      const askMeAboutArray = listing?.askMeAbout || [];
+      if (Array.isArray(askMeAboutArray) && askMeAboutArray.length > 0) {
+        const activeSorted = askMeAboutArray
+          .filter((entry: any) => entry.active === true)
+          .sort((a: any, b: any) => {
+            const orderA = typeof a.sortOrder === 'number' ? a.sortOrder : 999;
+            const orderB = typeof b.sortOrder === 'number' ? b.sortOrder : 999;
+            return orderA - orderB;
+          })
+          .slice(0, 12);
+
+        if (activeSorted.length > 0) {
+          askMeAboutVal = activeSorted.map((entry: any) => {
+            const category = entry.category || "";
+            const question = entry.sampleQuestion || entry.question || "";
+            const answer = entry.answer || "";
+            const imageLine = entry.mediaKey ? `[IMAGE_ID: ${entry.mediaKey}]\n` : "";
+            return `## ${category}\n*${question}*\n${imageLine}Answer: ${answer}`;
+          }).join("\n---\n");
+        }
+      }
+
+      if (askMeAboutVal === "None available") {
+        const isFrench = langVal.toLowerCase() === "fr" || langVal.toLowerCase() === "french";
+        const fallbackRows = [
+          {
+            category: isFrench ? "Chambres & Salles de bain" : "Bedrooms & Bathrooms",
+            question: isFrench ? "Combien de chambres et de salles de bain possède cette maison ?" : "How many bedrooms and bathrooms does this home have?",
+            answer: isFrench 
+              ? `Cette maison possède ${listing?.beds || "N/A"} chambres et ${listing?.baths || "N/A"} salles de bain.` 
+              : `This home features ${listing?.beds || "N/A"} bedrooms and ${listing?.baths || "N/A"} bathrooms.`,
+          },
+          {
+            category: isFrench ? "Améliorations de la cuisine" : "Kitchen Upgrades",
+            question: isFrench ? "Quelles sont les caractéristiques et les appareils de la cuisine ?" : "What are the key features and appliances in the kitchen?",
+            answer: isFrench
+              ? "La cuisine est équipée d'appareils modernes haut de gamme et de finitions de qualité."
+              : "The kitchen features premium modern appliances and high-quality finishes.",
+          },
+          {
+            category: isFrench ? "Superficie en pieds carrés" : "Square Footage",
+            question: isFrench ? "Quelle est la superficie totale approximative de l'intérieur ?" : "What is the approximate total interior square footage?",
+            answer: isFrench
+              ? `La superficie totale est d'environ ${listing?.sqft || "N/A"} pieds carrés.`
+              : `The total interior area is approximately ${listing?.sqft || "N/A"} square feet.`,
+          }
+        ];
+        askMeAboutVal = fallbackRows.map((entry) => {
+          return `## ${entry.category}\n*${entry.question}*\nAnswer: ${entry.answer}`;
+        }).join("\n---\n");
+      }
+
+      let kbVal = listing?.description || "None available";
+      if (listing?.knowledgeBase && Array.isArray(listing.knowledgeBase)) {
+        const kbStr = listing.knowledgeBase.map((k: any) => `Q: ${k.question}\nA: ${k.answer}`).join("\n");
+        if (kbStr) {
+          kbVal = `${kbStr}\n\nGeneral Description:\n${kbVal}`;
+        }
+      }
+
+      let manifestKeysVal = "None";
+      if (listing?.images && Array.isArray(listing.images)) {
+        manifestKeysVal = listing.images.map((img: any, i: number) => {
+          if (img && typeof img === "object") {
+            return img.key || img.name || `image_${i + 1}`;
+          }
+          return `image_${i + 1}`;
+        }).join(", ");
+      }
 
       const formattedPrompt = rawPrompt
         .replace(/{brokerage}/g, brokerageVal)
@@ -2256,7 +2850,7 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
         .replace(/{province}/g, provinceVal)
         .replace(/{address}/g, addressVal)
         .replace(/{language}/g, langVal)
-        .replace(/{highlights}/g, highlightsVal)
+        .replace(/{askMeAbout}/g, askMeAboutVal)
         .replace(/{knowledgeBase}/g, kbVal)
         .replace(/{manifestKeys}/g, manifestKeysVal);
 
@@ -3177,6 +3771,148 @@ ${agentWebsite ? 'Website: ' + agentWebsite : ''}`;
     }
   };
 
+  const checkBirthdays = async (force: boolean = false) => {
+    try {
+      console.log("[Birthday Service] Running birthday notification check...");
+      const users = await listFromFirestore("users");
+      let checkedCount = 0;
+      let matchedCount = 0;
+
+      for (const user of users) {
+        if (!user.birthDate) continue;
+        checkedCount++;
+
+        const parts = user.birthDate.split("-");
+        if (parts.length < 2) continue;
+
+        let birthMonth = "";
+        let birthDay = "";
+        if (parts.length === 3) {
+          birthMonth = parts[1]; // e.g. "07"
+          birthDay = parts[2]; // e.g. "17"
+        } else if (parts.length === 2) {
+          birthMonth = parts[0];
+          birthDay = parts[1];
+        }
+
+        if (!birthMonth || !birthDay) continue;
+
+        const tz = user.birthTimeZone || "America/Toronto";
+        let currentMonth = "";
+        let currentDay = "";
+        let currentYear = "";
+        try {
+          const formatter = new Intl.DateTimeFormat("en-US", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+          });
+          const formattedParts = formatter.formatToParts(new Date());
+          currentMonth = formattedParts.find(p => p.type === "month")?.value || "";
+          currentDay = formattedParts.find(p => p.type === "day")?.value || "";
+          currentYear = formattedParts.find(p => p.type === "year")?.value || "";
+        } catch (err) {
+          const d = new Date();
+          currentMonth = String(d.getMonth() + 1).padStart(2, '0');
+          currentDay = String(d.getDate()).padStart(2, '0');
+          currentYear = String(d.getFullYear());
+        }
+
+        const bM = birthMonth.padStart(2, '0');
+        const bD = birthDay.padStart(2, '0');
+        const cM = currentMonth.padStart(2, '0');
+        const cD = currentDay.padStart(2, '0');
+
+        if (bM === cM && bD === cD) {
+          matchedCount++;
+          // Track year to prevent duplicate notifications
+          if (user.lastBirthdaySentYear === currentYear && !force) {
+            console.log(`[Birthday Service] Birthday email already sent to ${user.email} for year ${currentYear}`);
+            continue;
+          }
+
+          console.log(`[Birthday Service] Match found! Sending customized birthday email to agent ${user.name} (${user.email})`);
+          
+          const agentName = user.name || "Agent";
+          const subject = `🎂 Happy Birthday, ${agentName}! Warm wishes from Sora & AI Open House Connect`;
+          const html = `
+            <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+              <div style="text-align: center; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9;">
+                <h1 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em;">AI OPEN HOUSE CONNECT</h1>
+                <p style="color: #155dfc; margin: 5px 0 0 0; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">Birthday Celebration</p>
+              </div>
+              
+              <div style="padding: 30px 10px; text-align: center;">
+                <span style="font-size: 48px;">🎂</span>
+                <h2 style="color: #0f172a; font-size: 22px; font-weight: 700; margin-top: 15px; margin-bottom: 10px;">Happy Birthday, ${agentName}!</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+                  The entire team at AI Open House Connect wishes you a wonderful birthday filled with joy, prosperity, and success!
+                </p>
+                
+                <div style="background-color: #f8fafc; border-radius: 12px; padding: 20px; text-align: left; border: 1px solid #e2e8f0; margin: 25px 0;">
+                  <p style="margin: 0; font-size: 14px; font-style: italic; color: #334155; line-height: 1.6;">
+                    "Happy Birthday! I am <strong>Sora</strong>, your AI Tour guide. It is an absolute privilege to help you showcase your beautiful properties, capture premium leads, and represent your brand to prospective buyers. Thank you for choosing AI Open House Connect. I hope your day is as spectacular and modern as your listings!"
+                  </p>
+                  <p style="margin: 10px 0 0 0; font-size: 12px; font-weight: 700; color: #155dfc; text-align: right;">
+                    — Sora, your AI Assistant
+                  </p>
+                </div>
+
+                <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+                  We are incredibly proud to support your real estate journey. Here's to another spectacular year of stunning tours, automated open houses, and closing premium deals!
+                </p>
+                
+                <div style="margin-top: 30px;">
+                  <a href="https://vertexagent.io" style="background-color: #155dfc; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-block;">Go to Dashboard</a>
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid #f1f5f9; padding-top: 20px; text-align: center; color: #94a3b8; font-size: 12px;">
+                <p style="margin: 0 0 5px 0;">&copy; 2026 AI Open House Connect. All rights reserved.</p>
+                <p style="margin: 0;">Hamilton, Ontario, Canada</p>
+              </div>
+            </div>
+          `;
+
+          const mailTransporter = getTransporter();
+          if (!mailTransporter) {
+            console.log(`[SMTP SIMULATION] Birthday alert email sent to: ${user.email}`);
+            globalEmailHistory.unshift({
+              id: `em_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+              timestamp: new Date().toISOString(),
+              to: user.email,
+              subject,
+              html,
+              simulated: true,
+              status: "simulated_delivered"
+            });
+          } else {
+            const fromName = process.env.SMTP_FROM_NAME || "Sora at AI Open House Connect";
+            const fromEmail = process.env.SMTP_USER || "sales@vertexagent.io";
+            await mailTransporter.sendMail({
+              from: `"${fromName}" <${fromEmail}>`,
+              to: user.email,
+              subject,
+              html
+            });
+            console.log(`[Birthday Service] Birthday email successfully sent to ${user.email}`);
+          }
+
+          // Save back the updated year to user profile in Firestore
+          await saveToFirestore("users", user.id, {
+            lastBirthdaySentYear: currentYear
+          });
+        }
+      }
+
+      return { checkedCount, matchedCount };
+    } catch (err) {
+      console.error("[Birthday Service Error]:", err);
+      throw err;
+    }
+  };
+
   async function translateText(text: string, targetLanguage: string): Promise<string> {
     console.log(`[Helper Translate] Translating text to ${targetLanguage}...`);
     const ai = getAi();
@@ -3762,19 +4498,28 @@ Input Message:
           const ai = getAi();
           let geminiVoice = "Kore";
           if (voice) {
-            const name = voice.toLowerCase();
-            if (name.includes("professional female") || name.includes("kore") || name.includes("sora")) geminiVoice = "Kore";
-            else if (name.includes("executive british") || name.includes("zephyr")) geminiVoice = "Zephyr";
-            else if (name.includes("storyteller") || name.includes("aoede")) geminiVoice = "Aoede";
-            else if (name.includes("warm energetic") || name.includes("warm male") || name.includes("puck")) geminiVoice = "Puck";
-            else if (name.includes("calm reassuring") || name.includes("calm male") || name.includes("charon")) geminiVoice = "Charon";
-            else if (name.includes("deep narrator") || name.includes("narrator") || name.includes("fenrir")) geminiVoice = "Fenrir";
+            const name = String(voice).toLowerCase();
+            if (name === "2" || name.includes("professional female") || name.includes("sora") || name.includes("kore")) {
+              geminiVoice = "Kore";
+            } else if (name === "3" || name.includes("warm energetic") || name.includes("warm male") || name.includes("puck") || name.includes("alex")) {
+              geminiVoice = "Puck";
+            } else if (name === "6" || name.includes("calm reassuring") || name.includes("calm male") || name.includes("charon") || name.includes("marcus")) {
+              geminiVoice = "Charon";
+            } else if (name === "8" || name.includes("deep narrator") || name.includes("fenrir")) {
+              geminiVoice = "Fenrir";
+            } else if (name.includes("executive british") || name.includes("zephyr")) {
+              geminiVoice = "Zephyr";
+            } else if (name.includes("storyteller") || name.includes("aoede")) {
+              geminiVoice = "Aoede";
+            } else {
+              geminiVoice = "Kore";
+            }
           }
 
           console.log(`[Welcome Save] Synthesizing [${locale}] using voice character ${geminiVoice}...`);
           const response = await callAiWithRetry(() => 
             ai.models.generateContent({
-              model: "gemini-3.1-flash-tts-preview",
+              model: "gemini-2.5-flash-preview-tts",
               contents: [{ parts: [{ text }] }],
               config: {
                 responseModalities: [Modality.AUDIO],
@@ -4046,6 +4791,23 @@ Input Message:
     }).catch(err => {
       console.error("[Seed Email Templates] Seeding email templates failed:", err);
     });
+
+    // Start background Birthday Notification Service
+    console.log("[Birthday Service] Initializing background task on server boot...");
+    checkBirthdays().then((res) => {
+      console.log(`[Birthday Service] Initial check done. Checked ${res?.checkedCount || 0} user records.`);
+    }).catch(err => {
+      console.error("[Birthday Service Boot Check Failed]:", err);
+    });
+
+    // Schedule the check to run every 12 hours
+    setInterval(() => {
+      checkBirthdays().then((res) => {
+        console.log(`[Birthday Service] Scheduled check done. Checked ${res?.checkedCount || 0} user records.`);
+      }).catch(err => {
+        console.error("[Birthday Service Scheduled Check Failed]:", err);
+      });
+    }, 12 * 60 * 60 * 1000);
   });
 }
 
