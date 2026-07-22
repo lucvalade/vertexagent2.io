@@ -79,10 +79,9 @@ export default function PublicSite() {
   const [isMockupSpeaking, setIsMockupSpeaking] = useState(false);
   const [isMockupPaused, setIsMockupPaused] = useState(false);
   const [consentChecked, setConsentChecked] = useState(true);
-  const mockupAudioRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const mockupAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechSessionIdRef = useRef(0);
   const mockupAudioTimeoutRef = useRef<any>(null);
-  const [soraFemaleVoice, setSoraFemaleVoice] = useState<SpeechSynthesisVoice | null>(null);
 
   // Scroll effect for header
   useEffect(() => {
@@ -129,39 +128,7 @@ export default function PublicSite() {
     brokerage: "Michael St. John Realty",
   };
 
-  // Select Premium warm voice 'Kore' identity
-  const selectSoraFemaleVoiceOnce = () => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return null;
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices || voices.length === 0) return null;
 
-    return (
-      voices.find(v => v.name.toLowerCase().includes("samantha")) ||
-      voices.find(v => v.name.toLowerCase().includes("zira")) ||
-      voices.find(v => v.name.toLowerCase().includes("hazel")) ||
-      voices.find(v => {
-        const name = v.name.toLowerCase();
-        return name.includes("female") && !name.includes("male");
-      }) ||
-      voices[0]
-    );
-  };
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const v = selectSoraFemaleVoiceOnce();
-    if (v) setSoraFemaleVoice(v);
-
-    const handleVoicesChanged = () => {
-      const vSec = selectSoraFemaleVoiceOnce();
-      if (vSec) setSoraFemaleVoice(vSec);
-    };
-
-    window.speechSynthesis.addEventListener("voiceschanged", handleVoicesChanged);
-    return () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", handleVoicesChanged);
-    };
-  }, []);
 
   // Initialize Dialogue on load or language switch
   useEffect(() => {
@@ -172,10 +139,11 @@ export default function PublicSite() {
     setMockupDialogue([{ sender: "sora", text: welcomeText }]);
   }, [lang]);
 
-  // Handle Synthesis with pause points
+  // Handle Synthesis with high quality Sora voice from backend
   const handleStopMockup = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (mockupAudioRef.current) {
+      mockupAudioRef.current.pause();
+      mockupAudioRef.current.currentTime = 0;
     }
     if (mockupAudioTimeoutRef.current) {
       clearTimeout(mockupAudioTimeoutRef.current);
@@ -185,72 +153,72 @@ export default function PublicSite() {
     setIsMockupPaused(false);
   };
 
-  const speakMockupWithPauses = (textToSpeak: string) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-
+  const speakMockupWithPauses = async (textToSpeak: string) => {
     const currentSessionId = speechSessionIdRef.current;
-    const listChunks = textToSpeak.split("[pause]");
-    let chunkIndex = 0;
+    setIsMockupSpeaking(true);
+    setIsMockupPaused(false);
 
-    const speakNextChunk = () => {
+    try {
+      const cleanText = textToSpeak.replace(/\[\w+\]/g, "").trim();
+      const langName = lang === "fr" ? "French" : "English";
+
+      const response = await fetch("/api/tts-simple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: cleanText,
+          lang: langName,
+          voiceName: "Kore" // Sora's official premium voice!
+        })
+      });
+
       if (currentSessionId !== speechSessionIdRef.current) return;
-      if (chunkIndex >= listChunks.length) {
-        setIsMockupSpeaking(false);
-        setIsMockupPaused(false);
-        return;
+
+      if (!response.ok) {
+        throw new Error("Failed to contact Gemini TTS servers.");
       }
 
-      const rawChunk = listChunks[chunkIndex];
-      const isSlowAction = rawChunk.includes("[slow]");
-      let cleanChunk = rawChunk.replace(/\[\w+\]/g, "").trim();
+      const data = await response.json();
+      if (currentSessionId !== speechSessionIdRef.current) return;
 
-      if (!cleanChunk) {
-        mockupAudioTimeoutRef.current = setTimeout(() => {
+      if (data.success && data.base64Audio) {
+        const mimeType = data.mimeType || "audio/wav";
+        const binary = atob(data.base64Audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+
+        if (!mockupAudioRef.current) {
+          mockupAudioRef.current = new Audio();
+        }
+
+        mockupAudioRef.current.src = url;
+        mockupAudioRef.current.load();
+
+        mockupAudioRef.current.onended = () => {
           if (currentSessionId === speechSessionIdRef.current) {
-            chunkIndex++;
-            speakNextChunk();
+            setIsMockupSpeaking(false);
+            setIsMockupPaused(false);
           }
-        }, 1200);
-        return;
+        };
+
+        mockupAudioRef.current.onerror = () => {
+          if (currentSessionId === speechSessionIdRef.current) {
+            setIsMockupSpeaking(false);
+            setIsMockupPaused(false);
+          }
+        };
+
+        await mockupAudioRef.current.play();
       }
-
-      const utterance = new SpeechSynthesisUtterance(cleanChunk);
-      utterance.rate = isSlowAction ? 0.82 : 0.88;
-      utterance.pitch = 1.05;
-
-      const activeVoice = soraFemaleVoice || selectSoraFemaleVoiceOnce();
-      if (activeVoice) {
-        utterance.voice = activeVoice;
-      }
-
-      utterance.onend = () => {
-        if (currentSessionId !== speechSessionIdRef.current) return;
-        chunkIndex++;
-        if (chunkIndex < listChunks.length) {
-          mockupAudioTimeoutRef.current = setTimeout(() => {
-            if (currentSessionId === speechSessionIdRef.current) {
-              speakNextChunk();
-            }
-          }, 1200);
-        } else {
-          setIsMockupSpeaking(false);
-          setIsMockupPaused(false);
-        }
-      };
-
-      utterance.onerror = () => {
-        if (currentSessionId === speechSessionIdRef.current) {
-          setIsMockupSpeaking(false);
-          setIsMockupPaused(false);
-        }
-      };
-
-      mockupAudioRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    };
-
-    speakNextChunk();
+    } catch (err) {
+      console.error("[PublicSite Mockup TTS Error]:", err);
+      setIsMockupSpeaking(false);
+      setIsMockupPaused(false);
+    }
   };
 
   const simulatedQuestions = [
@@ -469,7 +437,7 @@ export default function PublicSite() {
       hero: {
         eyebrow: "AI-Powered Real Estate Tour Platform",
         headline: "Open houses *reimagined* with your personal AI guide",
-        sub: "Delight buyers with sora, a warm conversational guide that speaks 15+ languages, handles listings compliance, and routes leads contextually.",
+        sub: "Delight buyers with sora, a warm conversational guide that speaks 70 languages, handles listings compliance, and routes leads contextually.",
         ctaFree: "Get Started Free",
         ctaDemo: "Book a Custom Demo",
         download: "Available on iOS & Android"

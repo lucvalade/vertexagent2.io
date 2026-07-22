@@ -562,9 +562,15 @@ export default function Settings() {
 
   // Pricing Plans State
   const [plans, setPlans] = useState([
-    { id: 'agent', name: 'Active Agent', price: 149, listings: 5, features: ['5 active listings', 'Unlimited AI conversations', 'Full Brand Customization'] },
-    { id: 'pro', name: 'Team Pro', price: 399, listings: 25, features: ['25 active listings', 'Advanced Analytics', 'Priority Support'] },
-    { id: 'enterprise', name: 'Enterprise', price: 999, listings: -1, features: ['Unlimited listings', 'Custom AI Training', 'Dedicated Account Manager'] }
+    { id: 'agent_starter', name: 'Agent Starter', price: 0, listings: 1, features: ['1 active listing', 'Offline-capable sign-in', 'Basic English-only Sora guide', 'Local contact management'] },
+    { id: 'agent_pro', name: 'Agent Pro', price: 29, listings: 25, features: ['25 active listings', 'Advanced conversational Sora (70+ languages)', 'Complete personal branding', 'Full Follow Up Boss & kvCORE sync'] },
+    { id: 'agent_elite', name: 'Agent Elite', price: 59, listings: -1, features: ['Unlimited listings', 'Priority AI support', 'Detailed buyer intent score', 'Custom question builder'] },
+    { id: 'team_pro', name: 'Team Pro', price: 149, listings: -1, features: ['Team routing override policies', 'Shared team visibility controls', 'Multi-agent co-op listings'] },
+    { id: 'brokerage', name: 'Brokerage', price: 399, listings: -1, features: ['Full white-labeling & custom domains', 'Office-wide dashboard & control logs', 'Shared listings assignments'] },
+    { id: 'lender_1', name: '1 Paired Agent Plan', price: 20, listings: -1, features: ['1 Paired Agent seat', 'Direct consented lead routing', 'Shared files and notification access'] },
+    { id: 'lender_3', name: '3 Paired Agents Plan', price: 45, listings: -1, features: ['3 Paired Agents seats', 'Direct consented lead routing', 'Shared files and notification access'] },
+    { id: 'lender_10', name: '10 Paired Agents Plan', price: 80, listings: -1, features: ['10 Paired Agents seats', 'Direct consented lead routing', 'Shared files and notification access'] },
+    { id: 'lender_20', name: '20 Paired Agents Plan', price: 100, listings: -1, features: ['20 Paired Agents seats', 'Direct consented lead routing', 'Shared files and notification access'] }
   ]);
   const [pricingTitle, setPricingTitle] = useState("Simple, flexible pricing");
   const [pricingDescription, setPricingDescription] = useState("Pricing models designed to maximize your revenue while minimizing friction, matching the seasonal nature of real estate.");
@@ -3337,7 +3343,7 @@ export default function Settings() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {plans.map((plan, idx) => (
                           <div key={plan.id} className="p-4 bg-white border border-slate-200 rounded-xl space-y-3">
                             <div className="grid grid-cols-2 gap-4">

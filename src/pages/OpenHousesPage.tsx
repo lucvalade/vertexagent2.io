@@ -280,6 +280,32 @@ export default function OpenHousesPage() {
     loadListings();
   }, [urlListingId]);
 
+  // Hook to handle hash scroll positioning offset of 20px up (accounting for sticky header + spacing)
+  useEffect(() => {
+    const handleHashScroll = () => {
+      const hash = window.location.hash;
+      if (hash === "#listings-directory") {
+        setTimeout(() => {
+          const element = document.getElementById("listings-directory");
+          if (element) {
+            const yOffset = -100; // Position the page 20px higher/upwards than standard top (offsetting the sticky navbar)
+            const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+            window.scrollTo({ top: y, behavior: "smooth" });
+          }
+        }, 400);
+      }
+    };
+
+    // Run on mount
+    handleHashScroll();
+
+    // Run on hash changes
+    window.addEventListener("hashchange", handleHashScroll);
+    return () => {
+      window.removeEventListener("hashchange", handleHashScroll);
+    };
+  }, []);
+
   // Load listingQuestionsMap of multiple listings on load
   useEffect(() => {
     const saved = localStorage.getItem("vertex_listing_questions_map");

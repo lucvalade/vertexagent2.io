@@ -2484,39 +2484,7 @@ Global rules
           </div>
 
           <div className="relative flex flex-col gap-4 items-center justify-center w-full max-w-sm px-4">
-            <div className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
-                <h4 className="text-center font-bold text-white text-sm sm:text-base mb-3 uppercase tracking-wider">
-                  {trans.askMeAbout}
-                </h4>
-                <AskMeAboutTable 
-                  language={language} 
-                  askMeAbout={listing?.askMeAbout}
-                  onTopicClick={(question) => {
-                    // 1. Instantly change image on screen if matching key exists
-                    changeImageForQuestion(question);
-
-                    // 2. Playback verbally via active AI session
-                    if (connected) {
-                      toast.info(
-                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
-                          ? `Sora répond : "${question}"`
-                          : `Sora is responding: "${question}"`
-                      );
-                      sendTextMessage(question);
-                    } else {
-                      toast.info(
-                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
-                          ? `Connexion à Sora pour répondre à : "${question}"...`
-                          : `Connecting to Sora to answer: "${question}"...`
-                      );
-                      setPendingQuestion(question);
-                      startSession();
-                    }
-                  }} 
-                />
-              </div>
-
-            <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 mt-2 animate-in fade-in duration-700">
+            <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 animate-in fade-in duration-700">
               <div className="grid grid-cols-3 gap-3 items-start justify-items-center">
                 
                 {/* Column 1: Private Voice Notes */}
@@ -2606,6 +2574,38 @@ Global rules
 
               </div>
             </div>
+
+            <div className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
+                <h4 className="text-center font-bold text-white text-sm sm:text-base mb-3 uppercase tracking-wider">
+                  {trans.askMeAbout}
+                </h4>
+                <AskMeAboutTable 
+                  language={language} 
+                  askMeAbout={listing?.askMeAbout}
+                  onTopicClick={(question) => {
+                    // 1. Instantly change image on screen if matching key exists
+                    changeImageForQuestion(question);
+
+                    // 2. Playback verbally via active AI session
+                    if (connected) {
+                      toast.info(
+                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
+                          ? `Sora répond : "${question}"`
+                          : `Sora is responding: "${question}"`
+                      );
+                      sendTextMessage(question);
+                    } else {
+                      toast.info(
+                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
+                          ? `Connexion à Sora pour répondre à : "${question}"...`
+                          : `Connecting to Sora to answer: "${question}"...`
+                      );
+                      setPendingQuestion(question);
+                      startSession();
+                    }
+                  }} 
+                />
+              </div>
           </div>
         </div>
 

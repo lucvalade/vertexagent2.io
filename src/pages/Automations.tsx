@@ -41,6 +41,8 @@ export default function Automations() {
       if (snap.exists()) {
         setIntegrations(snap.data()?.integrations || {});
       }
+    }, (err) => {
+      console.warn("[Automations] Snapshot error (quota/offline):", err);
     });
   }, [user?.id]);
 

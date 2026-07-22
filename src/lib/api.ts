@@ -10,7 +10,7 @@ import {
   where,
   onSnapshot
 } from "firebase/firestore";
-import { db, handleFirestoreError, OperationType } from "./firebase";
+import { db, handleFirestoreError, isQuotaError, OperationType } from "./firebase";
 
 export interface ListingImage {
   url: string;
@@ -218,6 +218,18 @@ export async function updateLead(leadId: string, updates: Partial<Lead>) {
   try {
     await updateDoc(doc(db, "leads", leadId), updates);
   } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn(`[Firestore Quota] Updating lead ${leadId} in local storage cache.`);
+      try {
+        const stored = JSON.parse(localStorage.getItem("local_buffered_leads") || "[]");
+        const idx = stored.findIndex((l: any) => l.id === leadId);
+        if (idx >= 0) {
+          stored[idx] = { ...stored[idx], ...updates };
+          localStorage.setItem("local_buffered_leads", JSON.stringify(stored));
+        }
+      } catch (e) {}
+      return;
+    }
     handleFirestoreError(err, OperationType.UPDATE, path);
   }
 }
@@ -227,6 +239,14 @@ export async function createListing(listing: Listing) {
   try {
     await setDoc(doc(db, "listings", listing.id), listing);
   } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn(`[Firestore Quota] Saving created listing ${listing.id} to local storage buffer.`);
+      try {
+        const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+        localStorage.setItem("local_buffered_listings", JSON.stringify([...stored.filter((l: any) => l.id !== listing.id), listing]));
+      } catch (e) {}
+      return;
+    }
     handleFirestoreError(err, OperationType.CREATE, path);
   }
 }
@@ -234,8 +254,29 @@ export async function createListing(listing: Listing) {
 export async function updateListing(listingId: string, updates: Partial<Listing>) {
   const path = `listings/${listingId}`;
   try {
-    await updateDoc(doc(db, "listings", listingId), updates);
+    await setDoc(doc(db, "listings", listingId), updates, { merge: true });
+    // Also update local storage buffer if present
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+      const idx = stored.findIndex((l: any) => l.id === listingId);
+      if (idx >= 0) {
+        stored[idx] = { ...stored[idx], ...updates };
+        localStorage.setItem("local_buffered_listings", JSON.stringify(stored));
+      }
+    } catch (e) {}
   } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn(`[Firestore Quota] Updating listing ${listingId} in local storage cache.`);
+      try {
+        const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+        const idx = stored.findIndex((l: any) => l.id === listingId);
+        if (idx >= 0) {
+          stored[idx] = { ...stored[idx], ...updates };
+          localStorage.setItem("local_buffered_listings", JSON.stringify(stored));
+        }
+      } catch (e) {}
+      return;
+    }
     handleFirestoreError(err, OperationType.UPDATE, path);
   }
 }
@@ -411,13 +452,36 @@ export async function getListing(listingId: string): Promise<Listing | null> {
   }
   const path = `listings/${listingId}`;
   try {
-    const d = await getDoc(doc(db, "listings", listingId));
-    if (d.exists()) {
-      return d.data() as Listing;
+    const fetchDoc = getDoc(doc(db, "listings", listingId));
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+    const d = await Promise.race([fetchDoc, timeout]) as any;
+
+    if (d && typeof d.exists === "function" && d.exists()) {
+      const data = d.data() as Listing;
+      // Cache locally for offline/quota fast load
+      try {
+        const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+        const filtered = stored.filter((l: any) => l.id !== listingId);
+        localStorage.setItem("local_buffered_listings", JSON.stringify([...filtered, data]));
+      } catch (e) {}
+      return data;
     }
+
+    // Check local storage buffer if doc not found or timed out in Firestore
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+      const found = stored.find((l: any) => l.id === listingId);
+      if (found) return found;
+    } catch (e) {}
     return null;
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, path);
+    console.warn("[getListing] Error fetching from Firestore, checking local storage cache:", err);
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+      const found = stored.find((l: any) => l.id === listingId);
+      if (found) return found;
+    } catch (e) {}
+    return null;
   }
 }
 
@@ -458,23 +522,72 @@ export async function updateUser(userId: string, updates: any) {
 
 export async function getUserListings(userId: string): Promise<Listing[]> {
   const path = "listings";
+  const getLocal = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+      return stored.filter((l: any) => l.ownerId === userId);
+    } catch (e) {
+      return [];
+    }
+  };
+
   try {
     const q = query(collection(db, path), where("ownerId", "==", userId));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as Listing);
+    const fetchSnap = getDocs(q);
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+    const snapshot = await Promise.race([fetchSnap, timeout]) as any;
+
+    if (!snapshot || !snapshot.docs) {
+      return getLocal();
+    }
+    const listings = snapshot.docs.map((doc: any) => doc.data() as Listing);
+    if (listings.length > 0) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+        const existingIds = new Set(listings.map((l: Listing) => l.id));
+        const remaining = stored.filter((l: any) => !existingIds.has(l.id));
+        localStorage.setItem("local_buffered_listings", JSON.stringify([...remaining, ...listings]));
+      } catch (e) {}
+    }
+    return listings;
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, path);
+    console.warn("[getUserListings] Error or timeout, checking local storage:", err);
+    return getLocal();
   }
 }
 
 export async function getAllListings(): Promise<Listing[]> {
   const path = "listings";
+  const getLocal = () => {
+    try {
+      return JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+    } catch (e) {
+      return [];
+    }
+  };
+
   try {
     const q = query(collection(db, path));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as Listing);
+    const fetchSnap = getDocs(q);
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500));
+    const snapshot = await Promise.race([fetchSnap, timeout]) as any;
+
+    if (!snapshot || !snapshot.docs) {
+      return getLocal();
+    }
+    const listings = snapshot.docs.map((doc: any) => doc.data() as Listing);
+    if (listings.length > 0) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("local_buffered_listings") || "[]");
+        const existingIds = new Set(listings.map((l: Listing) => l.id));
+        const remaining = stored.filter((l: any) => !existingIds.has(l.id));
+        localStorage.setItem("local_buffered_listings", JSON.stringify([...remaining, ...listings]));
+      } catch (e) {}
+    }
+    return listings;
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, path);
+    console.warn("[getAllListings] Error or timeout, checking local storage:", err);
+    return getLocal();
   }
 }
 
@@ -584,9 +697,16 @@ export async function getOpenHouseSessions(listingId?: string): Promise<OpenHous
     } else {
       q = query(collection(db, path));
     }
-    const snapshot = await getDocs(q);
+    const fetchSnap = getDocs(q);
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+    const snapshot = await Promise.race([fetchSnap, timeout]) as any;
+
+    if (!snapshot || !snapshot.docs) {
+      return [];
+    }
+
     const now = new Date().toISOString();
-    return snapshot.docs.map(doc => {
+    return snapshot.docs.map((doc: any) => {
       const data = doc.data() as OpenHouseSession;
       const computedStatus = now < data.end_datetime ? "scheduled" : "completed";
       return {
@@ -595,7 +715,7 @@ export async function getOpenHouseSessions(listingId?: string): Promise<OpenHous
       };
     });
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, path);
+    console.warn("[getOpenHouseSessions] Failed or timed out:", err);
     return [];
   }
 }
@@ -642,37 +762,49 @@ export async function routeLeadToCRM(listing: Listing, lead: Lead) {
 
 export async function createLead(listingId: string, lead: Lead) {
   try {
+    // Save to local storage buffer first as guaranteed fallback
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_leads") || "[]");
+      localStorage.setItem("local_buffered_leads", JSON.stringify([...stored.filter((l: any) => l.id !== lead.id), lead]));
+    } catch (e) {}
+
     let listingData: Listing | null = null;
     if (listingId !== "DEMO_SIGNUP") {
       // Ensure we have listing details
-      const listingDoc = await getDoc(doc(db, "listings", listingId));
-      if (listingDoc.exists()) {
-        listingData = listingDoc.data() as Listing;
-        lead.agentId = listingData.ownerId;
-        lead.listingAddress = listingData.address;
-        
-        // Auto-generate AI lead summary on creation
-        try {
-          const summary = await generateLeadSummary({
-            leadName: lead.name,
-            leadMessage: lead.message,
-            listingAddress: listingData.address,
-            listingDescription: listingData.description,
-            talkingPoints: listingData.talkingPoints
-          });
-          lead.conversationSummary = {
-            ...summary,
-            generatedAt: Date.now()
-          };
-        } catch (summaryErr) {
-          console.error("Auto-generating lead summary failed on creation:", summaryErr);
-        }
-        
-        // Save to listing subcollection
-        await setDoc(doc(db, "listings", listingId, "leads", lead.id), lead);
+      try {
+        const listingDoc = await getDoc(doc(db, "listings", listingId));
+        if (listingDoc.exists()) {
+          listingData = listingDoc.data() as Listing;
+          lead.agentId = listingData.ownerId;
+          lead.listingAddress = listingData.address;
+          
+          // Auto-generate AI lead summary on creation
+          try {
+            const summary = await generateLeadSummary({
+              leadName: lead.name,
+              leadMessage: lead.message,
+              listingAddress: listingData.address,
+              listingDescription: listingData.description,
+              talkingPoints: listingData.talkingPoints
+            });
+            lead.conversationSummary = {
+              ...summary,
+              generatedAt: Date.now()
+            };
+          } catch (summaryErr) {
+            console.error("Auto-generating lead summary failed on creation:", summaryErr);
+          }
+          
+          // Save to listing subcollection
+          await setDoc(doc(db, "listings", listingId, "leads", lead.id), lead);
 
-        // CRM Routing
-        routeLeadToCRM(listingData, lead);
+          // CRM Routing
+          routeLeadToCRM(listingData, lead);
+        }
+      } catch (subErr) {
+        if (isQuotaError(subErr)) {
+          console.warn("[Firestore Quota] Quota reached saving lead to listing subcollection. Preserved in local buffer.");
+        }
       }
     } else {
       lead.isLaunchSignup = true;
@@ -681,42 +813,101 @@ export async function createLead(listingId: string, lead: Lead) {
     // Save to global collection (agent/admin-accessible)
     await setDoc(doc(db, "leads", lead.id), lead);
   } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn(`[Firestore Quota] Quota limit reached creating lead ${lead.id}. Preserved in local storage buffer.`);
+      return;
+    }
     handleFirestoreError(err, OperationType.CREATE, `leads/${lead.id}`);
   }
 }
 
 export async function getUserLeads(userId: string): Promise<Lead[]> {
   const path = "leads";
+  const getLocal = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_leads") || "[]");
+      return stored.filter((l: any) => l.agentId === userId || !l.agentId);
+    } catch (e) {
+      return [];
+    }
+  };
+
   try {
     const q = query(collection(db, path), where("agentId", "==", userId));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as Lead);
+    const fetchSnap = getDocs(q);
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+    const snapshot = await Promise.race([fetchSnap, timeout]) as any;
+
+    if (!snapshot || !snapshot.docs) {
+      return getLocal();
+    }
+    const leads = snapshot.docs.map((doc: any) => doc.data() as Lead);
+    if (leads.length > 0) {
+      try {
+        const stored = JSON.parse(localStorage.getItem("local_buffered_leads") || "[]");
+        const existingIds = new Set(leads.map((l: Lead) => l.id));
+        const remaining = stored.filter((l: any) => !existingIds.has(l.id));
+        localStorage.setItem("local_buffered_leads", JSON.stringify([...remaining, ...leads]));
+      } catch (e) {}
+    }
+    return leads;
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, path);
+    console.warn("[getUserLeads] Error or timeout, checking local storage:", err);
+    return getLocal();
   }
 }
 
 export async function getLead(leadId: string): Promise<Lead | null> {
   const path = `leads/${leadId}`;
   try {
-    const d = await getDoc(doc(db, "leads", leadId));
-    if (d.exists()) {
+    const fetchDoc = getDoc(doc(db, "leads", leadId));
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+    const d = await Promise.race([fetchDoc, timeout]) as any;
+
+    if (d && typeof d.exists === "function" && d.exists()) {
       return d.data() as Lead;
     }
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_leads") || "[]");
+      const found = stored.find((l: any) => l.id === leadId);
+      if (found) return found;
+    } catch (e) {}
     return null;
   } catch (err) {
-    handleFirestoreError(err, OperationType.GET, path);
+    console.warn("[getLead] Error fetching lead:", err);
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_leads") || "[]");
+      const found = stored.find((l: any) => l.id === leadId);
+      if (found) return found;
+    } catch (e) {}
+    return null;
   }
 }
 
 export async function getListingLeads(listingId: string): Promise<Lead[]> {
   const path = `listings/${listingId}/leads`;
+  const getLocal = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("local_buffered_leads") || "[]");
+      return stored.filter((l: any) => l.listingId === listingId);
+    } catch (e) {
+      return [];
+    }
+  };
+
   try {
     const q = query(collection(db, "listings", listingId, "leads"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as Lead);
+    const fetchSnap = getDocs(q);
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+    const snapshot = await Promise.race([fetchSnap, timeout]) as any;
+
+    if (!snapshot || !snapshot.docs) {
+      return getLocal();
+    }
+    return snapshot.docs.map((doc: any) => doc.data() as Lead);
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, path);
+    console.warn("[getListingLeads] Error fetching listing leads:", err);
+    return getLocal();
   }
 }
 

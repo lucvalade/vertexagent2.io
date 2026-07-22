@@ -93,6 +93,13 @@ export default function Team() {
         
         setTeam(members);
         setLoading(false);
+      }, (err) => {
+        console.warn("[Team] Snapshot error for team members (quota/offline):", err);
+        const savedMembers = localStorage.getItem('aiopenhouseconnect_team_data');
+        if (savedMembers) {
+          setTeam(JSON.parse(savedMembers));
+        }
+        setLoading(false);
       });
 
       // 3. Real-time listener for pending invitations
@@ -110,6 +117,8 @@ export default function Team() {
         pendingInvites = pendingInvites.filter(inv => inv.email !== "luc.valade@gmail.com");
         
         setInvitations(pendingInvites);
+      }, (err) => {
+        console.warn("[Team] Snapshot error for invitations (quota/offline):", err);
       });
 
       return () => {

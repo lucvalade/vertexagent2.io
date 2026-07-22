@@ -137,69 +137,37 @@ export default function VoiceLab() {
     const voicesRef = collection(db, "users", user.id, "voices");
     const q = query(voicesRef);
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      // Clean up Sarah's Clone (id: "1") from database if it exists
-      const hasOldSarah = snapshot.docs.some(doc => doc.id === "1");
-      if (hasOldSarah) {
-        try {
-          await deleteDoc(doc(voicesRef, "1"));
-        } catch (e) {
-          console.error("Clean old Sarah voice error in VoiceLab:", e);
-        }
-      }
-
-      const voicesData = snapshot.docs
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const dbVoices = snapshot.docs
         .filter(doc => doc.id !== "1")
         .map(doc => {
           const data = doc.data() as any;
-          // Strip hardcoded "(Default)" from name to respect global settings UI
           if (data.name && data.name.includes(" (Default)")) {
             data.name = data.name.replace(" (Default)", "");
           }
           return { id: doc.id, ...data } as Voice;
         });
 
-      if (snapshot.empty) {
-        // Bootstrap initial voices if none exist
-        for (const v of INITIAL_VOICES) {
-          await setDoc(doc(voicesRef, v.id), v);
+      // Merge initial default voices with user custom voices in-memory
+      const mergedList: Voice[] = [...dbVoices];
+      for (const ini of INITIAL_VOICES) {
+        if (!mergedList.some(v => v.id === ini.id)) {
+          mergedList.push(ini);
         }
-      } else {
-        // Auto synchronize any modified voice name definitions or additions in user's profile
-        let nameUpdated = false;
-        for (const ini of INITIAL_VOICES) {
-          const match = voicesData.find(e => e.id === ini.id);
-          if (!match) {
-            await setDoc(doc(voicesRef, ini.id), ini);
-            nameUpdated = true;
-          } else if (match.name !== ini.name || match.isDefault !== ini.isDefault) {
-            await updateDoc(doc(voicesRef, ini.id), { name: ini.name, isDefault: ini.isDefault || false });
-            nameUpdated = true;
-          }
-        }
-
-        // Clean obsolete ones in user profile
-        for (const exp of voicesData) {
-          if (!INITIAL_VOICES.some(ini => ini.id === exp.id)) {
-            try {
-              await deleteDoc(doc(voicesRef, exp.id));
-              nameUpdated = true;
-            } catch (err) {
-              console.error("Clean old obsolete voice in VoiceLab error:", err);
-            }
-          }
-        }
-
-        if (nameUpdated) return; // This triggers snapshot change event, which will rerun the snapshot listener with correct names
-
-        // Sort voices so default is at the top
-        const sortedVoices = voicesData.sort((a, b) => {
-          if (a.isDefault) return -1;
-          if (b.isDefault) return 1;
-          return 0;
-        });
-        setVoices(sortedVoices);
       }
+
+      // Sort voices so default is at the top
+      const sortedVoices = mergedList.sort((a, b) => {
+        if (a.isDefault) return -1;
+        if (b.isDefault) return 1;
+        return 0;
+      });
+
+      setVoices(sortedVoices);
+      setLoading(false);
+    }, (err) => {
+      console.warn("[VoiceLab] Snapshot error (quota/offline), using default voices:", err);
+      setVoices(INITIAL_VOICES);
       setLoading(false);
     });
 

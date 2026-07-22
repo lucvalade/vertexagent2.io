@@ -704,7 +704,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       href: "/product",
       items: [
         { name: "AI Property Tours", desc: "Interactive smart guided media voice narrates homes", href: "/product#narrator" },
-        { name: "Open House Sign-In", desc: "Tablet kiosk mode captures visitor approvals easily", href: "/open-houses" },
+        { name: "Active Listings, Open House Links & QR Codes", desc: "Access property sign-ins, dynamic flyers and yard sign QR directory", href: "/open-houses#listings-directory" },
         { name: "Talk with Sora", desc: "Real-time voice chat answers property facts naturally", href: "/product#narrator" },
         { name: "Listen to Tour", desc: "Guided ambient audio walks you room-by-room", href: "/product#narrator" },
         { name: "Message Me", desc: "Prompt mobile chat for buyers on the move", href: "/product#features" },
@@ -1020,7 +1020,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
               <span className="font-extrabold text-[#111827] text-base block text-left mb-2">Products</span>
               <div className="pl-4 space-y-2.5">
                 <Link to="/product#narrator" onClick={() => setMobileMenuOpen(false)} className={`text-xs font-semibold block text-left ${isLinkActive("/product#narrator") ? "text-blue-600 font-extrabold" : "text-slate-500 hover:text-blue-600"}`}>AI Property Tours</Link>
-                <Link to="/open-houses" onClick={() => setMobileMenuOpen(false)} className={`text-xs font-semibold block text-left ${isLinkActive("/open-houses") ? "text-blue-600 font-extrabold" : "text-slate-500 hover:text-blue-600"}`}>Open House Sign-In</Link>
+                <Link to="/open-houses#listings-directory" onClick={() => setMobileMenuOpen(false)} className={`text-xs font-semibold block text-left ${isLinkActive("/open-houses#listings-directory") ? "text-blue-600 font-extrabold" : "text-slate-500 hover:text-blue-600"}`}>Active Listings, Open House Links & QR Codes</Link>
                 <Link to="/product#narrator" onClick={() => setMobileMenuOpen(false)} className={`text-xs font-semibold block text-left ${isLinkActive("/product#narrator") ? "text-blue-600 font-extrabold" : "text-slate-500 hover:text-blue-600"}`}>Talk with Sora</Link>
                 <Link to="/product#narrator" onClick={() => setMobileMenuOpen(false)} className={`text-xs font-semibold block text-left ${isLinkActive("/product#narrator") ? "text-blue-600 font-extrabold" : "text-slate-500 hover:text-blue-600"}`}>Listen to Tour</Link>
                 <Link to="/product#features" onClick={() => setMobileMenuOpen(false)} className={`text-xs font-semibold block text-left ${isLinkActive("/product#features") ? "text-blue-600 font-extrabold" : "text-slate-500 hover:text-blue-600"}`}>Message Me</Link>

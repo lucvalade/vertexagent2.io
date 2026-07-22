@@ -188,15 +188,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (docSnap.exists()) {
               setState({ user: docSnap.data() as AppUser, firebaseUser: fUser, loading: false });
             } else {
-              setState(prev => ({ ...prev, loading: false }));
+              const fallbackUser: AppUser = {
+                id: fUser.uid,
+                email: fUser.email || "",
+                name: fUser.displayName || "Agent",
+                role: fUser.email?.toLowerCase() === "luc.valade@gmail.com" ? "ADMIN" : "AGENT",
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                accountType: "agent",
+                subscriptionStatus: "active",
+                subscriptionPlan: "free"
+              };
+              setState({ user: fallbackUser, firebaseUser: fUser, loading: false });
             }
           }, (err) => {
-            console.error("Error listening to user record:", err);
-            setState(prev => ({ ...prev, loading: false }));
+            console.warn("[useAuth] Listener error (offline/quota), falling back to local user profile:", err);
+            const fallbackUser: AppUser = {
+              id: fUser.uid,
+              email: fUser.email || "",
+              name: fUser.displayName || "Agent",
+              role: fUser.email?.toLowerCase() === "luc.valade@gmail.com" ? "ADMIN" : "AGENT",
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              accountType: "agent",
+              subscriptionStatus: "active",
+              subscriptionPlan: "free"
+            };
+            setState({ user: fallbackUser, firebaseUser: fUser, loading: false });
           });
         } catch (err) {
-          console.error(err);
-          setState({ user: null, firebaseUser: fUser, loading: false });
+          console.warn("[useAuth] Failed to load Firestore user doc (offline/quota), using fallback user:", err);
+          const fallbackUser: AppUser = {
+            id: fUser.uid,
+            email: fUser.email || "",
+            name: fUser.displayName || "Agent",
+            role: fUser.email?.toLowerCase() === "luc.valade@gmail.com" ? "ADMIN" : "AGENT",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            accountType: "agent",
+            subscriptionStatus: "active",
+            subscriptionPlan: "free"
+          };
+          setState({ user: fallbackUser, firebaseUser: fUser, loading: false });
         }
       } else {
         setState({ user: null, firebaseUser: null, loading: false });

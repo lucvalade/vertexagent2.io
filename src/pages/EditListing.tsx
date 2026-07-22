@@ -208,67 +208,42 @@ const INITIAL_VOICES: Voice[] = [
 ];
 
 async function ensureUserVoices(userId: string): Promise<Voice[]> {
-  const voicesRef = collection(db, "users", userId, "voices");
-  
-  // Clean up Sarah's Clone (id: "1") from database if it exists
   try {
-    await deleteDoc(doc(voicesRef, "1"));
+    const voicesRef = collection(db, "users", userId, "voices");
+    const fetchDocs = getDocs(query(voicesRef));
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
+    const voicesSnap = await Promise.race([fetchDocs, timeout]) as any;
+
+    if (!voicesSnap || !voicesSnap.docs) {
+      return INITIAL_VOICES;
+    }
+
+    const existList = voicesSnap.docs
+      .filter((doc: any) => doc.id !== "1")
+      .map((doc: any) => {
+        const d = doc.data() as any;
+        if (d.name && d.name.includes(" (Default)")) {
+          d.name = d.name.replace(" (Default)", "");
+        }
+        return { id: doc.id, ...d } as Voice;
+      });
+
+    const mergedList: Voice[] = [...existList];
+    for (const ini of INITIAL_VOICES) {
+      if (!mergedList.some(v => v.id === ini.id)) {
+        mergedList.push(ini);
+      }
+    }
+
+    return mergedList;
   } catch (err) {
-    console.error("Clean old Sarah voice error:", err);
+    console.warn("Failed to load user voices from database, falling back to default voices:", err);
+    return INITIAL_VOICES;
   }
-
-  const voicesSnap = await getDocs(query(voicesRef));
-  if (voicesSnap.empty) {
-    const list: Voice[] = [];
-    for (const v of INITIAL_VOICES) {
-      await setDoc(doc(voicesRef, v.id), v);
-      list.push(v);
-    }
-    return list;
-  }
-  
-  const existList = voicesSnap.docs
-    .filter(doc => doc.id !== "1")
-    .map(doc => {
-      const d = doc.data() as any;
-      if (d.name && d.name.includes(" (Default)")) {
-        d.name = d.name.replace(" (Default)", "");
-      }
-      return { id: doc.id, ...d } as Voice;
-    });
-
-  // Synchronize name definitions and add missing voices
-  const syncedList: Voice[] = [];
-  for (const ini of INITIAL_VOICES) {
-    const current = existList.find(e => e.id === ini.id);
-    if (!current) {
-      await setDoc(doc(voicesRef, ini.id), ini);
-      syncedList.push(ini);
-    } else {
-      if (current.name !== ini.name) {
-        await updateDoc(doc(voicesRef, ini.id), { name: ini.name });
-        current.name = ini.name;
-      }
-      syncedList.push(current);
-    }
-  }
-
-  // Delete obsolete voices from database
-  for (const exp of existList) {
-    if (!INITIAL_VOICES.some(ini => ini.id === exp.id)) {
-      try {
-        await deleteDoc(doc(voicesRef, exp.id));
-      } catch (err) {
-        console.error("Clean old obsolete voice error:", err);
-      }
-    }
-  }
-
-  return syncedList;
 }
 
 export default function EditListing() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { listingId } = useParams();
   const [activeListingId] = useState(() => listingId || crypto.randomUUID());
   const navigate = useNavigate();
@@ -1076,13 +1051,16 @@ export default function EditListing() {
   }, [loading, user?.defaultVoiceId]);
 
   useEffect(() => {
+    if (authLoading) return;
     if (isEdit && listingId) {
       loadData(listingId);
+    } else {
+      setLoading(false);
     }
     if (user?.id) {
        fetchUserBranding();
     }
-  }, [listingId, isEdit, user?.id]);
+  }, [listingId, isEdit, user?.id, authLoading]);
 
   async function fetchUserBranding() {
      const savedCrmName = localStorage.getItem("user_selected_crm");
@@ -1190,21 +1168,29 @@ export default function EditListing() {
 
   async function loadData(id: string) {
     try {
-      // Load voices first to ensure we can match names
+      setLoading(true);
+      // Initialize default voices immediately, load custom voices in background
+      setAvailableVoices(INITIAL_VOICES);
       if (user?.id) {
-        const voicesData = await ensureUserVoices(user.id);
-        setAvailableVoices(voicesData);
+        ensureUserVoices(user.id)
+          .then(voicesData => setAvailableVoices(voicesData))
+          .catch(vErr => console.warn("Failed to ensure user voices:", vErr));
       }
 
       const data = await getListing(id);
-      if (data) {
-        const isAdmin = (user as any)?.role === 'ADMIN';
-        if (data.ownerId !== user?.id && !isAdmin) {
-          toast.error("Unauthorized");
-          navigate("/app/listings");
-          return;
-        }
-        const fetchedAddress = data.address || "";
+      if (!data) {
+        toast.error("Listing not found or could not be loaded");
+        navigate("/app/listings");
+        return;
+      }
+
+      const isAdmin = (user as any)?.role === 'ADMIN';
+      if (user?.id && data.ownerId !== user.id && !isAdmin) {
+        toast.error("Unauthorized");
+        navigate("/app/listings");
+        return;
+      }
+      const fetchedAddress = data.address || "";
         const fetchedCity = data.city || "";
         const fetchedProvince = data.province || "";
         const fetchedPostalCode = data.postalCode || "";
@@ -1407,7 +1393,6 @@ export default function EditListing() {
           }
         }
         */
-      }
     } catch (err) {
       toast.error("Failed to load listing");
     } finally {
@@ -1686,12 +1671,67 @@ export default function EditListing() {
 
   const getThumbnailForMediaKey = (key: string) => {
     if (!key) return null;
-    const match = images.find(img => {
-      const nameLower = (img.name || "").toLowerCase();
-      const keyLower = key.toLowerCase();
-      return nameLower.includes(keyLower) || keyLower.includes(nameLower) || nameLower.replace(/_/g, " ").includes(keyLower.replace(/_/g, " "));
+    const match = images.find((img, idx) => {
+      const nameLower = (img.name || "").toLowerCase().trim();
+      const keyLower = key.toLowerCase().trim();
+      const slug = nameLower.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      return (
+        slug === keyLower ||
+        nameLower === keyLower ||
+        nameLower.includes(keyLower) ||
+        keyLower.includes(nameLower) ||
+        nameLower.replace(/_/g, " ").includes(keyLower.replace(/_/g, " ")) ||
+        `photo_${idx + 1}` === keyLower
+      );
     });
     return match ? match.url : null;
+  };
+
+  const getAvailableMediaOptions = (currentKey?: string) => {
+    const optionsMap = new Map<string, { key: string; label: string; hasImage: boolean; thumbUrl?: string }>();
+
+    // 1. First add keys derived directly from uploaded property photos in Property Photos & Media Manager
+    images.forEach((img, idx) => {
+      const rawName = img.name?.trim() || `Photo ${idx + 1}`;
+      const slugKey = rawName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `photo_${idx + 1}`;
+      optionsMap.set(slugKey, {
+        key: slugKey,
+        label: rawName,
+        hasImage: true,
+        thumbUrl: img.url
+      });
+    });
+
+    // 2. Add standard manifest keys ONLY if they match an uploaded photo
+    MEDIA_MANIFEST_KEYS.forEach(stdKey => {
+      if (!optionsMap.has(stdKey)) {
+        const thumb = getThumbnailForMediaKey(stdKey);
+        if (thumb) {
+          optionsMap.set(stdKey, {
+            key: stdKey,
+            label: stdKey.replace(/_/g, ' ').toUpperCase(),
+            hasImage: true,
+            thumbUrl: thumb
+          });
+        }
+      }
+    });
+
+    // 3. Keep ONLY options that have an uploaded photo (filter out non-uploaded tags)
+    const available = Array.from(optionsMap.values()).filter(opt => opt.hasImage);
+
+    // 4. If a current key is selected on an existing question but not in available list, retain it
+    if (currentKey && !available.some(opt => opt.key === currentKey)) {
+      available.push({
+        key: currentKey,
+        label: currentKey.replace(/_/g, ' ').toUpperCase(),
+        hasImage: true
+      });
+    }
+
+    return available.sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true })
+    );
   };
 
   const capitalizeCategory = (str: string) => {
@@ -1818,7 +1858,7 @@ export default function EditListing() {
       answer: addForm.answer.trim(),
       mediaKey: addForm.mediaKey,
       isPreset: false,
-      active: false,
+      active: true,
       sortOrder: maxSortOrder + 1
     };
     
@@ -3051,14 +3091,28 @@ export default function EditListing() {
                     Configure up to 24 active questions that Sora can speak answers for. When selected, the tour photo will automatically swap to the designated room. These preset will be synced with the AI Tour, Ask Me About section.
                   </CardDescription>
                 </div>
-                <Button 
-                  type="button" 
-                  onClick={() => setIsAddFormOpen(true)}
-                  className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shrink-0 cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Custom Q&A
-                </Button>
+                <div className="flex flex-col gap-2 shrink-0">
+                  <Button 
+                    type="button" 
+                    onClick={() => setIsAddFormOpen(true)}
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md cursor-pointer w-full"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Custom Q&A
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const success = await handleSave();
+                      if (success) {
+                        toast.success("Ask Me About Q&As saved successfully!");
+                      }
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer w-full text-xs"
+                  >
+                    Save
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -4579,6 +4633,17 @@ export default function EditListing() {
                 className="h-10 text-sm"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-answer" className="font-bold text-slate-700">Sora's Spoken Answer (Optional)</Label>
+              <Textarea 
+                id="add-answer"
+                value={addForm.answer}
+                onChange={(e) => setAddForm({ ...addForm, answer: e.target.value })}
+                placeholder="e.g. Yes! The backyard features a heated salt-water swimming pool with custom lighting and a spacious lounge patio."
+                className="min-h-[80px] text-sm"
+              />
+            </div>
             
             <div className="space-y-2">
               <div className="flex items-center gap-1.5">
@@ -4597,9 +4662,9 @@ export default function EditListing() {
                 className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
               >
                 <option value="">-- No Image Swap --</option>
-                {MEDIA_MANIFEST_KEYS.map((key) => (
-                  <option key={`add-opt-${key}`} value={key}>
-                    {key.replace(/_/g, ' ').toUpperCase()}
+                {getAvailableMediaOptions(addForm.mediaKey).map((opt) => (
+                  <option key={`add-opt-${opt.key}`} value={opt.key}>
+                    📷 {opt.label} (Uploaded)
                   </option>
                 ))}
               </select>
@@ -4668,6 +4733,17 @@ export default function EditListing() {
                 className="h-10 text-sm"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-answer" className="font-bold text-slate-700">Sora's Spoken Answer (Optional)</Label>
+              <Textarea 
+                id="edit-answer"
+                value={editForm.answer}
+                onChange={(e) => setEditForm({ ...editForm, answer: e.target.value })}
+                placeholder="e.g. Yes! The backyard features a heated salt-water swimming pool with custom lighting and a spacious lounge patio."
+                className="min-h-[80px] text-sm"
+              />
+            </div>
             
             <div className="space-y-2">
               <div className="flex items-center gap-1.5">
@@ -4686,9 +4762,9 @@ export default function EditListing() {
                 className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
               >
                 <option value="">-- No Image Swap --</option>
-                {MEDIA_MANIFEST_KEYS.map((key) => (
-                  <option key={`edit-opt-${key}`} value={key}>
-                    {key.replace(/_/g, ' ').toUpperCase()}
+                {getAvailableMediaOptions(editForm.mediaKey).map((opt) => (
+                  <option key={`edit-opt-${opt.key}`} value={opt.key}>
+                    📷 {opt.label} (Uploaded)
                   </option>
                 ))}
               </select>

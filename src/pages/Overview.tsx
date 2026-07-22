@@ -530,25 +530,25 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
     <div className="space-y-8 font-sans">
       
       {/* Premium Header Card */}
-      <Card className="border-blue-900 shadow-lg bg-blue-950 text-white rounded-2xl overflow-hidden p-6 md:p-8">
+      <Card className="border-transparent shadow-lg bg-[#50a2ff] text-white rounded-2xl overflow-hidden p-6 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Workspace Dashboard</h1>
-            <p className="text-blue-100 mt-1">Welcome back, {firstName}. Monitor your open houses, touring activity, and live routing pipelines.</p>
+            <p className="text-blue-50 mt-1">Welcome back, {firstName}. Monitor your open houses, touring activity, and live routing pipelines.</p>
           </div>
           
           <div className="flex items-center gap-3 shrink-0">
             <Button 
               onClick={() => navigate("/app/listings/edit")}
-              className="bg-white hover:bg-white text-blue-900 font-extrabold text-xs h-10 tracking-wide shadow-sm transition-all duration-200 hover:scale-[1.08] active:scale-95 hover:shadow-lg hover:shadow-white/20 hover:-translate-y-0.5 cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs h-10 tracking-wide shadow-sm transition-all duration-200 hover:scale-[1.08] active:scale-95 hover:shadow-lg hover:shadow-white/20 hover:-translate-y-0.5 cursor-pointer border border-blue-500/30"
             >
-              <Plus className="h-4 w-4 mr-1 text-blue-900" /> New Listing
+              <Plus className="h-4 w-4 mr-1 text-white" /> New Listing
             </Button>
             <Button 
               onClick={() => navigate("/app/openhouses")} 
-              className="bg-white hover:bg-white text-blue-900 font-extrabold text-xs h-10 tracking-wide shadow-sm transition-all duration-200 hover:scale-[1.08] active:scale-95 hover:shadow-lg hover:shadow-white/20 hover:-translate-y-0.5 cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs h-10 tracking-wide shadow-sm transition-all duration-200 hover:scale-[1.08] active:scale-95 hover:shadow-lg hover:shadow-white/20 hover:-translate-y-0.5 cursor-pointer border border-blue-500/30"
             >
-              <Calendar className="h-4 w-4 mr-1 text-blue-900" /> Plan Open House
+              <Calendar className="h-4 w-4 mr-1 text-white" /> Plan Open House
             </Button>
           </div>
         </div>
@@ -630,17 +630,16 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
         <div className="lg:col-span-2 space-y-6 text-left">
           
           {/* Upcoming Open Houses Layout Section */}
-          <Card className="border-blue-900 shadow-sm rounded-2xl bg-blue-950 overflow-hidden">
-            <CardHeader className="pb-3 border-b border-blue-900 bg-blue-900">
+          <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white overflow-hidden">
+            <CardHeader className="pb-3 border-b border-white/10 bg-[#50a2ff]">
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="text-base font-bold text-white">Upcoming Open Houses Scheduled</CardTitle>
-                  <CardDescription className="text-xs text-blue-100">Digital check-ins, kiosks, and dynamic QR Code landing pages registered.</CardDescription>
+                  <CardDescription className="text-xs text-blue-50">Digital check-ins, kiosks, and dynamic QR Code landing pages registered.</CardDescription>
                 </div>
                 <Button 
                   onClick={() => navigate("/app/openhouses")} 
-                  variant="ghost" 
-                  className="text-xs text-blue-200 hover:text-white hover:bg-blue-900 h-8 gap-0.5 font-bold"
+                  className="bg-white hover:bg-stone-100 text-black font-extrabold text-xs h-8 gap-0.5 shadow-sm rounded-lg border-0"
                 >
                   Configure <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
@@ -650,24 +649,24 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
               {upcomingEvents.length > 0 ? (
                 <div className="space-y-4">
                   {upcomingEvents.map((evt) => (
-                    <div key={evt.id} className="p-4 border border-blue-900 rounded-xl bg-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div key={evt.id} className="p-4 border border-white/20 rounded-xl bg-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
                         <p className="text-xs font-bold text-white uppercase tracking-wide">{evt.eventName}</p>
-                        <p className="text-[11px] text-blue-200 mt-0.5 flex items-center gap-1">
-                          <Home className="h-3.5 w-3.5 text-blue-400" /> {evt.listingAddress}
+                        <p className="text-[11px] text-blue-50 mt-0.5 flex items-center gap-1">
+                          <Home className="h-3.5 w-3.5 text-white" /> {evt.listingAddress}
                         </p>
                       </div>
-                      <div className="flex items-center gap-4 text-xs shrink-0 bg-blue-950 p-2.5 border border-blue-900 rounded-lg max-w-fit text-blue-100">
-                        <div className="text-blue-100">
-                          <span className="flex items-center gap-1 font-semibold"><Calendar className="h-3.5 w-3.5 text-amber-500" /> {formatDate(evt.eventDate)}</span>
-                          <span className="flex items-center gap-1 text-[10px] text-blue-300 mt-0.5"><Clock className="h-3.5 w-3.5" /> {formatTime12h(evt.startTime)} - {formatTime12h(evt.endTime)}</span>
+                      <div className="flex items-center gap-4 text-xs shrink-0 bg-white/25 p-2.5 border border-white/20 rounded-lg max-w-fit text-white">
+                        <div className="text-white">
+                          <span className="flex items-center gap-1 font-semibold text-white"><Calendar className="h-3.5 w-3.5 text-amber-300" /> {formatDate(evt.eventDate)}</span>
+                          <span className="flex items-center gap-1 text-[10px] text-white/90 mt-0.5"><Clock className="h-3.5 w-3.5" /> {formatTime12h(evt.startTime)} - {formatTime12h(evt.endTime)}</span>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-blue-200 italic py-4">No open house show sessions planned for this week. Tap Plan Open House to set up a digital kiosk.</p>
+                <p className="text-xs text-blue-50 italic py-4">No open house show sessions planned for this week. Tap Plan Open House to set up a digital kiosk.</p>
               )}
             </CardContent>
           </Card>
@@ -817,17 +816,16 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           </Card>
 
           {/* New Leads log */}
-          <Card className="border-blue-900 shadow-sm rounded-2xl bg-blue-950 overflow-hidden">
-            <CardHeader className="pb-3 border-b border-blue-900 bg-blue-900">
+          <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white overflow-hidden">
+            <CardHeader className="pb-3 border-b border-white/10 bg-[#50a2ff]">
               <div className="flex justify-between items-center">
                 <div>
                   <CardTitle className="text-base font-bold text-white">Recently Captured Visitors</CardTitle>
-                  <CardDescription className="text-xs text-blue-100">Checked-in open house attendees and QR scan leads.</CardDescription>
+                  <CardDescription className="text-xs text-blue-50">Checked-in open house attendees and QR scan leads.</CardDescription>
                 </div>
                 <Button 
                   onClick={() => navigate("/app/leads")} 
-                  variant="ghost" 
-                  className="text-xs text-blue-200 hover:text-white hover:bg-blue-900 h-8 gap-0.5 font-bold"
+                  className="bg-white hover:bg-stone-100 text-black font-extrabold text-xs h-8 gap-0.5 shadow-sm rounded-lg border-0"
                 >
                   Manage Leads <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
@@ -838,20 +836,20 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                 <>
                   <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
                     {recentLeads.slice((recentLeadsPage - 1) * recentLeadsPerPage, recentLeadsPage * recentLeadsPerPage).map((ld) => (
-                      <div key={ld.id} className="p-3 border rounded-xl border-blue-900 bg-blue-900/50 flex items-center justify-between text-xs font-sans">
+                      <div key={ld.id} className="p-3 border rounded-xl border-white/20 bg-white/15 flex items-center justify-between text-xs font-sans">
                         <div className="space-y-0.5 text-left">
                           <p className="font-extrabold text-white flex items-center gap-1.5 flex-wrap">
                             {ld.name}
                             {ld.mortgageInterest && (
-                              <span className="text-[8px] font-black uppercase bg-blue-500 text-white px-1 py-0.5 rounded border border-blue-400">
+                              <span className="text-[8px] font-black uppercase bg-white text-black px-1 py-0.5 rounded border border-white/40">
                                 Lender Consent
                               </span>
                             )}
                           </p>
-                          <p className="text-[10px] text-blue-200">{ld.email || 'No email provided'} · {ld.phone || 'No phone provided'}</p>
+                          <p className="text-[10px] text-blue-50">{ld.email || 'No email provided'} · {ld.phone || 'No phone provided'}</p>
                         </div>
-                        <div className="text-[10px] text-right font-medium text-blue-400 space-y-1">
-                          <span className="block italic text-[9px] text-blue-200 font-bold bg-blue-950 border border-blue-800 px-1.5 py-0.5 rounded uppercase">
+                        <div className="text-[10px] text-right font-medium text-white space-y-1">
+                          <span className="block italic text-[9px] text-black font-bold bg-white border border-white px-1.5 py-0.5 rounded uppercase">
                             Source: {ld.source || ld.isOffline ? "Kiosk (Offline)" : "Sora Walkthrough"}
                           </span>
                         </div>
@@ -860,18 +858,17 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                   </div>
 
                   {recentLeads.length > recentLeadsPerPage && (
-                    <div className="mt-4 pt-4 border-t border-blue-900/45 flex flex-col items-center gap-2.5 font-sans">
-                      <div className="text-[10px] font-bold text-blue-200 border border-blue-800/60 px-2.5 py-0.5 rounded-full bg-blue-950/50">
+                    <div className="mt-4 pt-4 border-t border-white/20 flex flex-col items-center gap-2.5 font-sans">
+                      <div className="text-[10px] font-bold text-white border border-white/20 px-2.5 py-0.5 rounded-full bg-white/10">
                         {Math.min(recentLeadsPage * recentLeadsPerPage, recentLeads.length)} OF {recentLeads.length} Captured
                       </div>
                       
                       {/* Numbered Pagination Control Panel */}
                       <div className="flex items-center justify-center gap-1.5 w-full mt-1">
                         <Button
-                          variant="ghost" 
                           size="sm"
                           disabled={recentLeadsPage === 1}
-                          className="font-bold p-2 text-blue-200 hover:text-white hover:bg-blue-900/80 disabled:opacity-30 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer"
+                          className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
                           onClick={() => setRecentLeadsPage(prev => Math.max(prev - 1, 1))}
                         >
                           <ChevronLeft className="h-3 w-3" /> Prev
@@ -888,8 +885,8 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                                 onClick={() => setRecentLeadsPage(pageNumber)}
                                 className={`h-6 min-w-6 px-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center border ${
                                   isActive
-                                    ? "bg-blue-600 border-blue-400 text-white font-extrabold scale-110 shadow-sm"
-                                    : "bg-blue-950/40 border-blue-900/40 text-blue-300 hover:bg-blue-900/60 hover:text-white"
+                                    ? "bg-white border-white text-black font-extrabold scale-110 shadow-sm"
+                                    : "bg-white/20 border-white/20 text-white hover:bg-white/30"
                                 }`}
                               >
                                 {pageNumber}
@@ -899,24 +896,23 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                         </div>
 
                         <Button
-                          variant="ghost" 
                           size="sm"
                           disabled={recentLeadsPage === Math.ceil(recentLeads.length / recentLeadsPerPage)}
-                          className="font-bold p-2 text-blue-200 hover:text-white hover:bg-blue-900/80 disabled:opacity-30 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer"
+                          className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
                           onClick={() => setRecentLeadsPage(prev => Math.min(prev + 1, Math.ceil(recentLeads.length / recentLeadsPerPage)))}
                         >
                           Next <ChevronRight className="h-3 w-3" />
                         </Button>
                       </div>
                       
-                      <p className="text-[9.5px] text-blue-300/70 font-bold uppercase tracking-widest">
+                      <p className="text-[9.5px] text-white/95 font-bold uppercase tracking-widest">
                         Page {recentLeadsPage} of {Math.ceil(recentLeads.length / recentLeadsPerPage)}
                       </p>
                     </div>
                   )}
                 </>
               ) : (
-                <p className="text-xs text-blue-200 italic py-2">No guest registrations captured yet. Complete onboarding steps to capture leads.</p>
+                <p className="text-xs text-blue-50 italic py-2">No guest registrations captured yet. Complete onboarding steps to capture leads.</p>
               )}
             </CardContent>
           </Card>
@@ -952,30 +948,30 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           </Card>
 
           {/* Recent Flyer Activity Tracker */}
-          <Card className="border-blue-900 shadow-sm rounded-2xl bg-blue-950 p-5 space-y-4">
+          <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-xs font-black uppercase tracking-wider text-white">Recent Flyer Scans</CardTitle>
-                <CardDescription className="text-xs text-blue-100">Scan events from printed show materials.</CardDescription>
+                <CardDescription className="text-xs text-blue-50">Scan events from printed show materials.</CardDescription>
               </div>
-              <span className="text-[10px] font-bold text-emerald-100 bg-emerald-900/50 px-2 py-0.5 rounded border border-emerald-800">Active Flyers</span>
+              <span className="text-[10px] font-bold text-white bg-white/20 px-2 py-0.5 rounded border border-white/30">Active Flyers</span>
             </div>
 
             <div className="space-y-3.5 text-xs">
               <div className="flex justify-between items-center text-[11px]">
                 <div className="space-y-0.5">
                   <p className="font-bold text-white">Luxury QR Scan - flyer_888</p>
-                  <p className="text-[9px] text-blue-200">Sora Guided walking tour</p>
+                  <p className="text-[9px] text-blue-50">Sora Guided walking tour</p>
                 </div>
-                <span className="font-bold text-blue-100">Just now</span>
+                <span className="font-bold text-white/90">Just now</span>
               </div>
               
-              <div className="flex justify-between items-center text-[11px] border-t border-blue-900 pt-3">
+              <div className="flex justify-between items-center text-[11px] border-t border-white/20 pt-3">
                 <div className="space-y-0.5">
                   <p className="font-bold text-white">Exhibition Entry scan - stand_91</p>
-                  <p className="text-[9px] text-blue-200">Tablet kiosk prompt</p>
+                  <p className="text-[9px] text-blue-50">Tablet kiosk prompt</p>
                 </div>
-                <span className="font-bold text-blue-100">28 mins ago</span>
+                <span className="font-bold text-white/90">28 mins ago</span>
               </div>
             </div>
           </Card>
@@ -1023,16 +1019,16 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
       </div>
 
       {/* Admin Character Guard Block */}
-      <Card className="border-blue-900 shadow-sm overflow-hidden text-left bg-blue-950 rounded-2xl">
-        <CardHeader className="pb-3 border-b border-blue-900 bg-blue-900 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <Card className="border-white/20 shadow-sm overflow-hidden text-left bg-[#50a2ff] text-white rounded-2xl">
+        <CardHeader className="pb-3 border-b border-white/20 bg-[#50a2ff] flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <CardTitle className="text-base font-bold flex items-center gap-2 text-white">
-              <Shield className="h-5 w-5 text-amber-500 animate-pulse" /> AI System Instruction & Character Guard
+              <Shield className="h-5 w-5 text-yellow-200 animate-pulse" /> AI System Instruction & Character Guard
             </CardTitle>
-            <CardDescription className="text-xs font-medium text-blue-100">Lock down custom AI conversational prompts, agency characters, and safety triggers under a master control password.</CardDescription>
+            <CardDescription className="text-xs font-medium text-white/90">Lock down custom AI conversational prompts, agency characters, and safety triggers under a master control password.</CardDescription>
           </div>
-          <div className="flex items-center gap-1.5 text-xs font-black uppercase bg-blue-950 text-blue-100 px-2.5 py-1 rounded-full border border-blue-800 w-fit shrink-0">
-            {isAdminPanelUnlocked ? <Unlock className="h-3 w-3 text-green-400" /> : <Lock className="h-3 w-3 text-red-400" />}
+          <div className="flex items-center gap-1.5 text-xs font-black uppercase bg-white/20 text-white px-2.5 py-1 rounded-full border border-white/20 w-fit shrink-0">
+            {isAdminPanelUnlocked ? <Unlock className="h-3 w-3 text-green-200" /> : <Lock className="h-3 w-3 text-red-200" />}
             {isAdminPanelUnlocked ? 'Sora Unlocked' : 'Password Gated'}
           </div>
         </CardHeader>
@@ -1040,7 +1036,7 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
         <CardContent className="p-6">
           {!isAdminPanelUnlocked ? (
             <div className="max-w-md space-y-4 py-2">
-              <p className="text-xs text-blue-100 leading-relaxed font-sans">
+              <p className="text-xs text-white/90 leading-relaxed font-sans">
                 Enter your **Dashboard Password** to authorize listing prompt edits. This keeps critical AI Open House Connect character attributes, compliance overrides, and guided tour templates secure from unauthorized edits.
               </p>
               <div className="flex gap-2 font-sans">
@@ -1051,30 +1047,30 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                     value={promptPassword}
                     onChange={(e) => setPromptPassword(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-                    className="h-10 text-xs text-stone-900 border-blue-800 focus-visible:ring-1 focus-visible:ring-amber-500 focus-visible:ring-offset-0"
+                    className="h-10 text-xs text-stone-900 border-white/30 bg-white focus-visible:ring-1 focus-visible:ring-blue-400 focus-visible:ring-offset-0"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPasswordRaw(!showPasswordRaw)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-400 hover:text-white"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
                   >
                     {showPasswordRaw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 <Button 
                   onClick={handleUnlock}
-                  className="bg-amber-600 hover:bg-amber-500 font-bold text-xs h-10 px-4 text-white"
+                  className="bg-white hover:bg-slate-50 font-bold text-xs h-10 px-4 text-[#50a2ff]"
                 >
                   Authorize & Unlock
                 </Button>
               </div>
-              <p className="text-[10px] text-blue-300 italic font-medium">Default setup password: <span className="font-mono bg-blue-900 px-1 py-0.5 rounded text-amber-300 font-bold">8923</span></p>
+              <p className="text-[10px] text-white/80 italic font-medium">Default setup password: <span className="font-mono bg-white/10 px-1 py-0.5 rounded text-yellow-100 font-bold">8923</span></p>
             </div>
           ) : (
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label className="text-xs font-black uppercase text-blue-100 tracking-wider">AI System Instruction Template Override</Label>
-                <p className="text-[11px] text-blue-200 leading-normal">
+                <Label className="text-xs font-black uppercase text-white tracking-wider">AI System Instruction Template Override</Label>
+                <p className="text-[11px] text-white/90 leading-normal">
                   Customize the core system prompt that dictates how Sora represents your brokerage. This is prepended to the live session parameters. Leave blank to fallback to default settings.
                 </p>
                 <Textarea
@@ -1082,14 +1078,14 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                   onChange={(e) => setSavedPromptText(e.target.value)}
                   rows={8}
                   placeholder="Paste your custom agency system prompt instructions here (or leave blank to use the default)..."
-                  className="font-mono text-xs text-white bg-blue-900 border-blue-800 focus-visible:ring-1 focus-visible:ring-amber-500 focus-visible:ring-offset-0 h-44"
+                  className="font-mono text-xs text-white bg-white/10 border-white/20 focus-visible:ring-1 focus-visible:ring-white focus-visible:ring-offset-0 h-44"
                 />
               </div>
 
-              <div className="p-4 bg-blue-900 rounded-xl border border-blue-800 grid sm:grid-cols-2 gap-4 text-left">
+              <div className="p-4 bg-white/10 rounded-xl border border-white/20 grid sm:grid-cols-2 gap-4 text-left">
                 <div className="space-y-1">
-                  <Label className="text-xs font-black uppercase text-blue-100 tracking-wider">Change Dashboard Password</Label>
-                  <p className="text-[11px] text-blue-200">Provide a new password to upgrade administrative lockbox protection.</p>
+                  <Label className="text-xs font-black uppercase text-white tracking-wider">Change Dashboard Password</Label>
+                  <p className="text-[11px] text-white/90">Provide a new password to upgrade administrative lockbox protection.</p>
                 </div>
                 <div className="flex items-center">
                   <Input
@@ -1097,12 +1093,12 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                     placeholder="Enter new master password..."
                     value={newPasswordValue}
                     onChange={(e) => setNewPasswordValue(e.target.value)}
-                    className="h-10 text-xs bg-blue-950 border-blue-800 focus-visible:ring-1 focus-visible:ring-amber-550 focus-visible:ring-offset-0 text-white"
+                    className="h-10 text-xs bg-white/25 border-white/20 focus-visible:ring-1 focus-visible:ring-white focus-visible:ring-offset-0 text-white placeholder-white/60"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-between items-center pt-4 border-t border-blue-800">
+              <div className="flex justify-between items-center pt-4 border-t border-white/20">
                 <Button 
                   variant="outline" 
                   onClick={() => {
@@ -1110,22 +1106,22 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                     setNewPasswordValue("");
                     setPromptPassword("");
                   }}
-                  className="font-bold text-xs bg-blue-950 text-white border-blue-800 hover:bg-blue-900"
+                  className="font-bold text-xs bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
                 >
                   Discard & Lock
                 </Button>
                 <Button
                   onClick={handleSavePromptSettings}
                   disabled={savingPrompt}
-                  className="bg-amber-600 hover:bg-amber-500 font-bold text-xs gap-2 px-6 text-white"
+                  className="bg-white hover:bg-slate-55 text-[#50a2ff] hover:bg-white hover:text-[#50a2ff] font-bold text-xs gap-2 px-6"
                 >
                   {savingPrompt ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                      <Loader2 className="h-4 w-4 animate-spin text-[#50a2ff]" /> Saving...
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="h-4 w-4" /> Apply & Lock Down
+                      <CheckCircle2 className="h-4 w-4 text-[#50a2ff]" /> Apply & Lock Down
                     </>
                   )}
                 </Button>

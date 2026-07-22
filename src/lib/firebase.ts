@@ -58,8 +58,17 @@ async function testConnection() {
   try {
     await getDocFromServer(doc(db, "appConfig", "global"));
   } catch (error) {
-    if (error instanceof Error && (error.message.includes("the client is offline") || error.message.includes("unavailable") || (error as any).code === "unavailable")) {
-      console.warn("[Firebase Init] Connection check: Firestore client is operating in offline mode as expected.");
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errCode = (error as any)?.code;
+    if (
+      errMsg.includes("the client is offline") ||
+      errMsg.includes("unavailable") ||
+      errMsg.includes("resource-exhausted") ||
+      errMsg.includes("Quota limit exceeded") ||
+      errCode === "unavailable" ||
+      errCode === "resource-exhausted"
+    ) {
+      console.warn("[Firebase Init] Connection check: Firestore client is operating in offline/quota fallback mode.");
     } else {
       console.error("[Firebase Init] Firestore connection error:", error);
     }
@@ -102,13 +111,27 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function isQuotaError(error: unknown): boolean {
+  if (!error) return false;
+  const errMsg = error instanceof Error ? error.message : String(error);
+  const errCode = (error as any)?.code;
+  return errCode === "resource-exhausted" || errMsg.includes("resource-exhausted") || errMsg.includes("Quota limit exceeded");
+}
+
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): never {
+): void {
+  const errMsg = error instanceof Error ? error.message : String(error);
+
+  if (isQuotaError(error)) {
+    console.warn(`[Firestore Quota Exceeded] ${operationType.toUpperCase()} on ${path || "document"}: Daily free quota limit reached. Operating in offline/local fallback mode.`);
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -125,5 +148,4 @@ export function handleFirestoreError(
     path,
   };
   console.error("Firestore Error: ", JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }

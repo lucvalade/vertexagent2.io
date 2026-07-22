@@ -40,6 +40,9 @@ export default function Integrations() {
         }
       }
       setLoading(false);
+    }, (err) => {
+      console.warn("[Integrations] Snapshot error (quota/offline):", err);
+      setLoading(false);
     });
     return () => unsub();
   }, [user?.id]);

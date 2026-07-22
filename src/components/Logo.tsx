@@ -4,9 +4,10 @@ interface LogoProps {
   className?: string;
   iconClassName?: string;
   variant?: "light" | "dark" | "white" | "blue" | "currentColor";
+  iconOnly?: boolean;
 }
 
-export default function Logo({ className = "", iconClassName = "", variant = "currentColor" }: LogoProps) {
+export default function Logo({ className = "", iconClassName = "", variant = "currentColor", iconOnly = false }: LogoProps) {
   // Select color mappings to guarantee high-contrast readability against different background states
   const strokeColor = 
     variant === "white" ? "#ffffff" : 
@@ -113,14 +114,16 @@ export default function Logo({ className = "", iconClassName = "", variant = "cu
       </svg>
 
       {/* Structured accessible typography set precisely mirroring original branding */}
-      <div className="flex flex-col leading-none text-left select-none">
-        <span className={`text-[12px] md:text-[13px] font-extrabold tracking-tight ${textColorTop}`}>
-          AI Open House
-        </span>
-        <span className={`text-[13.5px] md:text-[14.5px] font-black tracking-[0.08em] uppercase -mt-0.5 ${textColorBottom}`}>
-          CONNECT
-        </span>
-      </div>
+      {!iconOnly && (
+        <div className="flex flex-col leading-none text-left select-none">
+          <span className={`text-[12px] md:text-[13px] font-extrabold tracking-tight ${textColorTop}`}>
+            AI Open House
+          </span>
+          <span className={`text-[13.5px] md:text-[14.5px] font-black tracking-[0.08em] uppercase -mt-0.5 ${textColorBottom}`}>
+            CONNECT
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -501,12 +501,12 @@ export default function DemoPage() {
                 )}
 
                 {activeTab === "signin" && (
-                  <div className="space-y-4">
-                    <h3 className="text-2xl font-extrabold text-slate-950 tracking-tight">Digital Sign-In Stand</h3>
-                    <p className="text-slate-500 text-sm leading-relaxed">
+                  <div className="space-y-4 p-6 bg-slate-900 text-white rounded-3xl shadow-xl border border-slate-800">
+                    <h3 className="text-2xl font-extrabold text-white tracking-tight">Digital Sign-In Stand</h3>
+                    <p className="text-slate-200 text-sm leading-relaxed">
                       No more trying to read messy pencil clipboard details. Let buyers sign-in cleanly. If they select disclosures requests, AI Open House Connect delivers the PDF immediately.
                     </p>
-                    <blockquote className="p-4 bg-slate-50 border-l-4 border-emerald-500 rounded-r-2xl italic text-xs text-slate-600">
+                    <blockquote className="p-4 bg-white/10 border-l-4 border-emerald-400 rounded-r-2xl italic text-xs text-slate-100">
                       "Since launching AI Open House Kiosks, our captured open house lead rate improved by 45% because visitor details are verified."
                     </blockquote>
                   </div>
@@ -684,16 +684,15 @@ export default function DemoPage() {
                       </div>
                     ) : (
                       <form onSubmit={handleDemoSignIn} className="p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80 space-y-4 text-left">
-                        
-                        {/* 1. Full Name */}
+                                          {/* 1. Full Name */}
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
-                            <Label htmlFor="fullName" className="text-[10px] font-bold text-slate-400 uppercase">Full Name</Label>
+                            <Label htmlFor="fullName" className="text-[10px] font-bold text-white uppercase">Full Name</Label>
                             {fullNameTouched ? (
                               fullNameError ? (
-                                <span className="text-rose-400 text-[9px] font-semibold">⚠️ Needs capitalization</span>
+                                <span className="text-rose-300 text-[9px] font-semibold">⚠️ Needs capitalization</span>
                               ) : formFullName ? (
-                                <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                                <span className="text-emerald-300 text-[10px] font-bold">✓ Ready</span>
                               ) : null
                             ) : null}
                           </div>
@@ -705,7 +704,7 @@ export default function DemoPage() {
                               setFullNameTouched(true);
                               validateFullName(formFullName);
                             }}
-                            className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                            className={`bg-slate-900 h-10 text-xs rounded-xl text-white placeholder:text-white/50 transition-all duration-200 ${
                               fullNameTouched 
                                 ? fullNameError 
                                   ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
@@ -720,7 +719,7 @@ export default function DemoPage() {
                             required
                           />
                           {fullNameTouched && fullNameError && (
-                            <p id="fullName-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                            <p id="fullName-err" className="text-rose-300 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
                               ⚠️ {fullNameError}
                             </p>
                           )}
@@ -729,12 +728,12 @@ export default function DemoPage() {
                         {/* 2. Email Address */}
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
-                            <Label htmlFor="emailAddress" className="text-[10px] font-bold text-slate-400 uppercase">Email Address</Label>
+                            <Label htmlFor="emailAddress" className="text-[10px] font-bold text-white uppercase">Email Address</Label>
                             {emailTouched ? (
                               emailError ? (
-                                <span className="text-rose-400 text-[9px] font-semibold">⚠️ Invalid structure</span>
+                                <span className="text-rose-300 text-[9px] font-semibold">⚠️ Invalid structure</span>
                               ) : formEmail ? (
-                                <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                                <span className="text-emerald-300 text-[10px] font-bold">✓ Ready</span>
                               ) : null
                             ) : null}
                           </div>
@@ -752,7 +751,7 @@ export default function DemoPage() {
                               setEmailTouched(true);
                               validateEmail(formEmail);
                             }}
-                            className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                            className={`bg-slate-900 h-10 text-xs rounded-xl text-white placeholder:text-white/50 transition-all duration-200 ${
                               emailTouched 
                                 ? emailError 
                                   ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
@@ -767,7 +766,7 @@ export default function DemoPage() {
                             required
                           />
                           {emailTouched && emailError && (
-                            <p id="email-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                            <p id="email-err" className="text-rose-300 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
                               ⚠️ {emailError}
                             </p>
                           )}
@@ -777,12 +776,12 @@ export default function DemoPage() {
                         <div className="grid sm:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center">
-                              <Label htmlFor="phoneNumber" className="text-[10px] font-bold text-slate-400 uppercase">Phone Number</Label>
+                              <Label htmlFor="phoneNumber" className="text-[10px] font-bold text-white uppercase">Phone Number</Label>
                               {phoneTouched ? (
                                 phoneError ? (
-                                  <span className="text-rose-400 text-[9px] font-semibold">⚠️ Format error</span>
+                                  <span className="text-rose-300 text-[9px] font-semibold">⚠️ Format error</span>
                                 ) : formPhone ? (
-                                  <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                                  <span className="text-emerald-300 text-[10px] font-bold">✓ Ready</span>
                                 ) : null
                               ) : null}
                             </div>
@@ -795,7 +794,7 @@ export default function DemoPage() {
                                 setPhoneTouched(true);
                                 validatePhone(formPhone);
                               }}
-                              className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                              className={`bg-slate-900 h-10 text-xs rounded-xl text-white placeholder:text-white/50 transition-all duration-200 ${
                                 phoneTouched 
                                   ? phoneError 
                                     ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
@@ -810,7 +809,7 @@ export default function DemoPage() {
                               required
                             />
                             {phoneTouched && phoneError && (
-                              <p id="phone-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                              <p id="phone-err" className="text-rose-300 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
                                 ⚠️ {phoneError}
                               </p>
                             )}
@@ -818,12 +817,12 @@ export default function DemoPage() {
 
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center">
-                              <Label htmlFor="websiteUrl" className="text-[10px] font-bold text-slate-400 uppercase">Website</Label>
+                              <Label htmlFor="websiteUrl" className="text-[10px] font-bold text-white uppercase">Website</Label>
                               {websiteTouched ? (
                                 websiteError ? (
-                                  <span className="text-rose-400 text-[9px] font-semibold">⚠️ Full HTTPS url needed</span>
+                                  <span className="text-rose-300 text-[9px] font-semibold">⚠️ Full HTTPS url needed</span>
                                 ) : formWebsite ? (
-                                  <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                                  <span className="text-emerald-300 text-[10px] font-bold">✓ Ready</span>
                                 ) : null
                               ) : null}
                             </div>
@@ -841,7 +840,7 @@ export default function DemoPage() {
                                 setWebsiteTouched(true);
                                 validateWebsite(formWebsite);
                               }}
-                              className={`bg-slate-900 h-10 text-xs rounded-xl text-white transition-all duration-200 ${
+                              className={`bg-slate-900 h-10 text-xs rounded-xl text-white placeholder:text-white/50 transition-all duration-200 ${
                                 websiteTouched 
                                   ? websiteError 
                                     ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
@@ -856,7 +855,7 @@ export default function DemoPage() {
                               required
                             />
                             {websiteTouched && websiteError && (
-                              <p id="website-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                              <p id="website-err" className="text-rose-300 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
                                 ⚠️ {websiteError}
                               </p>
                             )}
@@ -866,12 +865,12 @@ export default function DemoPage() {
                         {/* 5. Details Textarea */}
                         <div className="space-y-1.5 relative">
                           <div className="flex justify-between items-center">
-                            <Label htmlFor="detailsText" className="text-[10px] font-bold text-slate-400 uppercase">Details</Label>
+                            <Label htmlFor="detailsText" className="text-[10px] font-bold text-white uppercase">Details</Label>
                             {detailsTouched ? (
                               detailsError ? (
-                                <span className="text-rose-400 text-[9px] font-semibold">⚠️ Must capitalize start</span>
+                                <span className="text-rose-300 text-[9px] font-semibold">⚠️ Must capitalize start</span>
                               ) : formDetails ? (
-                                <span className="text-emerald-400 text-[10px] font-bold">✓ Ready</span>
+                                <span className="text-emerald-300 text-[10px] font-bold">✓ Ready</span>
                               ) : null
                             ) : null}
                           </div>
@@ -888,7 +887,7 @@ export default function DemoPage() {
                               rows={4}
                               aria-invalid={detailsTouched && !!detailsError}
                               aria-describedby={detailsError ? "details-err" : undefined}
-                              className={`bg-slate-900 border text-xs rounded-xl text-white p-3 w-full outline-none focus:ring-1 focus:ring-blue-500 transition-all duration-200 resize-none ${
+                              className={`bg-slate-900 border text-xs rounded-xl text-white p-3 w-full outline-none focus:ring-1 focus:ring-blue-500 transition-all duration-200 resize-none placeholder:text-white/50 ${
                                 detailsTouched 
                                   ? detailsError 
                                     ? "border-rose-500 focus:ring-rose-500 bg-rose-950/20" 
@@ -901,18 +900,18 @@ export default function DemoPage() {
                               required
                             />
                             {/* Live counter aligned bottom right within or below textarea */}
-                            <div className={`absolute bottom-2 right-3 text-[9px] font-mono select-none ${formDetails.length >= 750 ? 'text-amber-500 font-bold' : 'text-slate-500'}`}>
+                            <div className={`absolute bottom-2 right-3 text-[9px] font-mono select-none ${formDetails.length >= 750 ? 'text-amber-400 font-bold' : 'text-slate-300'}`}>
                               {formDetails.length} / 1000 {formDetails.length >= 750 && <span className="animate-pulse font-normal">(75% Reached)</span>}
                             </div>
                           </div>
                           {detailsTouched && detailsError && (
-                            <p id="details-err" className="text-rose-400 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
+                            <p id="details-err" className="text-rose-300 text-[9px] font-semibold mt-1 animate-in fade-in duration-200">
                               ⚠️ {detailsError}
                             </p>
                           )}
                         </div>
 
-                        <div className="p-3 bg-slate-900/80 rounded-xl text-[10px] text-slate-400 leading-normal text-left">
+                        <div className="p-3 bg-slate-900/80 rounded-xl text-[10px] text-white leading-normal text-left border border-slate-800">
                           <strong>Live Validation Active:</strong> Submitting is disabled until the criteria for all five fields are completed.
                         </div>
 
