@@ -1,7 +1,22 @@
-# VertexAgent System Prompt: Sora Buyer AI Tour
+# VertexAgent — System Prompt (Sora, Buyer Q&A)
 
-Paste this document into the Gemini call configuration used by the
-buyer-facing `chat` Cloud Function.
+**Paste into:** the Gemini call configuration for the buyer-facing chat Cloud Function (`chat`). This is the prompt sent to `gemini-2.5-flash` on every buyer turn — NOT the AI Studio "System Instructions" panel.
+
+**Model:** `gemini-2.5-flash`
+
+**Structured output contract (v2.0 — mediaAction, supersedes the old `showMedia` field):**
+```json
+{
+  "schemaVersion": "2.0",
+  "spokenReply": "string",
+  "mediaAction": { "action": "show" | "keep", "key": "string or null" }
+}
+```
+The model selects only a Media Manifest `key` — it never returns a URL or caption. The Cloud Function is the only component that resolves a key to a trusted manifest item, validates `schemaVersion`, and applies stale-response protection via `turnId`. Full binding contract, backend validation, frontend handler, and regression tests live in `vertexagent_system_instructions_only.md` §7a. Do not build against the old `showMedia: {key,url,caption} | null` shape anywhere in new code.
+
+---
+
+## The Prompt
 
 ```text
 You are Sora, a warm, professional real-estate tour assistant acting
@@ -257,10 +272,21 @@ MEDIA MANIFEST:
 {mediaManifestJson}
 ```
 
-## Required Session State Format
+---
 
+## Variables your Cloud Function must inject
+
+| Variable | Source |
+|---|---|
+| `{brokerage}`, `{city}`, `{province}`, `{address}` | `listings/{listingId}` fields |
+| `{language}` | buyer's selected language (from tourConfig or session state). Note: the set of languages an agent can offer is gated upstream by plan tier + country — Agent Starter (free) agents default to a country-based pair (EN+FR in Canada, EN+ES in USA, EN elsewhere), Pro/Broker agents can select from all languages. This gating happens before the tour loads; Sora always just answers in whatever `{language}` is injected, regardless of tier. |
+| `{sessionStateJson}` | JSON-stringified session state object — see Required Session State Format below. Built fresh on every turn from `eventType`, `turnId`, `currentVisibleMediaKey`, `currentTourStepId`, `targetMediaKey`, `interruptedTourStepId`, `tappedAskMeAboutId`, `manualSwipeMediaKey`, `openingTargetMediaKey`. |
+| `{askMeAboutJson}` | JSON-stringified `listings/{listingId}.askMeAbout[]`, active entries only, in agent's sort order, capped at 12 — **not** the old Markdown block format. |
+| `{knowledgeBaseJson}` | JSON-stringified `listings/{listingId}.knowledgeBase[]` |
+| `{mediaManifestJson}` | JSON-stringified `listings/{listingId}.media[]` (Media Manifest controlled vocabulary — `key`, `caption`, `aliases`) |
+
+### Required Session State Format
 Inject this object on every turn:
-
 ```json
 {
   "eventType": "USER_QUESTION",
@@ -275,10 +301,8 @@ Inject this object on every turn:
 }
 ```
 
-## Required Ask Me About Format
-
-Inject active entries as JSON:
-
+### Required Ask Me About Format
+Inject active entries as JSON (replaces the old `## / italic / [IMAGE_ID] / Answer / ---` Markdown block):
 ```json
 [
   {
@@ -291,22 +315,13 @@ Inject active entries as JSON:
 ]
 ```
 
-## Required Media Manifest Format
-
+### Required Media Manifest Format
 ```json
 [
-  {
-    "key": "kitchen",
-    "caption": "Renovated kitchen",
-    "aliases": ["kitchen upgrades", "island", "appliances"]
-  },
-  {
-    "key": "backyard",
-    "caption": "Backyard and lot",
-    "aliases": ["yard", "garden", "lot"]
-  }
+  { "key": "kitchen", "caption": "Renovated kitchen", "aliases": ["kitchen upgrades", "island", "appliances"] },
+  { "key": "backyard", "caption": "Backyard and lot", "aliases": ["yard", "garden", "lot"] }
 ]
 ```
+The model may use captions and aliases for matching, but it must return only an exact canonical `key`.
 
-The model may use captions and aliases for matching, but it must return
-only an exact canonical `key`.
+Note: avatar rendering is deferred — this prompt is voice/text-only via Gemini for now.

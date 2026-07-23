@@ -1080,6 +1080,7 @@ export default function Tour() {
   const isUS = currentCountry === "US";
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [topicClickCount, setTopicClickCount] = useState<number>(0);
 
   const getManifestKeyForQuestion = (question: string): string => {
     const q = question.toLowerCase();
@@ -1684,8 +1685,9 @@ or "[IMAGE_ID: ...]" tag out loud or in spokenReply — only the
 answer content, said naturally.
 
 ASK ME ABOUT — MATCHING RULES (apply first, before Knowledge Base):
-1. If the buyer taps a category or speaks its exact sample question,
-   go straight to that entry's Answer.
+1. If the buyer taps an Ask Me About item or speaks its question:
+   - For the FIRST item clicked or asked in the session, always thank the visitor warmly (e.g. "Thank you for asking!"), then answer using a very short response (under 25 words).
+   - In the same session, if the client clicks or asks another question, answer directly using a very short response (under 20 words).
 2. If the buyer asks ANY free-form variation — including a single
    bare topic word with no full sentence, e.g. just "kitchen?" or
    "what about the kitchen" — match it to the closest ## Category
@@ -1699,7 +1701,7 @@ ASK ME ABOUT — MATCHING RULES (apply first, before Knowledge Base):
    This applies whether the buyer tapped the category or spoke the
    question, in any phrasing.
 4. Speak the Answer content in your own conversational phrasing,
-   under 40 words — do not just read it verbatim if it reads stiff.
+   under 25 words — keep it very short, polite, direct, and concise.
 
 ANSWERING PRIORITY:
 1. ASK ME ABOUT (see matching rules above) — check first, always.
@@ -2586,21 +2588,41 @@ Global rules
                     // 1. Instantly change image on screen if matching key exists
                     changeImageForQuestion(question);
 
+                    const isFirstClick = topicClickCount === 0;
+                    setTopicClickCount(prev => prev + 1);
+
+                    const isFrench = language.toLowerCase() === "fr" || language.toLowerCase() === "french";
+
+                    let formattedMessage = "";
+                    if (isFrench) {
+                      if (isFirstClick) {
+                        formattedMessage = `Merci d'avoir posé la question ! Veuillez répondre très brièvement à "${question}".`;
+                      } else {
+                        formattedMessage = `Veuillez répondre très brièvement à "${question}".`;
+                      }
+                    } else {
+                      if (isFirstClick) {
+                        formattedMessage = `Thank you for asking! Please answer "${question}" using a very short response.`;
+                      } else {
+                        formattedMessage = `Please answer "${question}" using a very short response.`;
+                      }
+                    }
+
                     // 2. Playback verbally via active AI session
                     if (connected) {
                       toast.info(
-                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
+                        isFrench
                           ? `Sora répond : "${question}"`
                           : `Sora is responding: "${question}"`
                       );
-                      sendTextMessage(question);
+                      sendTextMessage(formattedMessage);
                     } else {
                       toast.info(
-                        language.toLowerCase() === "fr" || language.toLowerCase() === "french"
+                        isFrench
                           ? `Connexion à Sora pour répondre à : "${question}"...`
                           : `Connecting to Sora to answer: "${question}"...`
                       );
-                      setPendingQuestion(question);
+                      setPendingQuestion(formattedMessage);
                       startSession();
                     }
                   }} 

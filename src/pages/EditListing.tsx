@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage, getOpenHouseSessions, createOpenHouseSession, deleteOpenHouseSession, OpenHouseSession, parseDateTimeToUTC } from "@/lib/api";
-import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv } from "lucide-react";
+import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv, ChevronDown, Check } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -264,6 +264,7 @@ export default function EditListing() {
   });
 
   const [askMeAbout, setAskMeAbout] = useState<any[]>([]);
+  const [askMeAboutSearch, setAskMeAboutSearch] = useState("");
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     id: "",
@@ -281,6 +282,19 @@ export default function EditListing() {
   });
   const [deletingEntry, setDeletingEntry] = useState<any | null>(null);
   const [activeLimitError, setActiveLimitError] = useState(false);
+  const [addFormAutoMatched, setAddFormAutoMatched] = useState(false);
+  const [editFormAutoMatched, setEditFormAutoMatched] = useState(false);
+
+  const prevStepRef = useRef(currentStep);
+  useEffect(() => {
+    if (prevStepRef.current === 3 && currentStep !== 3) {
+      if (askMeAbout.length > 0) {
+        handleSaveAskMeAboutChange(askMeAbout);
+        toast.success("Ask Me About Q&A autosaved!", { duration: 1500 });
+      }
+    }
+    prevStepRef.current = currentStep;
+  }, [currentStep, askMeAbout]);
 
   const [setupMethod, setSetupMethod] = useState<"import" | "manual" | null>(
     isEdit ? "manual" : (isImportParam ? "import" : null)
@@ -1662,6 +1676,165 @@ export default function EditListing() {
     }
   }
 
+  interface SearchablePhotoSelectProps {
+    value: string;
+    onChange: (value: string) => void;
+    options: Array<{ key: string; label: string; hasImage: boolean; thumbUrl?: string }>;
+    placeholder?: string;
+    autoMatched?: boolean;
+  }
+
+  const SearchablePhotoSelect: React.FC<SearchablePhotoSelectProps> = ({
+    value,
+    onChange,
+    options,
+    placeholder = "-- No Image Swap --",
+    autoMatched = false,
+  }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+          setIsOpen(false);
+        }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find((opt) => opt.key === value);
+
+    const filteredOptions = options.filter((opt) => {
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase();
+      return opt.label.toLowerCase().includes(term) || opt.key.toLowerCase().includes(term);
+    });
+
+    return (
+      <div className="relative w-full text-left select-none" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="w-full flex items-center justify-between h-10 px-3 bg-white border border-slate-200 rounded-lg shadow-2xs hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer text-sm"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {selectedOption ? (
+              <>
+                {selectedOption.thumbUrl ? (
+                  <img
+                    src={selectedOption.thumbUrl}
+                    alt={selectedOption.label}
+                    className="h-6 w-8 object-cover rounded border border-slate-200 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="h-6 w-8 bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center rounded border border-blue-200 shrink-0">
+                    📷
+                  </div>
+                )}
+                <span className="font-semibold text-slate-800 truncate">{selectedOption.label}</span>
+                {autoMatched && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                    <Sparkles className="h-2.5 w-2.5 text-amber-600" /> AI Auto-Matched
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-slate-400 font-medium">{placeholder}</span>
+            )}
+          </div>
+          <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+            <div className="p-2 border-b bg-slate-50 flex items-center gap-2">
+              <Search className="h-4 w-4 text-slate-400 shrink-0 ml-1" />
+              <input
+                type="text"
+                autoFocus
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search linked photo label or keyword..."
+                className="w-full h-8 bg-white border border-slate-200 rounded-md px-2 text-xs focus:outline-none focus:border-blue-500 font-medium"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="text-xs text-slate-400 hover:text-slate-600 px-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                  !value ? "bg-blue-50 text-blue-700 font-bold" : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                <div className="h-6 w-8 bg-slate-100 text-slate-400 text-[10px] flex items-center justify-center rounded">
+                  🚫
+                </div>
+                <span>{placeholder}</span>
+              </button>
+
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((opt) => {
+                  const isSelected = opt.key === value;
+                  return (
+                    <button
+                      key={`photo-opt-${opt.key}`}
+                      type="button"
+                      onClick={() => {
+                        onChange(opt.key);
+                        setIsOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                        isSelected ? "bg-blue-50 text-blue-800 font-bold border border-blue-200" : "text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {opt.thumbUrl ? (
+                          <img
+                            src={opt.thumbUrl}
+                            alt={opt.label}
+                            className="h-6 w-8 object-cover rounded border border-slate-200 shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="h-6 w-8 bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center rounded shrink-0">
+                            📷
+                          </div>
+                        )}
+                        <span className="truncate">{opt.label}</span>
+                      </div>
+                      {isSelected && <Check className="h-4 w-4 text-blue-600 shrink-0 ml-2" />}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="py-4 text-center text-xs text-slate-400 italic">
+                  No photo labels found for "{searchTerm}"
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, '');
     if (numbers.length <= 3) return numbers;
@@ -1734,6 +1907,102 @@ export default function EditListing() {
     );
   };
 
+  const sortAskMeAboutAlphabetically = (list: any[]) => {
+    return list
+      .slice()
+      .sort((a, b) => (a.category || "").localeCompare(b.category || "", undefined, { sensitivity: "base" }))
+      .map((item, idx) => ({ ...item, sortOrder: idx }));
+  };
+
+  const findBestMatchingMediaKey = (categoryName: string, availableOptions: ReturnType<typeof getAvailableMediaOptions>) => {
+    if (!categoryName || !categoryName.trim() || !availableOptions || availableOptions.length === 0) {
+      return "";
+    }
+    
+    const cleanCat = categoryName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+    if (!cleanCat) return "";
+
+    const words = cleanCat.split(/\s+/).filter(w => w.length >= 2);
+    if (words.length === 0) return "";
+
+    let bestMatchKey = "";
+    let highestScore = 0;
+
+    availableOptions.forEach(opt => {
+      const optLabel = opt.label.toLowerCase();
+      const optKey = opt.key.toLowerCase();
+      let score = 0;
+
+      if (optLabel === cleanCat || optKey === cleanCat) {
+        score += 100;
+      } else if (optLabel.includes(cleanCat) || cleanCat.includes(optLabel)) {
+        score += 60;
+      }
+
+      words.forEach(word => {
+        if (optLabel.includes(word)) score += 25;
+        if (optKey.includes(word)) score += 20;
+      });
+
+      const synonymMap: Record<string, string[]> = {
+        kitchen: ["kitchen", "cooking", "island", "appliance", "pantry", "stove", "counter"],
+        pool: ["pool", "swim", "spa", "jacuzzi", "backyard", "water", "patio"],
+        backyard: ["backyard", "yard", "patio", "garden", "lawn", "deck", "outdoor", "pool"],
+        bed: ["bed", "bedroom", "suite", "primary", "master", "guest"],
+        bath: ["bath", "bathroom", "shower", "tub", "vanity", "powder", "restroom"],
+        living: ["living", "family", "great", "foyer", "lounge", "couch"],
+        dining: ["dining", "table", "eating", "breakfast", "nook"],
+        garage: ["garage", "driveway", "parking", "car"],
+        view: ["view", "scenery", "balcony", "deck", "skyline", "lake", "ocean"],
+        office: ["office", "den", "study", "desk"],
+        patio: ["patio", "porch", "deck", "backyard", "outdoor"]
+      };
+
+      Object.entries(synonymMap).forEach(([_concept, terms]) => {
+        const catHasConcept = words.some(w => terms.includes(w));
+        if (catHasConcept) {
+          const photoHasConcept = terms.some(t => optLabel.includes(t) || optKey.includes(t));
+          if (photoHasConcept) {
+            score += 40;
+          }
+        }
+      });
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatchKey = opt.key;
+      }
+    });
+
+    return highestScore >= 20 ? bestMatchKey : "";
+  };
+
+  const handleAddCategoryChange = (val: string) => {
+    const formattedCategory = capitalizeCategory(val);
+    const availableOptions = getAvailableMediaOptions();
+    const matchedKey = findBestMatchingMediaKey(formattedCategory, availableOptions);
+
+    setAddForm(prev => ({
+      ...prev,
+      category: formattedCategory,
+      mediaKey: matchedKey || prev.mediaKey
+    }));
+    setAddFormAutoMatched(!!matchedKey);
+  };
+
+  const handleEditCategoryChange = (val: string) => {
+    const formattedCategory = capitalizeCategory(val);
+    const availableOptions = getAvailableMediaOptions(editForm.mediaKey);
+    const matchedKey = findBestMatchingMediaKey(formattedCategory, availableOptions);
+
+    setEditForm(prev => ({
+      ...prev,
+      category: formattedCategory,
+      mediaKey: matchedKey || prev.mediaKey
+    }));
+    setEditFormAutoMatched(!!matchedKey);
+  };
+
   const capitalizeCategory = (str: string) => {
     if (!str) return "";
     // Capitalize every word's first character (after spaces, hyphens, slashes)
@@ -1752,6 +2021,58 @@ export default function EditListing() {
     return `Can you tell me about the ${cat}?`;
   };
 
+  const generateSoraSpokenAnswer = (catName: string, questName: string) => {
+    const cleanCat = (catName || "").trim();
+    const cleanQ = (questName || "").trim();
+    const catLower = cleanCat.toLowerCase();
+    const qLower = cleanQ.toLowerCase();
+
+    const bedsVal = beds || "4";
+    const bathsVal = baths || "3";
+    const sqftVal = sqft || "2,500";
+
+    if (catLower.includes("kitchen") || qLower.includes("kitchen") || catLower.includes("cuisine")) {
+      return `The kitchen features high-end stainless steel appliances, custom quartz countertops, and a spacious central island perfect for dining and entertaining.`;
+    }
+    if (catLower.includes("pool") || qLower.includes("pool") || catLower.includes("piscine")) {
+      return `Yes! The property includes a beautifully maintained swimming pool with surrounding patio space and ambient outdoor lighting.`;
+    }
+    if (catLower.includes("backyard") || catLower.includes("yard") || catLower.includes("patio") || qLower.includes("backyard") || qLower.includes("lot")) {
+      return `The private backyard offers a spacious outdoor sanctuary with lush landscaping, a patio area, and plenty of room for outdoor relaxation and dining.`;
+    }
+    if (catLower.includes("bed") || catLower.includes("bath") || qLower.includes("bedroom") || qLower.includes("bathroom")) {
+      return `This home features ${bedsVal} bedrooms and ${bathsVal} bathrooms with high-end fixtures and generous natural lighting.`;
+    }
+    if (catLower.includes("basement") || catLower.includes("in-law") || qLower.includes("basement") || qLower.includes("suite")) {
+      return `The lower level features flexible living space with private access, ideal for recreation, a home office, or an in-law suite.`;
+    }
+    if (catLower.includes("sqft") || catLower.includes("size") || qLower.includes("square foot") || qLower.includes("sqft")) {
+      return `The interior offers approximately ${sqftVal} square feet of beautifully designed living area across an open-concept floor plan.`;
+    }
+    if (catLower.includes("garage") || catLower.includes("parking") || qLower.includes("parking") || qLower.includes("garage")) {
+      return `Convenient parking is provided with a spacious garage and private driveway spaces.`;
+    }
+
+    if (cleanCat && cleanQ) {
+      return `This ${cleanCat.toLowerCase()} is thoughtfully designed with premium finishes and high quality features to complement comfortable daily living.`;
+    } else if (cleanCat) {
+      return `The ${cleanCat.toLowerCase()} is custom upgraded with quality materials and elegant detailing throughout.`;
+    }
+    return `Features custom high-end upgrades, premium finishes, and modern architectural detailing throughout.`;
+  };
+
+  const handleGenerateSoraAnswerForAdd = () => {
+    const generated = generateSoraSpokenAnswer(addForm.category, addForm.sampleQuestion);
+    setAddForm(prev => ({ ...prev, answer: generated }));
+    toast.success("AI created Sora's Spoken Answer!");
+  };
+
+  const handleGenerateSoraAnswerForEdit = () => {
+    const generated = generateSoraSpokenAnswer(editForm.category, editForm.sampleQuestion);
+    setEditForm(prev => ({ ...prev, answer: generated }));
+    toast.success("AI created Sora's Spoken Answer!");
+  };
+
   const handleToggleActive = async (id: string) => {
     const entry = askMeAbout.find(e => e.id === id);
     if (!entry) return;
@@ -1766,7 +2087,8 @@ export default function EditListing() {
     }
     
     setActiveLimitError(false);
-    const updated = askMeAbout.map(e => e.id === id ? { ...e, active: !e.active } : e);
+    const updatedRaw = askMeAbout.map(e => e.id === id ? { ...e, active: !e.active } : e);
+    const updated = sortAskMeAboutAlphabetically(updatedRaw);
     await handleSaveAskMeAboutChange(updated);
   };
 
@@ -1791,6 +2113,7 @@ export default function EditListing() {
       answer: entry.answer || "",
       mediaKey: entry.mediaKey || ""
     });
+    setEditFormAutoMatched(false);
     setEditingEntryId(entry.id);
   };
 
@@ -1807,32 +2130,37 @@ export default function EditListing() {
     const formattedCategory = capitalizeCategory(editForm.category);
     const formattedQuestion = capitalizeSentence(editForm.sampleQuestion);
 
-    const updated = askMeAbout.map(e => 
+    let chosenMediaKey = editForm.mediaKey;
+    if (!chosenMediaKey) {
+      const availableOptions = getAvailableMediaOptions(editForm.mediaKey);
+      chosenMediaKey = findBestMatchingMediaKey(formattedCategory, availableOptions);
+    }
+
+    const updatedRaw = askMeAbout.map(e => 
       e.id === editForm.id 
         ? { 
             ...e, 
             category: formattedCategory, 
             sampleQuestion: formattedQuestion, 
             answer: editForm.answer.trim(), 
-            mediaKey: editForm.mediaKey 
+            mediaKey: chosenMediaKey 
           } 
         : e
     );
+    
+    const updated = sortAskMeAboutAlphabetically(updatedRaw);
     await handleSaveAskMeAboutChange(updated);
     setEditingEntryId(null);
-    toast.success("Question updated successfully");
+    setEditFormAutoMatched(false);
+    toast.success(`'${formattedCategory}' updated & sorted alphabetically!`);
   };
 
   const handleConfirmDelete = async () => {
     if (!deletingEntry) return;
-    const updated = askMeAbout.filter(e => e.id !== deletingEntry.id);
-    
-    // Re-normalize sortOrder
-    const sorted = updated
-      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-      .map((e, idx) => ({ ...e, sortOrder: idx }));
+    const updatedRaw = askMeAbout.filter(e => e.id !== deletingEntry.id);
+    const updated = sortAskMeAboutAlphabetically(updatedRaw);
       
-    await handleSaveAskMeAboutChange(sorted);
+    await handleSaveAskMeAboutChange(updated);
     setDeletingEntry(null);
     toast.success(`'${deletingEntry.category}' deleted successfully`);
   };
@@ -1850,30 +2178,41 @@ export default function EditListing() {
     const formattedCategory = capitalizeCategory(addForm.category);
     const formattedQuestion = capitalizeSentence(addForm.sampleQuestion);
 
-    const maxSortOrder = askMeAbout.reduce((max, e) => Math.max(max, e.sortOrder || 0), -1);
+    let chosenMediaKey = addForm.mediaKey;
+    if (!chosenMediaKey) {
+      const availableOptions = getAvailableMediaOptions();
+      chosenMediaKey = findBestMatchingMediaKey(formattedCategory, availableOptions);
+    }
+
     const newEntry = {
       id: `custom_${Date.now()}`,
       category: formattedCategory,
       sampleQuestion: formattedQuestion,
       answer: addForm.answer.trim(),
-      mediaKey: addForm.mediaKey,
+      mediaKey: chosenMediaKey,
       isPreset: false,
       active: true,
-      sortOrder: maxSortOrder + 1
     };
     
-    const updated = [...askMeAbout, newEntry];
+    const updated = sortAskMeAboutAlphabetically([...askMeAbout, newEntry]);
     await handleSaveAskMeAboutChange(updated);
     setIsAddFormOpen(false);
     setAddForm({ category: "", sampleQuestion: "", answer: "", mediaKey: "" });
-    toast.success("Custom question added successfully");
+    setAddFormAutoMatched(false);
+
+    if (chosenMediaKey) {
+      toast.success(`'${formattedCategory}' added with connected photo & sorted alphabetically!`);
+    } else {
+      toast.success(`'${formattedCategory}' added & sorted alphabetically!`);
+    }
   };
 
   const handleSaveAskMeAboutChange = async (newAskMeAbout: any[]) => {
-    setAskMeAbout(newAskMeAbout);
+    const sortedList = sortAskMeAboutAlphabetically(newAskMeAbout);
+    setAskMeAbout(sortedList);
     const targetListingId = isEdit ? listingId! : activeListingId;
     try {
-      await updateListing(targetListingId, { askMeAbout: newAskMeAbout });
+      await updateListing(targetListingId, { askMeAbout: sortedList });
     } catch (err) {
       console.error("Failed to autosave Ask Me About changes:", err);
       toast.error("Failed to autosave changes");
@@ -2057,41 +2396,82 @@ export default function EditListing() {
 
   async function handleSave(e?: React.FormEvent, nextStepOverride?: number, isAutosave?: boolean): Promise<boolean> {
     if (e) e.preventDefault();
-    if (!address) {
-      toast.error("Address is required");
+    if (!address || !address.trim()) {
+      toast.error("Property address is required");
       return false;
     }
 
-    // Validations
+    if (!city || !city.trim()) {
+      toast.error("City is required");
+      return false;
+    }
+
+    if (!province || !province.trim()) {
+      toast.error("Province/State is required");
+      return false;
+    }
+
+    if (!country) {
+      toast.error("Country is required");
+      return false;
+    }
+
+    if (!brokerageName || !brokerageName.trim()) {
+      toast.error("Brokerage Name is required");
+      return false;
+    }
+
+    // Mandatory Price, Beds, Baths, Description
     const numericPrice = price ? parseInt(price) : 0;
-    if (price && (isNaN(numericPrice) || numericPrice <= 0)) {
-      toast.error("Price must be a positive number");
+    if (!price || isNaN(numericPrice) || numericPrice <= 0) {
+      toast.error("Price ($) is required and must be a positive number");
       return false;
     }
 
+    if (beds === "" || beds === null || beds === undefined || isNaN(parseInt(beds))) {
+      toast.error("Beds (number of bedrooms) is required");
+      return false;
+    }
+
+    if (baths === "" || baths === null || baths === undefined || isNaN(parseFloat(baths))) {
+      toast.error("Baths (number of bathrooms) is required");
+      return false;
+    }
+
+    if (!description || !description.trim()) {
+      toast.error("Property description is required");
+      return false;
+    }
+
+    // Square Footage is optional (if entered, validate numbers)
     if (useSqftRange) {
-      if (!sqftMin || !sqftMax) {
-        toast.error("Please enter both minimum and maximum square feet");
-        return false;
-      }
-      const minNum = parseInt(sqftMin);
-      const maxNum = parseInt(sqftMax);
-      if (isNaN(minNum) || isNaN(maxNum) || minNum >= 50000 || maxNum >= 50000) {
-        toast.error("Square feet must be realistic numbers (less than 50,000)");
-        return false;
-      }
-      if (minNum > maxNum) {
-        toast.error("Minimum square feet cannot be greater than maximum square feet");
-        return false;
+      if (sqftMin || sqftMax) {
+        if (!sqftMin || !sqftMax) {
+          toast.error("Please enter both minimum and maximum square feet for the range");
+          return false;
+        }
+        const minNum = parseInt(sqftMin);
+        const maxNum = parseInt(sqftMax);
+        if (isNaN(minNum) || isNaN(maxNum) || minNum >= 50000 || maxNum >= 50000) {
+          toast.error("Square feet must be realistic numbers (less than 50,000)");
+          return false;
+        }
+        if (minNum > maxNum) {
+          toast.error("Minimum square feet cannot be greater than maximum square feet");
+          return false;
+        }
       }
     } else {
-      const numericSqft = sqft ? parseInt(sqft) : 0;
-      if (sqft && (isNaN(numericSqft) || numericSqft >= 50000)) {
-        toast.error("Square feet must be a realistic number (less than 50,000)");
-        return false;
+      if (sqft) {
+        const numericSqft = parseInt(sqft);
+        if (isNaN(numericSqft) || numericSqft >= 50000) {
+          toast.error("Square feet must be a realistic number (less than 50,000)");
+          return false;
+        }
       }
     }
 
+    // MLS Number is optional (if entered, validate format)
     if (mlsNumber) {
       if (mlsCountry === "US") {
         if (!/^\d{6,10}$/.test(mlsNumber)) {
@@ -2111,7 +2491,7 @@ export default function EditListing() {
       if (postalPlaceholder === "NONE") {
         formattedPostalCode = "NONE";
       } else {
-        toast.error("Zip/Postal Code is missing. Please provide a valid entry.");
+        toast.error("Postal/Zip Code is required. Please provide a valid entry.");
         return false;
       }
     }
@@ -2789,19 +3169,19 @@ export default function EditListing() {
                   <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main St, Los Angeles, CA" required />
                 </div>
                 <div className="space-y-2">
-                  <Label>City</Label>
+                  <Label>City *</Label>
                   <Input value={city} onChange={e => setCity(e.target.value)} placeholder="L.A." />
                 </div>
                 <div className="space-y-2">
-                  <Label>Province/State</Label>
+                  <Label>Province/State *</Label>
                   <Input value={province} onChange={e => setProvince(e.target.value)} placeholder="CA" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Postal/Zip Code</Label>
+                  <Label>Postal/Zip Code *</Label>
                   <Input value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder={postalPlaceholder} />
                 </div>
                 <div className="space-y-2 col-span-1">
-                  <Label>Country</Label>
+                  <Label>Country *</Label>
                   <select 
                     className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
                     value={country} 
@@ -2815,11 +3195,11 @@ export default function EditListing() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Brokerage Name</Label>
+                  <Label>Brokerage Name *</Label>
                   <Input value={brokerageName} onChange={e => setBrokerageName(e.target.value)} placeholder="Century 21, Sotheby's, etc." />
                 </div>
                 <div className="space-y-2">
-                  <Label>Agent Attribution Name</Label>
+                  <Label>Agent Attribution Name <span className="text-slate-400 font-normal">(Optional)</span></Label>
                   <Input value={agentName} onChange={e => setAgentName(e.target.value)} placeholder="Jane Doe" />
                 </div>
               </div>
@@ -2828,18 +3208,18 @@ export default function EditListing() {
                 {/* Left side: Price, Beds & Baths */}
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Price ($)</Label>
+                    <Label>Price ($) *</Label>
                     <Input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="850000" />
                   </div>
                   
                   {/* Beds and Baths sharing a row - condensed to 50% width combined */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Beds</Label>
+                      <Label>Beds *</Label>
                       <Input type="number" value={beds} onChange={e => setBeds(e.target.value)} placeholder="3" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Baths</Label>
+                      <Label>Baths *</Label>
                       <Input type="number" value={baths} onChange={e => setBaths(e.target.value)} placeholder="2.5" />
                     </div>
                   </div>
@@ -2848,7 +3228,7 @@ export default function EditListing() {
                 {/* Right side: Sq Ft configuration */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b pb-1">
-                    <Label className="font-semibold text-slate-800">Square Footage</Label>
+                    <Label className="font-semibold text-slate-800">Square Footage <span className="text-slate-400 font-normal">(Optional)</span></Label>
                     <div className="flex items-center gap-1.5">
                       <input 
                         type="checkbox" 
@@ -2865,7 +3245,7 @@ export default function EditListing() {
 
                   {!useSqftRange ? (
                     <div className="space-y-2">
-                      <Label>Sq Ft</Label>
+                      <Label>Sq Ft <span className="text-slate-400 font-normal">(Optional)</span></Label>
                       <Input 
                         type="text" 
                         value={sqft} 
@@ -2881,7 +3261,7 @@ export default function EditListing() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <Label>Square Feet Range</Label>
+                      <Label>Square Feet Range <span className="text-slate-400 font-normal">(Optional)</span></Label>
                       <div className="grid grid-cols-2 gap-4 items-center">
                         <div className="space-y-1">
                           <Input 
@@ -2933,7 +3313,7 @@ export default function EditListing() {
                   </select>
                 </div>
                 <div className="space-y-2 text-left">
-                  <Label>MLS® Number</Label>
+                  <Label>MLS® Number <span className="text-slate-400 font-normal">(Optional)</span></Label>
                   <Input 
                     value={mlsNumber} 
                     onChange={e => {
@@ -2956,14 +3336,14 @@ export default function EditListing() {
                   </p>
                 </div>
                 <div className="space-y-2 text-left">
-                  <Label>MLS Board / Originating System</Label>
+                  <Label>MLS Board / Originating System <span className="text-slate-400 font-normal">(Optional)</span></Label>
                   <Input value={originatingSystemName} onChange={e => setOriginatingSystemName(e.target.value)} placeholder="e.g. CRISNet" />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label className="flex justify-between items-center">
-                  <span>Description</span>
+                  <span>Description *</span>
                   <span className="text-[10px] font-mono font-medium text-slate-400">Formatted as max 3 sentences per paragraph</span>
                 </Label>
                 <Textarea 
@@ -3090,6 +3470,42 @@ export default function EditListing() {
                   <CardDescription>
                     Configure up to 24 active questions that Sora can speak answers for. When selected, the tour photo will automatically swap to the designated room. These preset will be synced with the AI Tour, Ask Me About section.
                   </CardDescription>
+
+                  {/* Search Area for Ask Me About Q&A Builder */}
+                  <div className="mt-3 relative">
+                    <div className="relative flex items-center">
+                      <Search className="absolute left-3 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={askMeAboutSearch}
+                        onChange={(e) => setAskMeAboutSearch(e.target.value)}
+                        placeholder="Search Ask Me About presets, categories, questions, or custom items..."
+                        className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                      />
+                      {askMeAboutSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setAskMeAboutSearch("")}
+                          className="absolute right-3 text-slate-400 hover:text-slate-600 font-extrabold text-xs cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {askMeAboutSearch && (
+                      <p className="text-[11px] font-bold text-blue-600 mt-1 flex items-center gap-1">
+                        Filtering items matching "{askMeAboutSearch}" ({
+                          askMeAbout.filter(e => {
+                            const q = askMeAboutSearch.toLowerCase().trim();
+                            return (e.category || "").toLowerCase().includes(q) ||
+                              (e.sampleQuestion || "").toLowerCase().includes(q) ||
+                              (e.answer || "").toLowerCase().includes(q) ||
+                              (e.mediaKey || "").toLowerCase().includes(q);
+                          }).length
+                        } results)
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2 shrink-0">
                   <Button 
@@ -3127,6 +3543,15 @@ export default function EditListing() {
               {askMeAbout.length > 0 ? (
                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                   {askMeAbout
+                    .filter((entry) => {
+                      if (!askMeAboutSearch.trim()) return true;
+                      const q = askMeAboutSearch.toLowerCase().trim();
+                      const cat = (entry.category || "").toLowerCase();
+                      const sampleQ = (entry.sampleQuestion || "").toLowerCase();
+                      const ans = (entry.answer || "").toLowerCase();
+                      const media = (entry.mediaKey || "").toLowerCase();
+                      return cat.includes(q) || sampleQ.includes(q) || ans.includes(q) || media.includes(q);
+                    })
                     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
                     .map((entry, index) => {
                       const isCardActive = !!entry.active;
@@ -3803,7 +4228,7 @@ export default function EditListing() {
                 Social Share Configuration
               </CardTitle>
               <CardDescription>
-                Choose which social share destinations appear for visitors interacting with this listing and its AI Tour.
+                Choose which social share destinations appear for visitors interacting with this listing and its AI Tour using the share this listing bubble icon.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -4597,9 +5022,9 @@ export default function EditListing() {
               <Input 
                 id="add-category"
                 value={addForm.category}
-                onChange={(e) => setAddForm({ ...addForm, category: capitalizeCategory(e.target.value) })}
-                onBlur={() => setAddForm(prev => ({ ...prev, category: capitalizeCategory(prev.category) }))}
-                placeholder="e.g. Backyard Oasis, Smart Home Features"
+                onChange={(e) => handleAddCategoryChange(e.target.value)}
+                onBlur={() => handleAddCategoryChange(addForm.category)}
+                placeholder="e.g. Backyard Oasis, Kitchen Island, Primary Bath"
                 className="h-10 text-sm"
               />
             </div>
@@ -4615,6 +5040,7 @@ export default function EditListing() {
                     if (addForm.category) {
                       const generated = generateQuestionFromCategory(addForm.category);
                       setAddForm(prev => ({ ...prev, sampleQuestion: capitalizeSentence(generated) }));
+                      handleAddCategoryChange(addForm.category);
                     } else {
                       toast.error("Please enter a category name first");
                     }
@@ -4635,7 +5061,19 @@ export default function EditListing() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="add-answer" className="font-bold text-slate-700">Sora's Spoken Answer (Optional)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="add-answer" className="font-bold text-slate-700">Sora's Spoken Answer (Optional)</Label>
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  size="sm" 
+                  onClick={handleGenerateSoraAnswerForAdd}
+                  className="text-xs text-blue-600 font-semibold h-auto p-0 cursor-pointer hover:underline flex items-center gap-1"
+                >
+                  <Sparkles className="h-3 w-3 text-amber-500" />
+                  AI Create Sora's Spoken Answer
+                </Button>
+              </div>
               <Textarea 
                 id="add-answer"
                 value={addForm.answer}
@@ -4655,19 +5093,16 @@ export default function EditListing() {
                   </div>
                 </div>
               </div>
-              <select
-                id="add-media-key"
+              <SearchablePhotoSelect
                 value={addForm.mediaKey}
-                onChange={(e) => setAddForm({ ...addForm, mediaKey: e.target.value })}
-                className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
-              >
-                <option value="">-- No Image Swap --</option>
-                {getAvailableMediaOptions(addForm.mediaKey).map((opt) => (
-                  <option key={`add-opt-${opt.key}`} value={opt.key}>
-                    📷 {opt.label} (Uploaded)
-                  </option>
-                ))}
-              </select>
+                onChange={(key) => {
+                  setAddForm(prev => ({ ...prev, mediaKey: key }));
+                  setAddFormAutoMatched(false);
+                }}
+                options={getAvailableMediaOptions(addForm.mediaKey)}
+                placeholder="-- Select or Search Photo --"
+                autoMatched={addFormAutoMatched}
+              />
             </div>
           </div>
           <DialogFooter>
@@ -4697,9 +5132,9 @@ export default function EditListing() {
               <Input 
                 id="edit-category"
                 value={editForm.category}
-                onChange={(e) => setEditForm({ ...editForm, category: capitalizeCategory(e.target.value) })}
-                onBlur={() => setEditForm(prev => ({ ...prev, category: capitalizeCategory(prev.category) }))}
-                placeholder="e.g. Backyard Oasis, Smart Home Features"
+                onChange={(e) => handleEditCategoryChange(e.target.value)}
+                onBlur={() => handleEditCategoryChange(editForm.category)}
+                placeholder="e.g. Backyard Oasis, Kitchen Island, Primary Bath"
                 className="h-10 text-sm"
               />
             </div>
@@ -4715,6 +5150,7 @@ export default function EditListing() {
                     if (editForm.category) {
                       const generated = generateQuestionFromCategory(editForm.category);
                       setEditForm(prev => ({ ...prev, sampleQuestion: capitalizeSentence(generated) }));
+                      handleEditCategoryChange(editForm.category);
                     } else {
                       toast.error("Please enter a category name first");
                     }
@@ -4735,7 +5171,19 @@ export default function EditListing() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-answer" className="font-bold text-slate-700">Sora's Spoken Answer (Optional)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-answer" className="font-bold text-slate-700">Sora's Spoken Answer (Optional)</Label>
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  size="sm" 
+                  onClick={handleGenerateSoraAnswerForEdit}
+                  className="text-xs text-blue-600 font-semibold h-auto p-0 cursor-pointer hover:underline flex items-center gap-1"
+                >
+                  <Sparkles className="h-3 w-3 text-amber-500" />
+                  AI Create Sora's Spoken Answer
+                </Button>
+              </div>
               <Textarea 
                 id="edit-answer"
                 value={editForm.answer}
@@ -4755,19 +5203,16 @@ export default function EditListing() {
                   </div>
                 </div>
               </div>
-              <select
-                id="edit-media-key"
+              <SearchablePhotoSelect
                 value={editForm.mediaKey}
-                onChange={(e) => setEditForm({ ...editForm, mediaKey: e.target.value })}
-                className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm bg-white"
-              >
-                <option value="">-- No Image Swap --</option>
-                {getAvailableMediaOptions(editForm.mediaKey).map((opt) => (
-                  <option key={`edit-opt-${opt.key}`} value={opt.key}>
-                    📷 {opt.label} (Uploaded)
-                  </option>
-                ))}
-              </select>
+                onChange={(key) => {
+                  setEditForm(prev => ({ ...prev, mediaKey: key }));
+                  setEditFormAutoMatched(false);
+                }}
+                options={getAvailableMediaOptions(editForm.mediaKey)}
+                placeholder="-- Select or Search Photo --"
+                autoMatched={editFormAutoMatched}
+              />
             </div>
           </div>
           <DialogFooter>

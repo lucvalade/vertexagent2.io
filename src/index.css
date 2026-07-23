@@ -452,3 +452,20 @@
 .animate-flash-dark-blue {
   animation: flash-dark-blue-bg 1.4s infinite ease-in-out;
 }
+
+/* Custom Blue Scrollbar for Open House Planner and Application */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #50a2ff;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b8ee6;
+}

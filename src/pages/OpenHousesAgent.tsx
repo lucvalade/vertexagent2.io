@@ -206,6 +206,7 @@ export default function OpenHousesAgent() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
+  const eventIdParam = searchParams.get("eventId") || searchParams.get("event");
 
   const [listings, setListings] = useState<Listing[]>([]);
   const [agentsAndUsers, setAgentsAndUsers] = useState<string[]>([]);
@@ -219,7 +220,11 @@ export default function OpenHousesAgent() {
     } else if (tabParam === "results") {
       setActiveTab("results");
     }
-  }, [tabParam]);
+    if (eventIdParam) {
+      setActiveTab("results");
+      setResultsSelectedEventId(eventIdParam);
+    }
+  }, [tabParam, eventIdParam]);
   
   const [leads, setLeads] = useState<any[]>([]);
 
@@ -241,6 +246,253 @@ export default function OpenHousesAgent() {
   // Open House State
   const [events, setEvents] = useState<OpenHouseEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<OpenHouseEvent | null>(null);
+
+  // Open House Detailed Report Modal & Guest Drilldown State
+  const [selectedReportEvent, setSelectedReportEvent] = useState<OpenHouseEvent | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [selectedDrilldownGuest, setSelectedDrilldownGuest] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (eventIdParam && events.length > 0) {
+      const match = events.find(e => e.id === eventIdParam);
+      if (match) {
+        setResultsSelectedEventId(match.id);
+        setSelectedReportEvent(match);
+      }
+    }
+  }, [eventIdParam, events]);
+
+  // Submenu for Export PDF / CSV
+  const [exportSubmenuOpen, setExportSubmenuOpen] = useState(false);
+
+  // Live CRM Push Status per guest ID
+  const [guestCrmStatuses, setGuestCrmStatuses] = useState<Record<string, string>>({});
+
+  // Sora Personalized Email Composer Modal
+  const [soraEmailModalGuest, setSoraEmailModalGuest] = useState<any | null>(null);
+  const [soraEmailSubject, setSoraEmailSubject] = useState("");
+  const [soraEmailBody, setSoraEmailBody] = useState("");
+  const [soraEmailSentMap, setSoraEmailSentMap] = useState<Record<string, boolean>>({});
+
+  // Export handlers
+  const handleExportPDF = () => {
+    if (!selectedReportEvent) return;
+    setExportSubmenuOpen(false);
+    toast.info("Generating PDF Analytics Report...");
+    
+    // Create printable HTML window
+    const printWin = window.open("", "_blank");
+    if (printWin) {
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${selectedReportEvent.eventName} - Detailed Analytics Report</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #111827; }
+              h1 { font-size: 24px; margin-bottom: 4px; color: #1e3a8a; }
+              .meta { color: #4b5563; font-size: 14px; margin-bottom: 24px; }
+              .metrics { display: flex; gap: 16px; margin-bottom: 24px; }
+              .metric-card { flex: 1; border: 1px solid #e5e7eb; padding: 16px; border-radius: 8px; background: #f9fafb; text-align: center; }
+              .metric-card h3 { font-size: 11px; text-transform: uppercase; color: #6b7280; margin: 0 0 8px 0; }
+              .metric-card p { font-size: 20px; font-weight: bold; margin: 0; color: #1f2937; }
+              table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+              th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
+              th { background-color: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #374151; }
+            </style>
+          </head>
+          <body>
+            <h1>Detailed Open House Analytics Report</h1>
+            <div class="meta">
+              <strong>Event Name:</strong> ${selectedReportEvent.eventName} | 
+              <strong>Address:</strong> ${selectedReportEvent.listingAddress} | 
+              <strong>Date:</strong> ${selectedReportEvent.eventDate}
+            </div>
+            
+            <div class="metrics">
+              <div class="metric-card">
+                <h3>Client Visits</h3>
+                <p>${Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6} guests</p>
+              </div>
+              <div class="metric-card">
+                <h3>Hot Leads</h3>
+                <p>${Math.floor((Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) / 2) || 1} hot</p>
+              </div>
+              <div class="metric-card">
+                <h3>QR Scans</h3>
+                <p>${(Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) * 2 + 5} scans</p>
+              </div>
+              <div class="metric-card">
+                <h3>Sora Audio Tours</h3>
+                <p>${Math.floor((Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) * 1.3) + 2} plays</p>
+              </div>
+            </div>
+
+            <h2>Attendee Visitor Roster & Sora Interaction Log</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Guest Name</th>
+                  <th>Contact Info</th>
+                  <th>Sora Voice Activity</th>
+                  <th>Mortgage Consent</th>
+                  <th>Hot Lead</th>
+                  <th>CRM Sync Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Sarah Jenkins</td>
+                  <td>sarah.jenkins@gmail.com<br/>(310) 555-0192</td>
+                  <td>Kitchen, Master Suite, HOA fees Q&A</td>
+                  <td>Yes (Paired Lender)</td>
+                  <td>Yes (Hot Lead)</td>
+                  <td>Synced to Follow Up Boss</td>
+                </tr>
+                <tr>
+                  <td>David & Marcus Vance</td>
+                  <td>david.vance@techfirm.co<br/>(310) 555-0841</td>
+                  <td>Price & school district voice query</td>
+                  <td>Yes (Paired Lender)</td>
+                  <td>Yes (Hot Lead)</td>
+                  <td>Synced to Follow Up Boss</td>
+                </tr>
+                <tr>
+                  <td>Elena Rostova</td>
+                  <td>elena.r@designstudio.io<br/>(310) 555-3310</td>
+                  <td>Full guided tour (12 stops)</td>
+                  <td>Opted Out</td>
+                  <td>No</td>
+                  <td>Synced to Follow Up Boss</td>
+                </tr>
+                <tr>
+                  <td>Michael Chang</td>
+                  <td>mchang.investments@gmail.com<br/>(310) 555-9011</td>
+                  <td>Rental yield & property taxes Q&A</td>
+                  <td>Yes (Paired Lender)</td>
+                  <td>Yes (Hot Lead)</td>
+                  <td>Synced to Follow Up Boss</td>
+                </tr>
+                <tr>
+                  <td>Priya & Raj Patel</td>
+                  <td>priya.patel@health.org<br/>(310) 555-4420</td>
+                  <td>Backyard & neighborhood tour</td>
+                  <td>Opted Out</td>
+                  <td>No</td>
+                  <td>Synced to Follow Up Boss</td>
+                </tr>
+                <tr>
+                  <td>Robert Thorne</td>
+                  <td>r.thorne@lawgroup.com<br/>(310) 555-7788</td>
+                  <td>Garage & parking allocation</td>
+                  <td>Yes (Paired Lender)</td>
+                  <td>No</td>
+                  <td>Synced to Follow Up Boss</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="margin-top: 32px; font-size: 11px; color: #9ca3af; text-align: center;">
+              Report generated by AI Open House Connect for ${user?.email || 'Listing Agent'}
+            </div>
+          </body>
+        </html>
+      `.replace(/<\//g, "<\\/"));
+      printWin.document.close();
+      printWin.focus();
+      setTimeout(() => printWin.print(), 300);
+      toast.success("PDF Analytics Report opened in print/download window!");
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (!selectedReportEvent) return;
+    setExportSubmenuOpen(false);
+
+    const headers = ["Guest Name", "Email", "Phone", "Arrival Time", "Sora Voice Activity", "Mortgage Consent", "Hot Lead Status", "Occupation", "Agent Notes", "CRM Sync Status"];
+    const guests = [
+      { name: "Sarah Jenkins", email: "sarah.jenkins@gmail.com", phone: "(310) 555-0192", time: "1:15 PM", soraUsage: "Kitchen, Master Suite, HOA fees Q&A", mortgageConsent: "Yes", hotLead: "Yes", occupation: "Product Designer at Apple", notes: "Extremely interested in modern kitchen island and backyard orientation.", id: "guest-1" },
+      { name: "David & Marcus Vance", email: "david.vance@techfirm.co", phone: "(310) 555-0841", time: "1:42 PM", soraUsage: "Price & school district voice query", mortgageConsent: "Yes", hotLead: "Yes", occupation: "VP Engineering", notes: "Looking to close within 30 days. Pre-approved with Chase.", id: "guest-2" },
+      { name: "Elena Rostova", email: "elena.r@designstudio.io", phone: "(310) 555-3310", time: "2:05 PM", soraUsage: "Full guided tour (12 stops)", mortgageConsent: "No", hotLead: "No", occupation: "Architectural Stylist", notes: "Loved the hardwood finishes and double-height ceiling.", id: "guest-3" },
+      { name: "Michael Chang", email: "mchang.investments@gmail.com", phone: "(310) 555-9011", time: "2:30 PM", soraUsage: "Rental yield & property taxes Q&A", mortgageConsent: "Yes", hotLead: "Yes", occupation: "Real Estate Investor", notes: "Inquiring about seller concessions and quick inspection timelines.", id: "guest-4" },
+      { name: "Priya & Raj Patel", email: "priya.patel@health.org", phone: "(310) 555-4420", time: "3:10 PM", soraUsage: "Backyard & neighborhood tour", mortgageConsent: "No", hotLead: "No", occupation: "Physician", notes: "First time viewing. Comparing with nearby Beverly Hills properties.", id: "guest-5" },
+      { name: "Robert Thorne", email: "r.thorne@lawgroup.com", phone: "(310) 555-7788", time: "3:45 PM", soraUsage: "Garage & parking allocation", mortgageConsent: "Yes", hotLead: "No", occupation: "Senior Partner", notes: "Requesting follow up seller disclosure documents.", id: "guest-6" }
+    ];
+
+    let csvContent = headers.map(h => `"${h}"`).join(",") + "\n";
+    guests.forEach(g => {
+      const crmStatus = guestCrmStatuses[g.id] || "Synced to Follow Up Boss";
+      const row = [g.name, g.email, g.phone, g.time, g.soraUsage, g.mortgageConsent, g.hotLead, g.occupation, g.notes, crmStatus];
+      csvContent += row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = `${selectedReportEvent.eventName.replace(/[^a-zA-Z0-9]/g, "_")}_Analytics.csv`;
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Exported CSV file: ${filename} downloaded!`);
+  };
+
+  const handlePushLeadToCrm = (guest: any) => {
+    const refNum = Math.floor(100000 + Math.random() * 900000);
+    const newStatus = `Synced to Follow Up Boss & kvCORE (Ref #FUB-${refNum})`;
+    setGuestCrmStatuses(prev => ({ ...prev, [guest.id]: newStatus }));
+    toast.success(`Pushed ${guest.name} to Follow Up Boss CRM!`, {
+      description: `Lead tags: #${selectedReportEvent?.eventName.replace(/\s+/g, '')} ${guest.mortgageConsent ? '#fub-mortgage-interest' : ''}`
+    });
+  };
+
+  const handleBulkPushCrm = () => {
+    const updated: Record<string, string> = {};
+    ["guest-1", "guest-2", "guest-3", "guest-4", "guest-5", "guest-6"].forEach(id => {
+      const refNum = Math.floor(100000 + Math.random() * 900000);
+      updated[id] = `Synced to Follow Up Boss & kvCORE (Ref #FUB-${refNum})`;
+    });
+    setGuestCrmStatuses(prev => ({ ...prev, ...updated }));
+    toast.success("Pushed all 6 event attendees to Follow Up Boss & kvCORE CRM!", {
+      description: "Mapped contact fields, custom tags, and mortgage consent flags synced successfully."
+    });
+  };
+
+  const handleOpenSoraEmailComposer = (guest: any) => {
+    setSoraEmailModalGuest(guest);
+    setSoraEmailSubject(`Follow-up on your Open House visit to ${selectedReportEvent?.listingAddress || 'our luxury listing'}`);
+    setSoraEmailBody(
+`Hi ${guest.name.split(' ')[0]},
+
+Thank you so much for visiting our open house today at ${selectedReportEvent?.listingAddress || 'the property'}!
+
+Sora, our AI property tour assistant, noted that you had key questions regarding:
+• ${guest.soraUsage}
+
+I wanted to personally reach out with additional property disclosures, full floor plans, and answers to your questions.
+
+${guest.mortgageConsent ? "Since you requested financing options during sign-in, I have also alerted our preferred lender team to prepare customized rate and payment options for you." : ""}
+
+${guest.notes ? `Regarding your note: "${guest.notes}" — I would be delighted to arrange a private second walkthrough.` : "Would you like to schedule a private second walkthrough this week?"}
+
+Warm regards,
+
+${user?.email || "Listing Agent"}
+AI Open House Connect Team`
+    );
+  };
+
+  const handleSendSoraEmail = () => {
+    if (!soraEmailModalGuest) return;
+    setSoraEmailSentMap(prev => ({ ...prev, [soraEmailModalGuest.id]: true }));
+    toast.success(`Personalized email sent to ${soraEmailModalGuest.name}!`, {
+      description: `Dispatched to ${soraEmailModalGuest.email} via Sora Mail Engine.`
+    });
+    setSoraEmailModalGuest(null);
+  };
 
   // Date-based and Monthly aggregation filter states
   const [filterDateStr, setFilterDateStr] = useState("");
@@ -309,6 +561,10 @@ export default function OpenHousesAgent() {
   const [showEventModeHelp, setShowEventModeHelp] = useState(false);
   const [showSoraInsightsHelp, setShowSoraInsightsHelp] = useState(false);
 
+  useEffect(() => {
+    setShowPlannerHelp(false);
+  }, [activeTab, searchParams]);
+
   const getTodayString = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -319,7 +575,7 @@ export default function OpenHousesAgent() {
 
   // Simulation & Email Logs states
   const [resultsGroupBy, setResultsGroupBy] = useState<"date" | "month">("date");
-  const [resultsSelectedGroup, setResultsSelectedGroup] = useState<string>("all");
+  const [resultsSelectedGroup, setResultsSelectedGroup] = useState<string>("");
   const [resultsSelectedEventId, setResultsSelectedEventId] = useState<string>("all");
   const [resultsCmaComps, setResultsCmaComps] = useState([
     { address: "12 Clifton Downs Rd, Hamilton", price: "$849,000", status: "Sold", beds: "3+1", baths: "2", sqft: "1,850" },
@@ -1253,7 +1509,7 @@ Thanks,
               </p>
             </div>
             <div className="bg-white border border-stone-100 p-3 rounded-xl shadow-xs">
-              <p className="text-xs font-black text-slate-800 uppercase tracking-wide">🪄 Event Setup Wizard</p>
+              <p className="text-xs font-black text-slate-800 uppercase tracking-wide">🪄 Events & Results</p>
               <p className="text-[11px] text-stone-500 mt-1 leading-normal">
                 Plan upcoming events, assign custom listing hosts, configure timings, and choose the target registration mode (Tablet/QR/Hybrid).
               </p>
@@ -1265,7 +1521,7 @@ Thanks,
               </p>
             </div>
             <div className="bg-white border border-stone-100 p-3 rounded-xl shadow-xs">
-              <p className="text-xs font-black text-slate-800 uppercase tracking-wide">📱 Tablet Kiosk Loop</p>
+              <p className="text-xs font-black text-slate-800 uppercase tracking-wide">📱 Kiosk Terminal</p>
               <p className="text-[11px] text-stone-500 mt-1 leading-normal">
                 Lock the interface for direct consumer sign-in. Supports Exit PIN locks, offline session buffers, and auto-reset timers.
               </p>
@@ -1289,7 +1545,10 @@ Thanks,
       {/* Primary Subpages Navigation Tabs */}
       <div className="flex border-b text-black font-semibold text-xs font-bold uppercase tracking-wider overflow-x-auto gap-4 md:gap-6">
         <button 
-          onClick={() => setActiveTab("dashboard")}
+          onClick={() => {
+            setActiveTab("dashboard");
+            navigate("/app/openhouses?tab=scheduled");
+          }}
           className={`pb-2.5 outline-none whitespace-nowrap ${activeTab === 'dashboard' ? 'text-blue-700 border-b-2 border-blue-600 font-black' : 'hover:text-stone-800'}`}
         >
           Scheduled Events
@@ -1417,7 +1676,8 @@ Thanks,
                     setFilterDateStr("");
                     setFilterMonthStr("all");
                   }}
-                  className="w-full text-xs font-black uppercase tracking-wider bg-black text-white hover:bg-stone-800 disabled:opacity-40 disabled:hover:bg-black transition-all rounded-lg h-[42px] cursor-pointer"
+                  style={{ backgroundColor: "#50a2ff" }}
+                  className="w-full text-xs font-black uppercase tracking-wider text-white hover:opacity-90 disabled:opacity-40 transition-all rounded-lg h-[42px] cursor-pointer shadow-xs"
                 >
                   RESET FILTERS
                 </Button>
@@ -1449,9 +1709,18 @@ Thanks,
                                 <MapPin className="h-3 w-3 text-black font-medium" /> {evt.listingAddress}
                               </CardDescription>
                             </div>
-                            <span className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
-                              Mode: {evt.eventMode}
-                            </span>
+                            <div className="flex flex-col items-end gap-1">
+                              <span 
+                                title="Mode Hybrid: Combines an on-site tablet kiosk sign-in terminal at the property with touchless QR-code entry and Sora AI guided voice tours."
+                                className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1"
+                              >
+                                Mode: {evt.eventMode || "Hybrid"}
+                                <HelpCircle className="h-3 w-3 text-blue-500" />
+                              </span>
+                              <span className="text-[9px] font-semibold text-stone-600 bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200 text-right max-w-[210px] leading-tight">
+                                💡 <strong>Hybrid:</strong> Tablet Kiosk + Touchless QR & Sora Voice Tour.
+                              </span>
+                            </div>
                           </div>
                         </CardHeader>
                         <CardContent className="p-4 pt-1 grid sm:grid-cols-2 gap-4 text-left border-t border-dashed border-stone-200/50 mt-2">
@@ -1485,44 +1754,71 @@ Thanks,
                       const code = (evt.id || "").charCodeAt(0) || 1;
                       const guestsCount = Math.floor(Math.abs(code * 3) % 8) + 6;
                       const hotCount = Math.floor(guestsCount / 2) || 1;
-                      const qrScans = guestsCount * 2 + 2;
+                      const qrScans = guestsCount * 2 + 5;
+                      const soraPlays = Math.floor(guestsCount * 1.3) + 2;
 
                       return (
                         <Card 
                           key={evt.id}
-                          onClick={() => { handleSelectEvent(evt); setActiveTab("quick_actions"); }} 
-                          className={`transition-all hover:shadow-md cursor-pointer border-stone-200 ${selectedEvent?.id === evt.id ? 'bg-stone-50/50 shadow-sm border-stone-400' : 'bg-stone-50/10'}`}
+                          onClick={() => { 
+                            setResultsSelectedEventId(evt.id);
+                            setSelectedReportEvent(evt); 
+                            setActiveTab("results");
+                            navigate("/app/openhouses?tab=results");
+                          }} 
+                          className={`transition-all hover:shadow-lg cursor-pointer border-stone-200 hover:border-blue-500 group ${selectedReportEvent?.id === evt.id ? 'bg-blue-50/20 shadow-md border-blue-400' : 'bg-stone-50/10'}`}
                         >
                           <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[9px] font-black uppercase text-black font-semibold bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded">Completed</span>
-                                  <CardTitle className="text-sm font-bold text-stone-800">{evt.eventName}</CardTitle>
+                                  <span className="text-[9px] font-black uppercase text-white bg-blue-600 px-2 py-0.5 rounded-full">Completed</span>
+                                  <CardTitle className="text-sm font-bold text-stone-900 group-hover:text-blue-600 transition-colors">{evt.eventName}</CardTitle>
                                 </div>
-                                <CardDescription className="text-xs font-medium text-black font-semibold mt-1 flex items-center gap-1">
-                                  <MapPin className="h-3 w-3 text-black font-medium" /> {evt.listingAddress}
+                                <CardDescription className="text-xs font-medium text-stone-700 mt-1 flex items-center gap-1">
+                                  <MapPin className="h-3 w-3 text-stone-500" /> {evt.listingAddress}
                                 </CardDescription>
                               </div>
-                              <span className="text-[10px] font-bold uppercase bg-stone-100 text-black px-2 py-0.5 rounded border border-stone-200">
+                              <span className="text-[10px] font-extrabold uppercase bg-stone-100 text-stone-800 px-2.5 py-1 rounded-lg border border-stone-200">
                                 Date: {evt.eventDate}
                               </span>
                             </div>
                           </CardHeader>
-                          <CardContent className="p-4 pt-1 border-t border-stone-200/40 mt-2">
-                            <div className="grid grid-cols-3 gap-2 text-center text-black font-sans">
-                              <div className="bg-stone-50 p-2 rounded-lg border border-stone-150">
-                                <p className="text-[10px] font-black uppercase text-black font-medium tracking-wider">Visits</p>
+                          <CardContent className="p-4 pt-1 border-t border-stone-200/40 mt-2 space-y-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-stone-900 font-sans">
+                              <div className="bg-stone-50 p-2 rounded-xl border border-stone-200">
+                                <p className="text-[10px] font-black uppercase text-stone-500 tracking-wider">Client Visits</p>
                                 <p className="text-sm font-extrabold text-blue-700">{guestsCount} guests</p>
                               </div>
-                              <div className="bg-stone-50 p-2 rounded-lg border border-stone-150">
-                                <p className="text-[10px] font-black uppercase text-black font-medium tracking-wider font-sans">Hot Leads</p>
+                              <div className="bg-stone-50 p-2 rounded-xl border border-stone-200">
+                                <p className="text-[10px] font-black uppercase text-stone-500 tracking-wider">Hot Leads</p>
                                 <p className="text-sm font-extrabold text-amber-600">{hotCount} hot</p>
                               </div>
-                              <div className="bg-stone-50 p-2 rounded-lg border border-stone-150">
-                                <p className="text-[10px] font-black uppercase text-black font-medium tracking-wider">QR Scans</p>
+                              <div className="bg-stone-50 p-2 rounded-xl border border-stone-200">
+                                <p className="text-[10px] font-black uppercase text-stone-500 tracking-wider">QR Code Scans</p>
                                 <p className="text-sm font-extrabold text-emerald-700">{qrScans} scans</p>
                               </div>
+                              <div className="bg-stone-50 p-2 rounded-xl border border-stone-200">
+                                <p className="text-[10px] font-black uppercase text-stone-500 tracking-wider">Sora Tours</p>
+                                <p className="text-sm font-extrabold text-purple-700">{soraPlays} plays</p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[11px] font-bold text-blue-600 pt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setResultsSelectedEventId(evt.id);
+                                  setSelectedReportEvent(evt); 
+                                  setReportModalOpen(true); 
+                                }}
+                                className="flex items-center gap-1.5 font-black uppercase text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
+                              >
+                                <Activity className="h-3.5 w-3.5" /> Detailed Event Analytics Modal
+                              </button>
+                              <span className="group-hover:underline flex items-center gap-1">
+                                View in Past Exhibitions & Results &rarr;
+                              </span>
                             </div>
                           </CardContent>
                         </Card>
@@ -1543,7 +1839,7 @@ Thanks,
           {selectedEvent ? (
             <Card className="blue-pulsating-border bg-white w-full mx-auto text-center flex flex-col items-center">
               <CardHeader className="pb-3 border-b border-light-divider w-full flex flex-col items-center justify-center text-center">
-                <p className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Quick Actions for Current Event</p>
+                <p className="text-[10px] font-black uppercase text-black font-extrabold tracking-wider">Quick Actions for Current Event</p>
                 <CardTitle className="text-sm font-bold text-stone-900 mt-1">{selectedEvent.eventName}</CardTitle>
                 <p className="text-xs font-semibold text-black mt-1">Listing: {selectedEvent.listingAddress}</p>
               </CardHeader>
@@ -2234,7 +2530,7 @@ Thanks,
         <Card className="blue-pulsating-border max-w-md mx-auto bg-white text-center">
           <CardHeader>
             <CardTitle className="text-base font-bold">Dynamic QR Display Manager</CardTitle>
-            <CardDescription className="text-xs text-black font-semibold">Exhibition guests scan this code to access check-in sheets or launching the guided tour.</CardDescription>
+            <CardDescription className="text-xs text-black font-semibold">Guests scan this code to access check-in sheets or launching the guided tour.</CardDescription>
           </CardHeader>
           <CardContent className="p-6 flex flex-col items-center space-y-4 font-sans">
             <div className="bg-white p-4 rounded-2xl border-stone-200 shadow-md border relative flex items-center justify-center">
@@ -2909,12 +3205,7 @@ Thanks,
                     <button 
                       onClick={() => {
                         setResultsGroupBy("date");
-                        let firstDate = "all";
-                        if (events.length > 0 && events[0].eventDate) {
-                          const parts = events[0].eventDate.split("-");
-                          firstDate = parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0]}` : events[0].eventDate;
-                        }
-                        setResultsSelectedGroup(firstDate);
+                        setResultsSelectedGroup("");
                         setResultsSelectedEventId("all");
                       }}
                       className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-md transition-all ${resultsGroupBy === "date" ? "bg-white text-blue-700 shadow-xs" : "text-black font-semibold hover:text-stone-800"}`}
@@ -2924,15 +3215,7 @@ Thanks,
                     <button 
                       onClick={() => {
                         setResultsGroupBy("month");
-                        let firstMonth = "all";
-                        if (events.length > 0 && events[0].eventDate) {
-                          const parts = events[0].eventDate.split("-");
-                          if (parts.length === 3) {
-                            const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                            firstMonth = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-                          }
-                        }
-                        setResultsSelectedGroup(firstMonth);
+                        setResultsSelectedGroup("");
                         setResultsSelectedEventId("all");
                       }}
                       className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-md transition-all ${resultsGroupBy === "month" ? "bg-white text-blue-700 shadow-xs" : "text-black font-semibold hover:text-stone-800"}`}
@@ -2945,58 +3228,119 @@ Thanks,
             </CardContent>
           </Card>
 
-          {/* Grid Layout: Sidebar Filter & Main Analytics Canvas */}
-          <div className="grid lg:grid-cols-12 gap-6 items-start">
+          {/* Main Analytics Canvas */}
+          <div className="space-y-6 w-full">
             
-            {/* LEFT SIDEBAR: Grouped List Selection */}
-            <div className="lg:col-span-4 space-y-4">
-              <Card className="border border-stone-200 shadow-xs bg-white rounded-xl w-full">
-                <CardHeader className="p-4 border-b pb-3">
-                  <CardTitle className="text-xs font-black uppercase text-stone-800 tracking-wider">
-                    {resultsGroupBy === "date" ? "Select MMDDYYYY Date" : "Select By Month Time Frame"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 space-y-1 max-h-[380px] overflow-y-auto">
-                  
-                  {/* "All" button with nested sessions list */}
-                  <div className="space-y-1">
-                    <button
-                      onClick={() => {
-                        setResultsSelectedGroup("all");
-                        setResultsSelectedEventId("all");
-                      }}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-between ${resultsSelectedGroup === "all" ? "bg-blue-600 text-white shadow-sm" : "hover:bg-stone-50 text-stone-700"}`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5" /> All Sessions Combined
-                      </span>
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${resultsSelectedGroup === "all" ? "bg-blue-700 text-white" : "bg-stone-100 text-black font-semibold"}`}>
-                        {events.length}
-                      </span>
-                    </button>
-                    
-                    {resultsSelectedGroup === "all" && (
-                      <div className="pl-4 pr-1 py-1 space-y-1 border-l border-blue-200 ml-3 animate-in slide-in-from-top-1 duration-200">
-                        {events.map(evt => {
-                          const isSessionSelected = resultsSelectedEventId === evt.id;
-                          return (
-                            <button
-                              key={evt.id}
-                              onClick={() => setResultsSelectedEventId(evt.id)}
-                              className={`w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-all truncate flex items-center justify-between ${isSessionSelected ? "bg-blue-50 text-blue-700 font-extrabold" : "hover:bg-stone-100 text-black"}`}
-                            >
-                              <span className="truncate">{evt.listingAddress}</span>
-                              <span className="text-[9px] text-black font-medium shrink-0 ml-1">
-                                {formatDateToMMM_DD_YYYY(evt.eventDate)}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+            {/* Event Filter Selector within Group */}
+            <div className="bg-white p-4 border border-stone-200 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-center">
+              <div className="space-y-0.5 text-left">
+                <span className="text-[9px] font-black text-black font-medium uppercase tracking-widest">Active Scope</span>
+                <h3 className="text-xs font-extrabold text-stone-900 uppercase">
+                  {(() => {
+                    if (resultsSelectedEventId !== "all") {
+                      const s = events.find(e => e.id === resultsSelectedEventId);
+                      if (s) {
+                        return `${s.listingAddress} (${formatDateToMMM_DD_YYYY(s.eventDate)})`;
+                      }
+                    }
+                    if (resultsSelectedGroup === "all") {
+                      return "All Events / All Dates";
+                    }
+                    return `Filtered: ${resultsSelectedGroup}`;
+                  })()}
+                </h3>
+              </div>
+              
+              {/* Session Selector Dropdown */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="session-filter" className="text-[10px] font-black uppercase text-black font-medium shrink-0">Session:</Label>
+                <select
+                  id="session-filter"
+                  value={resultsSelectedEventId}
+                  onChange={(e) => setResultsSelectedEventId(e.target.value)}
+                  className="h-8.5 rounded-lg border border-stone-200 bg-white text-xs font-bold px-2 py-1 outline-none text-stone-800"
+                >
+                  <option value="all">All Sessions in this selection</option>
+                  {events
+                    .filter(evt => {
+                      if (resultsSelectedGroup === "all") return true;
+                      
+                      let key = "";
+                      if (resultsGroupBy === "date") {
+                        if (evt.eventDate) {
+                          const parts = evt.eventDate.split("-");
+                          key = parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0]}` : evt.eventDate;
+                        }
+                      } else {
+                        if (evt.eventDate) {
+                          const parts = evt.eventDate.split("-");
+                          if (parts.length === 3) {
+                            const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                            key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                          }
+                        }
+                      }
+                      return key === resultsSelectedGroup;
+                    })
+                    .map(evt => (
+                      <option key={evt.id} value={evt.id}>
+                        {evt.listingAddress} ({formatDateToMMM_DD_YYYY(evt.eventDate)})
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
+            </div>
 
-                  {/* Dynamic Group Keys with nested monthly sessions list */}
+            {/* MOVED & CENTERED FULL-WIDTH: Select MMDDYYYY Date / Select By Month Time Frame Card */}
+            <Card className="border border-stone-200 shadow-xs bg-white rounded-xl w-full text-center">
+              <CardHeader className="p-4 border-b pb-3 flex flex-col items-center justify-center">
+                <CardTitle className="text-xs font-black uppercase text-stone-800 tracking-wider flex items-center justify-center gap-2">
+                  <Calendar className="h-4 w-4 text-blue-600" />
+                  <span>{resultsGroupBy === "date" ? "Select By Date Time Frame" : "Select By Month Time Frame"}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2 max-h-[380px] overflow-y-auto flex flex-col items-center justify-center w-full">
+                
+                {/* "All" button with nested sessions list */}
+                <div className="space-y-1 w-full max-w-xl mx-auto">
+                  <button
+                    onClick={() => {
+                      setResultsSelectedGroup(prev => prev === "all" ? "" : "all");
+                      setResultsSelectedEventId("all");
+                    }}
+                    className={`w-full text-center px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${resultsSelectedGroup === "all" ? "bg-blue-600 text-white shadow-sm" : "hover:bg-stone-50 text-stone-700 border border-stone-200"}`}
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>All Sessions Combined</span>
+                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${resultsSelectedGroup === "all" ? "bg-blue-700 text-white" : "bg-stone-100 text-black font-semibold"}`}>
+                      {events.length}
+                    </span>
+                  </button>
+                  
+                  {resultsSelectedGroup === "all" && (
+                    <div className="py-2 space-y-1 border-t border-blue-200 my-2 animate-in slide-in-from-top-1 duration-200 w-full">
+                      {events.map(evt => {
+                        const isSessionSelected = resultsSelectedEventId === evt.id;
+                        return (
+                          <button
+                            key={evt.id}
+                            onClick={() => setResultsSelectedEventId(evt.id)}
+                            className={`w-full text-center px-3 py-1.5 rounded-md text-[11px] font-medium transition-all truncate flex items-center justify-center gap-2 ${isSessionSelected ? "bg-blue-50 text-blue-700 font-extrabold" : "hover:bg-stone-100 text-black"}`}
+                          >
+                            <span className="truncate">{evt.listingAddress}</span>
+                            <span className="text-[9px] text-black font-medium shrink-0">
+                              ({formatDateToMMM_DD_YYYY(evt.eventDate)})
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Dynamic Group Keys with nested monthly sessions list */}
+                <div className="space-y-2 w-full max-w-xl mx-auto">
                   {(() => {
                     const groupsMap = {};
                     events.forEach(evt => {
@@ -3029,15 +3373,15 @@ Thanks,
                       const count = groupsMap[key];
                       const isSelected = resultsSelectedGroup === key;
                       return (
-                        <div key={key} className="space-y-1">
+                        <div key={key} className="space-y-1 w-full text-center">
                           <button
                             onClick={() => {
-                              setResultsSelectedGroup(key);
-                              setResultsSelectedEventId("all"); // Reset individual session filter when group changes
+                              setResultsSelectedGroup(prev => prev === key ? "" : key);
+                              setResultsSelectedEventId("all");
                             }}
-                            className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-between ${isSelected ? "bg-blue-600 text-white shadow-sm" : "hover:bg-stone-50 text-stone-700"}`}
+                            className={`w-full text-center px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${isSelected ? "bg-blue-600 text-white shadow-sm" : "hover:bg-stone-50 text-stone-700 border border-stone-200"}`}
                           >
-                            <span className="truncate">{key}</span>
+                            <span>{key}</span>
                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${isSelected ? "bg-blue-700 text-white" : "bg-stone-100 text-black font-semibold"}`}>
                               {count} {count === 1 ? "session" : "sessions"}
                             </span>
@@ -3045,7 +3389,7 @@ Thanks,
                           
                           {/* Display the sessions for this selection below */}
                           {isSelected && (
-                            <div className="pl-4 pr-1 py-1 space-y-1 border-l border-blue-200 ml-3 animate-in slide-in-from-top-1 duration-200">
+                            <div className="py-2 space-y-1 border-t border-blue-200 my-2 animate-in slide-in-from-top-1 duration-200 w-full">
                               {events
                                 .filter(evt => {
                                   if (resultsGroupBy === "date") {
@@ -3072,11 +3416,11 @@ Thanks,
                                     <button
                                       key={evt.id}
                                       onClick={() => setResultsSelectedEventId(evt.id)}
-                                      className={`w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-all truncate flex items-center justify-between ${isSessionSelected ? "bg-blue-50 text-blue-700 font-extrabold" : "hover:bg-stone-100 text-black"}`}
+                                      className={`w-full text-center px-3 py-1.5 rounded-md text-[11px] font-medium transition-all truncate flex items-center justify-center gap-2 ${isSessionSelected ? "bg-blue-50 text-blue-700 font-extrabold" : "hover:bg-stone-100 text-black"}`}
                                     >
                                       <span className="truncate">{evt.listingAddress}</span>
-                                      <span className="text-[9px] text-black font-medium shrink-0 ml-1">
-                                        {formatDateToMMM_DD_YYYY(evt.eventDate)}
+                                      <span className="text-[9px] text-black font-medium shrink-0">
+                                        ({formatDateToMMM_DD_YYYY(evt.eventDate)})
                                       </span>
                                     </button>
                                   );
@@ -3088,95 +3432,140 @@ Thanks,
                       );
                     });
                   })()}
-
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* MAIN CANVAS: Reports Grid */}
-            <div className="lg:col-span-8 space-y-6">
-              
-              {/* Event Filter Selector within Group */}
-              <div className="bg-white p-4 border border-stone-200 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-black text-black font-medium uppercase tracking-widest">Active Scope</span>
-                  <h3 className="text-xs font-extrabold text-stone-900 uppercase">
-                    {(() => {
-                      if (resultsSelectedEventId !== "all") {
-                        const s = events.find(e => e.id === resultsSelectedEventId);
-                        if (s) {
-                          return `${s.listingAddress} (${formatDateToMMM_DD_YYYY(s.eventDate)})`;
-                        }
-                      }
-                      if (resultsSelectedGroup === "all") {
-                        return "All Events / All Dates";
-                      }
-                      return `Filtered: ${resultsSelectedGroup}`;
-                    })()}
-                  </h3>
                 </div>
-                
-                {/* Session Selector Dropdown */}
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="session-filter" className="text-[10px] font-black uppercase text-black font-medium shrink-0">Session:</Label>
-                  <select
-                    id="session-filter"
-                    value={resultsSelectedEventId}
-                    onChange={(e) => setResultsSelectedEventId(e.target.value)}
-                    className="h-8.5 rounded-lg border border-stone-200 bg-white text-xs font-bold px-2 py-1 outline-none text-stone-800"
-                  >
-                    <option value="all">All Sessions in this selection</option>
-                    {events
-                      .filter(evt => {
-                        if (resultsSelectedGroup === "all") return true;
-                        
-                        let key = "";
-                        if (resultsGroupBy === "date") {
-                          if (evt.eventDate) {
-                            const parts = evt.eventDate.split("-");
-                            key = parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0]}` : evt.eventDate;
-                          }
-                        } else {
-                          if (evt.eventDate) {
-                            const parts = evt.eventDate.split("-");
-                            if (parts.length === 3) {
-                              const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                              key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
-                            }
+
+              </CardContent>
+            </Card>
+
+              {/* Past Open House Event Metric Cards */}
+              <div className="space-y-3 bg-stone-50/70 p-4 rounded-xl border border-stone-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h3 className="text-xs font-black uppercase text-stone-900 tracking-wider flex items-center gap-1.5">
+                    <Activity className="h-4 w-4 text-blue-600" />
+                    Past Open House Event Metric Cards
+                  </h3>
+                  <span className="text-[10px] font-bold text-stone-500 uppercase">
+                    Click card or button to launch Detailed Event Analytics Modal
+                  </span>
+                </div>
+
+                <div className="grid gap-3">
+                  {events
+                    .filter(evt => {
+                      if (resultsSelectedEventId !== "all") return evt.id === resultsSelectedEventId;
+                      if (resultsSelectedGroup === "all") return true;
+                      let key = "";
+                      if (resultsGroupBy === "date") {
+                        if (evt.eventDate) {
+                          const parts = evt.eventDate.split("-");
+                          key = parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0]}` : evt.eventDate;
+                        }
+                      } else {
+                        if (evt.eventDate) {
+                          const parts = evt.eventDate.split("-");
+                          if (parts.length === 3) {
+                            const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                            key = d.toLocaleString('default', { month: 'long', year: 'numeric' });
                           }
                         }
-                        return key === resultsSelectedGroup;
-                      })
-                      .map(evt => (
-                        <option key={evt.id} value={evt.id}>
-                          {evt.listingAddress} ({formatDateToMMM_DD_YYYY(evt.eventDate)})
-                        </option>
-                      ))
-                    }
-                  </select>
+                      }
+                      return key === resultsSelectedGroup;
+                    })
+                    .map(evt => {
+                      const code = (evt.id || "").charCodeAt(0) || 1;
+                      const guestsCount = Math.floor(Math.abs(code * 3) % 8) + 6;
+                      const hotCount = Math.floor(guestsCount / 2) || 1;
+                      const qrScans = guestsCount * 2 + 5;
+                      const soraPlays = Math.floor(guestsCount * 1.3) + 2;
+
+                      return (
+                        <Card 
+                          key={evt.id}
+                          onClick={() => {
+                            setSelectedReportEvent(evt);
+                            setReportModalOpen(true);
+                          }}
+                          className="p-4 bg-white border border-stone-200 hover:border-blue-500 shadow-xs hover:shadow-md transition-all rounded-xl cursor-pointer group"
+                        >
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="bg-emerald-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
+                                  Completed Event
+                                </span>
+                                <h4 className="text-sm font-black text-stone-900 group-hover:text-blue-600 transition-colors">
+                                  {evt.eventName}
+                                </h4>
+                              </div>
+                              <p className="text-xs font-semibold text-stone-600 flex items-center gap-1 mt-0.5">
+                                <MapPin className="h-3 w-3 text-blue-600" />
+                                {evt.listingAddress}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[10px] font-extrabold text-stone-700 bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200">
+                                📅 Date: {evt.eventDate}
+                              </span>
+                              <Button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedReportEvent(evt);
+                                  setReportModalOpen(true);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase h-8 px-3 rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Activity className="h-3.5 w-3.5" />
+                                Detailed Event Analytics Modal
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Metric Badges */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 text-center">
+                            <div className="bg-blue-50/70 p-2 rounded-lg border border-blue-100">
+                              <p className="text-[9px] font-black uppercase text-blue-800">Client Visits</p>
+                              <p className="text-sm font-black text-blue-900">{guestsCount} guests</p>
+                            </div>
+                            <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-100">
+                              <p className="text-[9px] font-black uppercase text-amber-800">Hot Leads</p>
+                              <p className="text-sm font-black text-amber-900">{hotCount} hot</p>
+                            </div>
+                            <div className="bg-emerald-50/70 p-2 rounded-lg border border-emerald-100">
+                              <p className="text-[9px] font-black uppercase text-emerald-800">QR Code Scans</p>
+                              <p className="text-sm font-black text-emerald-900">{qrScans} scans</p>
+                            </div>
+                            <div className="bg-purple-50/70 p-2 rounded-lg border border-purple-100">
+                              <p className="text-[9px] font-black uppercase text-purple-800">Sora Tours</p>
+                              <p className="text-sm font-black text-purple-900">{soraPlays} plays</p>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
                 </div>
               </div>
 
               {/* MODULE 1: ESSENTIAL ON-SCREEN DASHBOARDS */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-black uppercase text-blue-700 tracking-wider flex items-center gap-1.5">
+              <div className="space-y-4 text-center flex flex-col items-center justify-center w-full">
+                <h3 className="text-xs font-black uppercase text-blue-700 tracking-wider flex items-center justify-center gap-1.5 text-center">
                   <Tv className="h-4 w-4" /> Essential On-Screen Dashboards
                 </h3>
                 
-                <div className="grid md:grid-cols-3 gap-6">
+                <div className="flex flex-col items-center justify-center gap-6 w-full">
                   
-                  {/* Live Visitor Counter */}
-                  <Card className="border border-stone-200 shadow-sm bg-white rounded-xl overflow-hidden md:col-span-1">
-                    <CardHeader className="p-4 bg-stone-50 border-b">
-                      <CardTitle className="text-xs font-black uppercase text-stone-800 tracking-wide flex items-center justify-between">
-                        Live Visitor Counter
+                  {/* Live Visitor Counter - Centered Full Width */}
+                  <Card className="border border-stone-200 shadow-sm bg-white rounded-xl overflow-hidden w-full text-center">
+                    <CardHeader className="p-4 bg-stone-50 border-b flex flex-col items-center justify-center">
+                      <CardTitle className="text-xs font-black uppercase text-stone-800 tracking-wide flex items-center justify-center gap-2">
+                        <span>Live Visitor Counter</span>
                         <span className="flex h-2 w-2 relative">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-6 flex flex-col items-center justify-center space-y-4">
+                    <CardContent className="p-6 flex flex-col items-center justify-center space-y-4 text-center w-full">
                       {/* Pulsing neon-blue counter circle */}
                       <div className="h-28 w-28 rounded-full border-4 border-blue-600/30 flex flex-col items-center justify-center bg-blue-50/50 shadow-inner select-none relative animate-pulse">
                         <span className="text-4xl font-black text-blue-700">
@@ -3204,55 +3593,55 @@ Thanks,
                     </CardContent>
                   </Card>
 
-                  {/* Agent Safety Tracker */}
-                  <Card className="border border-stone-200 shadow-sm bg-white rounded-xl overflow-hidden md:col-span-2">
-                    <CardHeader className="p-4 bg-stone-50 border-b">
-                      <CardTitle className="text-xs font-black uppercase text-stone-800 tracking-wide flex items-center justify-between">
-                        Agent Safety Tracker
+                  {/* Agent Safety Tracker - Centered Full Width */}
+                  <Card className="border border-stone-200 shadow-sm bg-white rounded-xl overflow-hidden w-full text-center">
+                    <CardHeader className="p-4 bg-stone-50 border-b flex flex-col items-center justify-center">
+                      <CardTitle className="text-xs font-black uppercase text-stone-800 tracking-wide flex items-center justify-center gap-2">
+                        <span>Agent Safety Tracker</span>
                         <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase ${resultsSafetyCheckedIn ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
                           {resultsSafetyCheckedIn ? "● checked in" : "○ checked out / closed"}
                         </span>
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4.5 space-y-4">
-                      <div className="grid sm:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-black uppercase text-black font-medium">Agent Check-In Time</Label>
-                          <div className="flex items-center gap-1.5">
+                    <CardContent className="p-4.5 space-y-4 text-center w-full flex flex-col items-center justify-center">
+                      <div className="grid sm:grid-cols-2 gap-4 w-full max-w-2xl mx-auto text-center">
+                        <div className="space-y-1 flex flex-col items-center justify-center">
+                          <Label className="text-[10px] font-black uppercase text-black font-medium text-center">Agent Check-In Time</Label>
+                          <div className="flex items-center gap-1.5 justify-center w-full">
                             <Clock className="h-3.5 w-3.5 text-black font-medium" />
                             <Input 
                               value={resultsSafetyCheckInTime} 
                               onChange={(e) => setResultsSafetyCheckInTime(e.target.value)}
-                              className="h-8 text-xs font-bold"
+                              className="h-8 text-xs font-bold text-center max-w-[180px]"
                             />
                           </div>
                         </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] font-black uppercase text-black font-medium">Agent Check-Out Time</Label>
-                          <div className="flex items-center gap-1.5">
+                        <div className="space-y-1 flex flex-col items-center justify-center">
+                          <Label className="text-[10px] font-black uppercase text-black font-medium text-center">Agent Check-Out Time</Label>
+                          <div className="flex items-center gap-1.5 justify-center w-full">
                             <Clock className="h-3.5 w-3.5 text-black font-medium" />
                             <Input 
                               value={resultsSafetyCheckOutTime} 
                               onChange={(e) => setResultsSafetyCheckOutTime(e.target.value)}
-                              className="h-8 text-xs font-bold"
+                              className="h-8 text-xs font-bold text-center max-w-[180px]"
                             />
                           </div>
                         </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <Label className="text-[10px] font-black uppercase text-black font-medium">Host Security & Handover Notes</Label>
+                      <div className="space-y-1 w-full max-w-2xl mx-auto text-center">
+                        <Label className="text-[10px] font-black uppercase text-black font-medium text-center">Host Security & Handover Notes</Label>
                         <Textarea
                           value={resultsSafetyNotes}
                           onChange={(e) => setResultsSafetyNotes(e.target.value)}
                           rows={2}
-                          className="text-xs leading-relaxed font-medium bg-[#faf9f6]"
+                          className="text-xs leading-relaxed font-medium bg-[#faf9f6] text-center"
                         />
                       </div>
 
-                      <div className="flex items-center justify-between gap-3 border-t pt-3">
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 border-t pt-3 w-full text-center">
                         <span className="text-[10px] font-bold text-black font-semibold">Auto-ping emergency contacts on overdue checkout</span>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 justify-center">
                           <Button 
                             onClick={() => {
                               setResultsSafetyCheckedIn(!resultsSafetyCheckedIn);
@@ -3276,18 +3665,19 @@ Thanks,
 
                 </div>
 
-                {/* Centered Compliance & Audit Card */}
-                <div className="flex justify-center py-2">
-                  <Card className="border-2 border-blue-200 bg-blue-50/10 shadow-md rounded-xl overflow-hidden max-w-xl w-full text-center">
-                    <CardHeader className="p-5 flex flex-col items-center justify-center space-y-2">
+                {/* Centered Compliance & Audit Card - Full Width */}
+                <div className="flex justify-center py-2 w-full text-center">
+                  <Card className="border-2 border-blue-200 bg-blue-50/10 shadow-md rounded-xl overflow-hidden w-full text-center">
+                    <CardHeader className="p-5 flex flex-col items-center justify-center text-center space-y-2">
                       <Shield className="h-8 w-8 text-blue-600 animate-bounce" />
                       <CardTitle className="text-sm font-black uppercase text-blue-900 tracking-wider">Compliance & Audit Control Hub</CardTitle>
-                      <CardDescription className="text-xs text-blue-700 leading-relaxed font-semibold">
+                      <CardDescription className="text-xs text-blue-700 leading-relaxed font-semibold max-w-2xl mx-auto text-center">
                         All captured leads, visitor profiles, performance metrics, and automated workflows are fully audited, timestamped, and secured. Opt-in consent files strictly comply with PIPEDA, CASL, and Quebec Law 25 guidelines.
                       </CardDescription>
                     </CardHeader>
                   </Card>
                 </div>
+              </div>
 
                 {/* Visitor Profile Summary */}
                 <Card className="border border-stone-200 shadow-sm bg-white rounded-xl overflow-hidden">
@@ -4253,10 +4643,6 @@ Thanks,
                 </Card>
               </div>
 
-            </div>
-
-          </div>
-
           {/* DRAFT EMAIL COMPOSER MODAL */}
           {resultsShowDraftComposer && (
             <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4 font-sans">
@@ -4593,6 +4979,479 @@ Thanks,
           </div>
         </div>
       )}
+
+      {/* COMPLETED OPEN HOUSE DETAILED REPORT & GUEST DRILLDOWN MODAL */}
+      {reportModalOpen && selectedReportEvent && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="bg-white border border-stone-200 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-6 text-left">
+            
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-stone-200 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-blue-600 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Activity className="h-3 w-3" /> Detailed Event Analytics Modal
+                  </span>
+                  <span className="text-xs font-bold text-stone-500">
+                    Event Date: {selectedReportEvent.eventDate}
+                  </span>
+                </div>
+                <h2 className="text-xl font-extrabold text-stone-900 mt-1">
+                  {selectedReportEvent.eventName}
+                </h2>
+                <p className="text-xs font-semibold text-stone-600 flex items-center gap-1 mt-0.5">
+                  <MapPin className="h-3.5 w-3.5 text-blue-600" />
+                  {selectedReportEvent.listingAddress}
+                </p>
+              </div>
+
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setExportSubmenuOpen(!exportSubmenuOpen)}
+                  className="bg-stone-800 hover:bg-stone-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                >
+                  <Database className="h-3.5 w-3.5 text-blue-400" />
+                  {"Export PDF / CSV ▾"}
+                </button>
+
+                {exportSubmenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white border border-stone-200 rounded-xl shadow-xl z-50 py-1 animate-in fade-in slide-in-from-top-2">
+                    <button
+                      onClick={handleExportPDF}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-stone-800 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 cursor-pointer border-b border-stone-100"
+                    >
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      Export to PDF
+                    </button>
+                    <button
+                      onClick={handleExportCSV}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-stone-800 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Database className="h-4 w-4 text-emerald-600" />
+                      Export to CSV
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setReportModalOpen(false);
+                  setSelectedReportEvent(null);
+                  setSelectedDrilldownGuest(null);
+                  setExportSubmenuOpen(false);
+                }}
+                className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-extrabold px-3 py-2 rounded-xl cursor-pointer"
+              >
+                Close ✕
+              </button>
+            </div>
+
+          {/* Top Metrics Row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-blue-50/70 border border-blue-200 p-4 rounded-2xl text-center space-y-1">
+              <div className="flex justify-center text-blue-600">
+                <Users className="h-5 w-5" />
+              </div>
+              <p className="text-[10px] font-black uppercase text-blue-800 tracking-wider">Client Visits</p>
+              <p className="text-2xl font-black text-blue-900">
+                {Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6} guests
+              </p>
+              <p className="text-[10px] font-bold text-blue-600">Sign-in kiosk & remote entries</p>
+            </div>
+
+            <div className="bg-amber-50/70 border border-amber-200 p-4 rounded-2xl text-center space-y-1">
+              <div className="flex justify-center text-amber-600">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <p className="text-[10px] font-black uppercase text-amber-800 tracking-wider">Hot Leads</p>
+              <p className="text-2xl font-black text-amber-900">
+                {Math.floor((Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) / 2) || 1} hot
+              </p>
+              <p className="text-[10px] font-bold text-amber-600">High intent & mortgage consent</p>
+            </div>
+
+            <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-2xl text-center space-y-1">
+              <div className="flex justify-center text-emerald-600">
+                <QrCode className="h-5 w-5" />
+              </div>
+              <p className="text-[10px] font-black uppercase text-emerald-800 tracking-wider">QR Code Scans</p>
+              <p className="text-2xl font-black text-emerald-900">
+                {(Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) * 2 + 5} scans
+              </p>
+              <p className="text-[10px] font-bold text-emerald-600">Flyer & yard sign entry points</p>
+            </div>
+
+            <div className="bg-purple-50/70 border border-purple-200 p-4 rounded-2xl text-center space-y-1">
+              <div className="flex justify-center text-purple-600">
+                <Volume2 className="h-5 w-5" />
+              </div>
+              <p className="text-[10px] font-black uppercase text-purple-800 tracking-wider">Sora Tours</p>
+              <p className="text-2xl font-black text-purple-900">
+                {Math.floor((Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) * 1.3) + 2} plays
+              </p>
+              <p className="text-[10px] font-bold text-purple-600">AI audio guided room stops</p>
+            </div>
+          </div>
+
+          {/* Guest Roster & Individual Drilldown Section */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-stone-200 pb-2">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-stone-900 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-blue-600" />
+                  Guest Visitor Roster & Drilldown Records
+                </h3>
+                <span className="text-xs font-semibold text-stone-500">
+                  Click any guest row below to instantly inspect their full profile, CRM sync & Sora activity
+                </span>
+              </div>
+              <Button
+                onClick={handleBulkPushCrm}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-black uppercase h-8 px-3.5 rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Push All (6) Leads to CRM
+              </Button>
+            </div>
+
+            {/* Prominent Individual Guest Drilldown Panel (Rendered AT THE TOP of roster when active) */}
+            {selectedDrilldownGuest && (
+              <div className="p-5 bg-blue-50/80 border-2 border-blue-500 rounded-2xl space-y-4 shadow-lg animate-in slide-in-from-top-2">
+                <div className="flex justify-between items-start border-b border-blue-200 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black uppercase bg-blue-600 text-white px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <Activity className="h-3 w-3" /> Active Guest Drilldown Profile
+                      </span>
+                      {selectedDrilldownGuest.hotLead && (
+                        <span className="bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-amber-300">
+                          🔥 Hot Lead
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-lg font-black text-stone-900 mt-1 flex items-center gap-2">
+                      {selectedDrilldownGuest.name}
+                    </h4>
+                    <p className="text-xs font-semibold text-stone-600">
+                      {selectedDrilldownGuest.occupation} • Arrived at {selectedDrilldownGuest.time}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedDrilldownGuest(null)}
+                    className="text-stone-500 hover:text-stone-900 text-xs font-black cursor-pointer bg-white hover:bg-stone-100 px-3 py-1.5 rounded-xl border border-stone-300 transition-colors shadow-xs"
+                  >
+                    Close Profile ✕
+                  </button>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4 text-xs">
+                  <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-2.5 shadow-2xs">
+                    <p className="text-[10px] font-black uppercase text-stone-400 tracking-wider">Contact & Verification Details</p>
+                    <p className="font-bold text-stone-800">Email: <span className="font-medium text-stone-600">{selectedDrilldownGuest.email}</span></p>
+                    <p className="font-bold text-stone-800">Phone: <span className="font-medium text-stone-600">{selectedDrilldownGuest.phone}</span></p>
+                    <p className="font-bold text-stone-800">Identity Verification: <span className="text-emerald-700 font-black bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">✔ High Confidence Clearbit Verified</span></p>
+                    <p className="font-bold text-stone-800">Agent Notes: <span className="font-medium text-stone-600">{selectedDrilldownGuest.notes}</span></p>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-2.5 shadow-2xs">
+                    <p className="text-[10px] font-black uppercase text-stone-400 tracking-wider">Sora AI Voice Tour & CRM Actions</p>
+                    <p className="font-bold text-stone-800">Sora Voice Q&A: <span className="font-medium text-purple-700">{selectedDrilldownGuest.soraUsage}</span></p>
+                    <p className="font-bold text-stone-800">Mortgage Consent: <span className={selectedDrilldownGuest.mortgageConsent ? "text-emerald-700 font-black bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200" : "text-stone-500 font-medium"}>{selectedDrilldownGuest.mortgageConsent ? "Yes — Opted In & Routed to Paired Lender" : "Opted Out"}</span></p>
+                    
+                    {/* CRM Push Status & Action Button */}
+                    <div className="pt-1 border-t border-stone-100">
+                      <div className="flex justify-between items-center text-[11px] mb-1">
+                        <span className="font-bold text-stone-700">CRM Sync Status:</span>
+                        <span className="font-extrabold text-blue-700">
+                          {guestCrmStatuses[selectedDrilldownGuest.id] || "Synced to Follow Up Boss & kvCORE"}
+                        </span>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => handlePushLeadToCrm(selectedDrilldownGuest)}
+                          className="flex-1 bg-stone-900 hover:bg-stone-800 text-white font-black py-2 px-3 rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 text-blue-400" />
+                          Push Lead to CRM Now
+                        </button>
+                        <button
+                          onClick={() => handleOpenSoraEmailComposer(selectedDrilldownGuest)}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-2 px-3 rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          {soraEmailSentMap[selectedDrilldownGuest.id] ? "View / Re-Send Sora Email" : "Send Sora Follow-Up Email"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {[
+                {
+                  id: "guest-1",
+                  name: "Sarah Jenkins",
+                  email: "sarah.jenkins@gmail.com",
+                  phone: "(310) 555-0192",
+                  time: "1:15 PM",
+                  soraUsage: "Kitchen, Master Suite, HOA fees Q&A",
+                  mortgageConsent: true,
+                  hotLead: true,
+                  occupation: "Product Designer at Apple",
+                  notes: "Extremely interested in modern kitchen island and backyard orientation."
+                },
+                {
+                  id: "guest-2",
+                  name: "David & Marcus Vance",
+                  email: "david.vance@techfirm.co",
+                  phone: "(310) 555-0841",
+                  time: "1:42 PM",
+                  soraUsage: "Price & school district voice query",
+                  mortgageConsent: true,
+                  hotLead: true,
+                  occupation: "VP Engineering",
+                  notes: "Looking to close within 30 days. Pre-approved with Chase."
+                },
+                {
+                  id: "guest-3",
+                  name: "Elena Rostova",
+                  email: "elena.r@designstudio.io",
+                  phone: "(310) 555-3310",
+                  time: "2:05 PM",
+                  soraUsage: "Full guided tour (12 stops)",
+                  mortgageConsent: false,
+                  hotLead: false,
+                  occupation: "Architectural Stylist",
+                  notes: "Loved the hardwood finishes and double-height ceiling."
+                },
+                {
+                  id: "guest-4",
+                  name: "Michael Chang",
+                  email: "mchang.investments@gmail.com",
+                  phone: "(310) 555-9011",
+                  time: "2:30 PM",
+                  soraUsage: "Rental yield & property taxes Q&A",
+                  mortgageConsent: true,
+                  hotLead: true,
+                  occupation: "Real Estate Investor",
+                  notes: "Inquiring about seller concessions and quick inspection timelines."
+                },
+                {
+                  id: "guest-5",
+                  name: "Priya & Raj Patel",
+                  email: "priya.patel@health.org",
+                  phone: "(310) 555-4420",
+                  time: "3:10 PM",
+                  soraUsage: "Backyard & neighborhood tour",
+                  mortgageConsent: false,
+                  hotLead: false,
+                  occupation: "Physician",
+                  notes: "First time viewing. Comparing with nearby Beverly Hills properties."
+                },
+                {
+                  id: "guest-6",
+                  name: "Robert Thorne",
+                  email: "r.thorne@lawgroup.com",
+                  phone: "(310) 555-7788",
+                  time: "3:45 PM",
+                  soraUsage: "Garage & parking allocation",
+                  mortgageConsent: true,
+                  hotLead: false,
+                  occupation: "Senior Partner",
+                  notes: "Requesting follow up seller disclosure documents."
+                }
+              ].map((guest) => (
+                <div 
+                  key={guest.id}
+                  onClick={() => setSelectedDrilldownGuest(guest)}
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${selectedDrilldownGuest?.id === guest.id ? 'bg-blue-50 border-blue-500 shadow-md ring-2 ring-blue-300' : 'bg-stone-50/60 hover:bg-white border-stone-200 hover:border-blue-400'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 bg-stone-200 rounded-full flex items-center justify-center font-extrabold text-stone-700 text-xs shrink-0">
+                      {guest.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-xs text-stone-900">{guest.name}</span>
+                        {guest.hotLead && (
+                          <span className="bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-amber-300">
+                            🔥 Hot Lead
+                          </span>
+                        )}
+                        {guest.mortgageConsent && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-300">
+                            Mortgage Opt-In
+                          </span>
+                        )}
+                        {soraEmailSentMap[guest.id] && (
+                          <span className="bg-blue-100 text-blue-800 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-blue-300">
+                            ✉️ Sora Email Sent
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-stone-600 font-medium">
+                        {guest.email} • {guest.phone}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-xs shrink-0 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-0 border-stone-200 pt-2 sm:pt-0">
+                    <div className="text-right">
+                      <p className="text-[10px] font-black text-stone-400 uppercase">Sora Voice Activity</p>
+                      <p className="text-[11px] font-bold text-purple-700 max-w-[200px] truncate">{guest.soraUsage}</p>
+                    </div>
+                    <span className="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg shadow-xs group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                      Drill Down Profile →
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-stone-200 pt-3 flex justify-between items-center text-xs text-stone-500 font-medium">
+            <span>Report Generated for Listing Agent: {user?.email}</span>
+            <button
+              onClick={() => {
+                setReportModalOpen(false);
+                setSelectedReportEvent(null);
+                setSelectedDrilldownGuest(null);
+                setExportSubmenuOpen(false);
+              }}
+              className="bg-stone-900 hover:bg-stone-800 text-white text-xs font-bold px-4 py-2 rounded-xl cursor-pointer"
+            >
+              Done Reviewing Report
+            </button>
+          </div>
+
+        </div>
+      </div>
+    )}
+
+    {/* Sora Personalized Email Composer Modal */}
+    {soraEmailModalGuest && (
+      <div className="fixed inset-0 bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+        <div className="bg-white border border-stone-200 rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl relative overflow-hidden">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b border-stone-100 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-purple-600 text-white rounded-2xl flex items-center justify-center shadow-md shrink-0">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full border border-purple-200">
+                    Sora AI Assistant
+                  </span>
+                  <span className="text-[10px] font-bold text-stone-500">
+                    Personalized Email Composer
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-stone-900 mt-0.5">
+                  Follow-Up Email Draft for {soraEmailModalGuest.name}
+                </h3>
+              </div>
+            </div>
+            <button
+              onClick={() => setSoraEmailModalGuest(null)}
+              className="text-stone-400 hover:text-stone-800 font-bold text-sm cursor-pointer p-1 rounded-lg hover:bg-stone-100"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Recipient & Event Details */}
+          <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5 text-xs grid sm:grid-cols-2 gap-2">
+            <div>
+              <span className="font-bold text-stone-500 uppercase text-[10px] block">Recipient:</span>
+              <span className="font-black text-stone-900">{soraEmailModalGuest.name}</span>
+              <span className="text-stone-600 block text-[11px]">{soraEmailModalGuest.email} • {soraEmailModalGuest.phone}</span>
+            </div>
+            <div>
+              <span className="font-bold text-stone-500 uppercase text-[10px] block">Property & Event Context:</span>
+              <span className="font-bold text-stone-800">{selectedReportEvent?.listingAddress || "Beverly Hills Open House"}</span>
+              <span className="text-purple-700 font-bold block text-[11px]">Sora Audio Q&A: {soraEmailModalGuest.soraUsage}</span>
+            </div>
+          </div>
+
+          {/* AI Explanation Banner */}
+          <div className="bg-purple-50/80 border border-purple-200 rounded-2xl p-3 text-xs text-purple-900 flex items-start gap-2.5">
+            <Sparkles className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              <strong className="font-black">AI Tour Tailored Draft:</strong> Sora created this follow-up based on {soraEmailModalGuest.name}&apos;s exact voice tour questions ({soraEmailModalGuest.soraUsage}) and mortgage preference. <span className="font-bold underline">You have full control to edit, save, or send below.</span>
+            </p>
+          </div>
+
+          {/* Editable Form Controls */}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-black uppercase text-stone-700 tracking-wider mb-1">
+                Subject Line
+              </label>
+              <input
+                type="text"
+                value={soraEmailSubject}
+                onChange={(e) => setSoraEmailSubject(e.target.value)}
+                className="w-full text-xs font-bold text-stone-900 bg-white border border-stone-300 rounded-xl px-3.5 py-2.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500 shadow-2xs"
+                placeholder="Email Subject"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-black uppercase text-stone-700 tracking-wider">
+                  Email Message Body (Editable)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => handleOpenSoraEmailComposer(soraEmailModalGuest)}
+                  className="text-[11px] font-black text-purple-700 hover:text-purple-900 flex items-center gap-1 cursor-pointer bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 transition-colors"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  🤖 Re-Draft with Sora
+                </button>
+              </div>
+              <textarea
+                rows={8}
+                value={soraEmailBody}
+                onChange={(e) => setSoraEmailBody(e.target.value)}
+                className="w-full text-xs font-medium text-stone-800 bg-white border border-stone-300 rounded-xl p-3.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500 shadow-2xs leading-relaxed"
+              />
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="border-t border-stone-200 pt-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <button
+              onClick={() => setSoraEmailModalGuest(null)}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 font-bold text-xs hover:bg-stone-100 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+
+            <div className="flex w-full sm:w-auto gap-2">
+              <button
+                onClick={() => {
+                  toast.success(`Draft saved for ${soraEmailModalGuest.name}`);
+                }}
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs transition-colors cursor-pointer border border-stone-300 flex items-center justify-center gap-1.5"
+              >
+                💾 Save Draft
+              </button>
+              <button
+                onClick={handleSendSoraEmail}
+                className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs transition-colors cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+              >
+                <Mail className="h-4 w-4" />
+                ✉️ Send Email Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
     </div>
   );

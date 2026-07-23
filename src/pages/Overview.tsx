@@ -51,7 +51,8 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
-  QrCode
+  QrCode,
+  Activity
 } from "lucide-react";
 
 function formatDate(dateStr: string) {
@@ -649,9 +650,13 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
               {upcomingEvents.length > 0 ? (
                 <div className="space-y-4">
                   {upcomingEvents.map((evt) => (
-                    <div key={evt.id} className="p-4 border border-white/20 rounded-xl bg-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div 
+                      key={evt.id} 
+                      onClick={() => navigate(`/app/openhouses?tab=scheduled&eventId=${evt.id}`)}
+                      className="p-4 border border-white/20 rounded-xl bg-white/15 hover:bg-white/25 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+                    >
                       <div>
-                        <p className="text-xs font-bold text-white uppercase tracking-wide">{evt.eventName}</p>
+                        <p className="text-xs font-bold text-white uppercase tracking-wide group-hover:underline">{evt.eventName}</p>
                         <p className="text-[11px] text-blue-50 mt-0.5 flex items-center gap-1">
                           <Home className="h-3.5 w-3.5 text-white" /> {evt.listingAddress}
                         </p>
@@ -698,11 +703,15 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                     const toursCount = visitsCount + 2;
 
                     return (
-                      <div key={evt.id} className="p-4 border border-stone-200 rounded-xl bg-stone-50/40 hover:bg-stone-50 transition-colors flex flex-col gap-4">
+                      <div 
+                        key={evt.id} 
+                        onClick={() => navigate(`/app/openhouses?tab=results&eventId=${evt.id}`)}
+                        className="p-4 border border-stone-200 rounded-xl bg-stone-50/40 hover:bg-stone-50 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer flex flex-col gap-4 group"
+                      >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div>
                             <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded mr-2">Completed</span>
-                            <strong className="text-xs font-bold text-stone-900 uppercase tracking-wide">{evt.eventName}</strong>
+                            <strong className="text-xs font-bold text-stone-900 group-hover:text-blue-600 transition-colors uppercase tracking-wide">{evt.eventName}</strong>
                             <p className="text-[11px] text-stone-500 mt-1 flex items-center gap-1">
                               <Home className="h-3 w-3 text-stone-400" /> {evt.listingAddress}
                             </p>
@@ -741,6 +750,15 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                             </span>
                             <p className="text-base font-extrabold text-purple-700">{toursCount} plays</p>
                           </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[11px] font-bold text-blue-600 pt-1 border-t border-stone-100">
+                          <span className="flex items-center gap-1.5 font-black uppercase text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-xs group-hover:bg-blue-700 transition-colors">
+                            <Activity className="h-3.5 w-3.5" /> View Event Analytics Report
+                          </span>
+                          <span className="group-hover:underline flex items-center gap-1">
+                            View in Past Exhibitions & Results &rarr;
+                          </span>
                         </div>
                       </div>
                     );
@@ -978,7 +996,7 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
 
           {/* Quick Actions Panel */}
           <Card className="border-stone-200 shadow-sm rounded-2xl bg-white p-5 space-y-3">
-            <p className="text-[10px] font-black uppercase text-stone-500 tracking-wider">Quick Actions</p>
+            <p className="text-xs font-black uppercase text-black font-extrabold tracking-wider">Quick Actions</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <button 
                 onClick={() => navigate("/app/listings")} 

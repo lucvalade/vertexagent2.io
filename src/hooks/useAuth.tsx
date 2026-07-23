@@ -1,8 +1,68 @@
 import { auth, db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { User as FirebaseUser, signInWithPopup, GoogleAuthProvider, FacebookAuthProvider, OAuthProvider, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, addDoc } from "firebase/firestore";
 import { useEffect, useState, createContext, useContext } from "react";
 import { sendEmail } from "@/lib/api";
+
+async function seedSampleDummyDataForNewUser(userId: string, userEmail: string) {
+  try {
+    // 1. Dummy Listing
+    await addDoc(collection(db, "listings"), {
+      userId: userId,
+      agentId: userId,
+      userEmail: userEmail,
+      title: "123 Demo Luxury Lane [SAMPLE / DEMO DATA]",
+      address: "123 Demo Luxury Lane, Beverly Hills, CA 90210",
+      price: "$2,850,000",
+      beds: 4,
+      baths: 4.5,
+      sqft: "3,850",
+      description: "[SAMPLE / DEMO DATA] Modern architectural estate featuring open-concept living, panoramic canyon views, chef's kitchen with quartz island, and smart home Sora audio integration.",
+      isDummyData: true,
+      demoLabel: "[SAMPLE / DEMO DATA]",
+      status: "Active",
+      createdAt: Date.now()
+    });
+
+    // 2. Dummy Open House Event
+    await addDoc(collection(db, "openHouseEvents"), {
+      agentId: userId,
+      listingAddress: "123 Demo Luxury Lane, Beverly Hills, CA 90210",
+      eventName: "Weekend Open House Showcase [SAMPLE / DEMO DATA]",
+      eventDate: new Date().toISOString().split('T')[0],
+      startTime: "13:00",
+      endTime: "16:00",
+      eventMode: "Hybrid",
+      aiTourLinked: true,
+      mortgageQuestion: true,
+      status: "scheduled",
+      isDummyData: true,
+      demoLabel: "[SAMPLE / DEMO DATA]",
+      createdAt: Date.now()
+    });
+
+    // 3. Dummy Lead
+    await addDoc(collection(db, "leads"), {
+      agentId: userId,
+      name: "Jane Smith [SAMPLE / DEMO LEAD]",
+      email: "jane.smith.demo@example.com",
+      phone: "(555) 234-5678",
+      listingAddress: "123 Demo Luxury Lane, Beverly Hills, CA 90210",
+      mortgageConsent: true,
+      isVerified: true,
+      confidenceScore: "high",
+      occupation: "Senior Designer",
+      employer: "Tech Design Co",
+      isDummyData: true,
+      demoLabel: "[SAMPLE / DEMO DATA]",
+      createdAt: Date.now()
+    });
+
+    console.log("[useAuth] Successfully seeded initial sample dummy data for new user:", userId);
+  } catch (err) {
+    console.error("Failed to seed sample dummy data:", err);
+  }
+}
 
 interface AppUser {
   id: string;
@@ -110,6 +170,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               subscriptionPlan: targetPlan
             };
             await setDoc(userDocRef, appUser);
+
+            // Seed sample dummy data for new user account
+            await seedSampleDummyDataForNewUser(fUser.uid, fUser.email || "");
 
             // Send 14-day Free Trial Welcome Email
             try {

@@ -5,7 +5,7 @@ import Logo from "./Logo";
 import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import AgentVoiceControl from "./AgentVoiceControl";
-import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail } from "lucide-react";
+import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail, Search, HelpCircle } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -17,6 +17,13 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from "@/components/ui/dialog";
 
 export default function ProtectedLayout() {
   const { user, loading } = useAuth();
@@ -27,6 +34,74 @@ export default function ProtectedLayout() {
   const [viewMode, setViewMode] = useState<'ADMIN' | 'CLIENT'>(
     (user?.role === 'ADMIN' || user?.email === 'luc.valade@gmail.com') ? 'ADMIN' : 'CLIENT'
   );
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const clientKnowledgeBase = [
+    {
+      id: "sora-tours",
+      title: "How to Configure Sora AI Voice Tours",
+      category: "AI Tour & Sora",
+      content: "Go to Listings -> Edit Listing -> Step 2 (Sora Script) or Step 3 (Ask Me About Q&A Builder). You can auto-generate scripts, add custom Q&As, link photos, and test voice narration live. Need additional help? Please contact support team at /contact.",
+      link: "/app/aitours"
+    },
+    {
+      id: "kiosk-open-house",
+      title: "How to Launch Open House Kiosk & Lock Terminal",
+      category: "Open Houses",
+      content: "Go to Open Houses -> Deploy Show Kiosk. Select your event, verify your security Exit PIN, and tap 'Start Kiosk Mode'. The tablet will lock into consumer sign-in mode with an auto-reset 5-second thank-you loop. For technical assistance, contact support team at /contact.",
+      link: "/app/openhouses"
+    },
+    {
+      id: "qr-code-displays",
+      title: "How to Fetch & Print QR Code Sign-In Displays",
+      category: "Open Houses",
+      content: "Under Open Houses -> Fetch QR Displays, choose your listing to view dynamic QR sign-in posters. Visitors can scan with their smartphone camera to open the touchless digital sign-in page.",
+      link: "/app/openhouses?tab=qr"
+    },
+    {
+      id: "lender-pairing",
+      title: "How to Pair with Preferred Lenders & Co-Branding",
+      category: "Lenders & Mortgage",
+      content: "Go to Lenders -> My Paired Lender. Send an invite or accept a pending pairing request. When paired, visitors who opt-in to mortgage questions will be routed directly to your lender partner. If no lender is paired, the mortgage question is automatically hidden.",
+      link: "/app/lenders"
+    },
+    {
+      id: "followupboss-crm",
+      title: "How to Connect Follow Up Boss CRM & Field Mapping",
+      category: "CRM Integrations",
+      content: "Go to Settings or Integrations -> Follow Up Boss. Enter your FUB API key, then map contact details (First Name, Email, Phone, Tags) directly to FUB fields. Failed syncs can be manually retried in one click.",
+      link: "/app/crm"
+    },
+    {
+      id: "shared-listings",
+      title: "How to Share Listings & Cross-Host Open Houses",
+      category: "Listings",
+      content: "On any listing card in Listings, click the ellipsis (...) menu -> Share Listing / Cross-Hosting. Choose the hosting agent, set lead attribution rules, lender routing overrides, and schedule access.",
+      link: "/app/listings"
+    },
+    {
+      id: "flyer-generator",
+      title: "How to Create Marketing Flyers & Promo Posters",
+      category: "Marketing",
+      content: "Go to Marketing Flyers -> Create Luxury Promo. Select your property, choose a design template, embed QR codes, and export print-ready PDFs or digital social posts.",
+      link: "/app/flyers"
+    },
+    {
+      id: "lead-verification",
+      title: "Lead Verification Badges & Background Profiles",
+      category: "Leads",
+      content: "All sign-ins undergo automatic email/phone verification. Verified leads receive a 'Verified' confidence badge along with enriched public social profiles, occupation, and education details.",
+      link: "/app/leads"
+    },
+    {
+      id: "support-desk",
+      title: "Need Assistance from AI Open House Connect Support?",
+      category: "Support & Help",
+      content: "Our agent success team is ready to assist you. Click here to contact support team directly at /contact.",
+      link: "/contact"
+    }
+  ];
 
   // Inactivity Logout (4 hours)
   useEffect(() => {
@@ -269,7 +344,7 @@ export default function ProtectedLayout() {
                     {link.subLinks.map((sub: any) => {
                       const searchTab = new URLSearchParams(location.search).get("tab");
                       const subActive = active && (
-                        (sub.path.includes("tab=scheduled") && searchTab === "scheduled") || 
+                        (sub.path.includes("tab=scheduled") && (searchTab === "scheduled" || !searchTab)) || 
                         (sub.path.includes("tab=completed") && searchTab === "completed") ||
                         (sub.path.includes("tab=results") && searchTab === "results")
                       );
@@ -342,6 +417,48 @@ export default function ProtectedLayout() {
           </Link>
         </header>
 
+        {/* Top Bar Header for Client App Search & Portal Switches */}
+        <div className="bg-white border-b border-stone-200 px-4 md:px-8 py-3 flex items-center justify-between sticky top-0 z-20 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSearchModalOpen(true)}
+              className="flex items-center gap-2 bg-stone-100 hover:bg-blue-600 hover:text-white text-stone-800 border border-stone-200 px-3.5 py-1.5 rounded-xl text-xs font-black tracking-wide transition-all cursor-pointer shadow-2xs group"
+            >
+              <Search className="h-4 w-4 text-blue-600 group-hover:text-white transition-colors" />
+              <span>Search</span>
+            </button>
+            <span className="hidden sm:inline-block text-[11px] font-semibold text-stone-500">
+              Search app guides, Sora voice setup, & how-to answers
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {(user?.role === 'ADMIN' || user?.email === 'luc.valade@gmail.com') && (
+              <div className="flex items-center bg-stone-100 p-0.5 rounded-lg border border-stone-200 text-xs font-bold">
+                <button
+                  onClick={() => { setViewMode('CLIENT'); navigate('/app/overview'); }}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${viewMode === 'CLIENT' ? 'bg-blue-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'}`}
+                >
+                  Client View
+                </button>
+                <button
+                  onClick={() => { setViewMode('ADMIN'); navigate('/app/admin'); }}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${viewMode === 'ADMIN' ? 'bg-red-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'}`}
+                >
+                  Admin Portal
+                </button>
+              </div>
+            )}
+            <Link 
+              to="/contact" 
+              className="text-xs font-extrabold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Contact Support</span>
+            </Link>
+          </div>
+        </div>
+
         <main className="flex-1 p-4 md:p-8">
           <div className={`mx-auto ${location.pathname.includes('/flyers') || location.pathname.includes('/aitours') ? 'max-w-7xl lg:max-w-[1380px] w-full' : 'max-w-5xl'}`}>
             {(user?.role === 'ADMIN' || user?.email === 'luc.valade@gmail.com') && maintenanceMode && (
@@ -360,6 +477,124 @@ export default function ProtectedLayout() {
           </div>
         </main>
       </div>
+
+      {/* Client App Search Knowledge Base Dialog */}
+      <Dialog open={searchModalOpen} onOpenChange={setSearchModalOpen}>
+        <DialogContent className="max-w-2xl bg-white p-6 rounded-2xl space-y-4">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold text-stone-900 flex items-center gap-2">
+              <Search className="h-5 w-5 text-blue-600" />
+              Search AI Open House Connect Guides & Knowledge Base
+            </DialogTitle>
+            <DialogDescription className="text-xs text-stone-600 font-medium">
+              Find instant answers on how to use Sora voice tours, open house kiosk mode, CRM field mapping, and lender pairing.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-stone-400 pointer-events-none" />
+            <input
+              type="text"
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search features, e.g. Sora voice, kiosk PIN, Follow Up Boss, paired lender..."
+              className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3.5 top-2.5 text-stone-400 hover:text-stone-700 font-extrabold text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1 pt-1">
+            {clientKnowledgeBase
+              .filter(item => {
+                if (!searchQuery.trim()) return true;
+                const q = searchQuery.toLowerCase().trim();
+                return item.title.toLowerCase().includes(q) ||
+                  item.category.toLowerCase().includes(q) ||
+                  item.content.toLowerCase().includes(q);
+              })
+              .map(item => (
+                <div 
+                  key={item.id} 
+                  className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 hover:border-blue-400 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                      {item.category}
+                    </span>
+                    <Link
+                      to={item.link}
+                      onClick={() => setSearchModalOpen(false)}
+                      className="text-[11px] font-bold text-blue-600 hover:underline"
+                    >
+                      Open Module →
+                    </Link>
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900">{item.title}</h4>
+                  <p className="text-[11px] text-slate-600 leading-relaxed">
+                    {item.content.includes("/contact") ? (
+                      <>
+                        {item.content.split("/contact")[0]}
+                        <Link
+                          to="/contact"
+                          onClick={() => setSearchModalOpen(false)}
+                          className="text-blue-600 font-extrabold underline hover:text-blue-800"
+                        >
+                          contact support team
+                        </Link>
+                        {item.content.split("/contact")[1]}
+                      </>
+                    ) : (
+                      item.content
+                    )}
+                  </p>
+                </div>
+              ))}
+
+            {clientKnowledgeBase.filter(item => {
+              if (!searchQuery.trim()) return true;
+              const q = searchQuery.toLowerCase().trim();
+              return item.title.toLowerCase().includes(q) ||
+                item.category.toLowerCase().includes(q) ||
+                item.content.toLowerCase().includes(q);
+            }).length === 0 && (
+              <div className="p-6 text-center text-xs text-stone-500 bg-stone-50 rounded-xl border border-dashed border-stone-200 space-y-2">
+                <p>No guides found matching "{searchQuery}".</p>
+                <p>
+                  Need direct human help? Please{" "}
+                  <Link
+                    to="/contact"
+                    onClick={() => setSearchModalOpen(false)}
+                    className="text-blue-600 font-extrabold underline hover:text-blue-800"
+                  >
+                    contact support team
+                  </Link>
+                  .
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-stone-200 flex justify-between items-center text-[11px] text-stone-500 font-medium">
+            <span>Can't find your answer?</span>
+            <Link
+              to="/contact"
+              onClick={() => setSearchModalOpen(false)}
+              className="text-blue-600 font-extrabold hover:underline"
+            >
+              Contact Support Team →
+            </Link>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
