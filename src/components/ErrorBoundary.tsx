@@ -20,6 +20,17 @@ export default class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    const msg = error?.message || String(error || "");
+    if (
+      msg.includes("INTERNAL ASSERTION FAILED") || 
+      msg.includes("Unexpected state") || 
+      msg.includes("b815") || 
+      msg.includes("ca9") ||
+      msg.includes("WatchChangeAggregator")
+    ) {
+      console.warn("[ErrorBoundary] Intercepted and ignored internal Firestore SDK assertion failure:", msg);
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 

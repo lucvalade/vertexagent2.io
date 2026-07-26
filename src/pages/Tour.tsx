@@ -903,20 +903,30 @@ const getGeminiVoice = (voiceName: string = ""): string => {
 const show_property_feature = {
   name: "show_property_feature",
   description:
-    "Changes the currently displayed image on the user's screen to match the room or feature you are discussing.",
+    "MANDATORY PHOTO SWITCHER TOOL: Call this tool IMMEDIATELY to change the displayed image on the user's screen whenever discussing a room, feature, or area, or when the user asks to see another photo, the next photo, previous photo, or a specific room.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       imageIndex: {
         type: Type.NUMBER,
         description:
-          "The index of the image in the listing's images array to show, starting at 0.",
+          "The zero-based index of the image in the listing's images array to show.",
       },
       key: {
         type: Type.STRING,
         description:
-          "The specific media manifest key of the room or area (e.g. 'kitchen', 'primary_bed', 'backyard') to show.",
+          "The specific media key or room name (e.g. 'kitchen', 'primary_bed', 'backyard', 'basement', 'living', 'dining', 'bathroom', 'garage', 'driveway', 'next', 'prev', 'previous') to show.",
       },
+      direction: {
+        type: Type.STRING,
+        description:
+          "Direction to move photo: 'next' to advance to the next photo, 'prev' or 'previous' to go back.",
+      },
+      action: {
+        type: Type.STRING,
+        description:
+          "Navigation command like 'next_photo', 'prev_photo', 'show_room', 'switch_photo'.",
+      }
     },
   },
 };
@@ -1126,7 +1136,7 @@ export default function Tour() {
     return "";
   };
 
-  const changeImageForQuestion = (question: string) => {
+  const changeImageForQuestion = async (question: string) => {
     const askMeAboutArray = (listing as any)?.askMeAbout || [];
     const matchingEntry = askMeAboutArray.find((entry: any) => 
       entry.active && (
@@ -1143,46 +1153,7 @@ export default function Tour() {
       key = getManifestKeyForQuestion(question);
     }
 
-    if (key && listing?.images) {
-      // 1. Look up by exact key or name-match in listing.images
-      const foundIdx = listing.images.findIndex((img: any) => {
-        if (!img) return false;
-        if (typeof img === "object") {
-          const imgKey = (img.key || img.manifestKey || img.mediaKey || img.name || "").toLowerCase();
-          const targetKey = key.toLowerCase();
-          return imgKey === targetKey || 
-                 imgKey.includes(targetKey) || 
-                 targetKey.includes(imgKey) ||
-                 imgKey.replace(/_/g, " ").includes(targetKey.replace(/_/g, " "));
-        }
-        return false;
-      });
-
-      if (foundIdx !== -1) {
-        setActiveImageIndex(foundIdx);
-        return;
-      }
-      
-      // 2. Look up in mediaManifest
-      if (tourConfig?.mediaManifest) {
-        const manifestIdx = tourConfig.mediaManifest.findIndex((m: any) => m && m.key === key);
-        if (manifestIdx !== -1) {
-          const url = tourConfig.mediaManifest[manifestIdx].url;
-          const imgIdx = listing.images.findIndex((img: any) => 
-            typeof img === "string" ? img === url : img?.url === url
-          );
-          if (imgIdx !== -1) {
-            setActiveImageIndex(imgIdx);
-            return;
-          }
-          // Fallback to index if manifestIdx is within bounds
-          if (manifestIdx < listing.images.length) {
-            setActiveImageIndex(manifestIdx);
-            return;
-          }
-        }
-      }
-    }
+    await handleToolCall("show_property_feature", { key: key || question });
   };
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [language, setLanguage] = useState("English");
@@ -1491,40 +1462,93 @@ export default function Tour() {
   const handleToolCall = async (name: string, args: any) => {
     console.log("TOOL CALLED:", name, args);
     if (name === "show_property_feature") {
-      let idx = args.imageIndex;
-      const key = args.key;
+      const images = listing?.images || [];
+      const total = images.length;
+      if (total === 0) {
+        return { success: false, message: "No images available on listing." };
+      }
 
-      if (key && listing?.images) {
-        // Look up by key in listing images
-        const foundIdx = listing.images.findIndex((img: any) => 
-          img && typeof img === "object" && img.key === key
-        );
+      let idx: number | undefined = undefined;
+      const keyStr = (args?.key || args?.room || args?.feature || "").toString().toLowerCase();
+      const dirStr = (args?.direction || args?.action || "").toString().toLowerCase();
+
+      // 1. Directional/relative keywords
+      if (dirStr.includes("next") || keyStr === "next" || keyStr.includes("next_photo") || keyStr.includes("another") || keyStr.includes("forward")) {
+        idx = (activeImageIndex + 1) % total;
+      } else if (dirStr.includes("prev") || keyStr === "prev" || keyStr === "previous" || keyStr.includes("back") || keyStr.includes("last")) {
+        idx = (activeImageIndex - 1 + total) % total;
+      } else if (typeof args?.imageIndex === "number" && !isNaN(args.imageIndex) && args.imageIndex >= 0) {
+        idx = Math.min(Math.floor(args.imageIndex), total - 1);
+      } else if (keyStr) {
+        // 2. Exact or fuzzy match in listing.images
+        const foundIdx = images.findIndex((img: any) => {
+          if (!img) return false;
+          if (typeof img === "string") {
+            return img.toLowerCase().includes(keyStr);
+          }
+          const imgKey = (img.key || img.manifestKey || img.mediaKey || img.name || img.caption || "").toLowerCase();
+          return imgKey === keyStr || imgKey.includes(keyStr) || keyStr.includes(imgKey) || imgKey.replace(/_/g, " ").includes(keyStr.replace(/_/g, " "));
+        });
+
         if (foundIdx !== -1) {
           idx = foundIdx;
-        } else if (tourConfig?.mediaManifest) {
-          // Look up in mediaManifest
-          const manifestIdx = tourConfig.mediaManifest.findIndex((m: any) => m && m.key === key);
+        } else if (tourConfig?.mediaManifest && Array.isArray(tourConfig.mediaManifest)) {
+          // 3. Look up in mediaManifest
+          const manifestIdx = tourConfig.mediaManifest.findIndex((m: any) => 
+            m && m.key && (m.key.toLowerCase() === keyStr || m.key.toLowerCase().includes(keyStr) || keyStr.includes(m.key.toLowerCase()))
+          );
           if (manifestIdx !== -1) {
             const url = tourConfig.mediaManifest[manifestIdx].url;
-            const imgIdx = listing.images.findIndex((img: any) => 
+            const imgIdx = images.findIndex((img: any) => 
               typeof img === "string" ? img === url : img?.url === url
             );
             if (imgIdx !== -1) {
               idx = imgIdx;
-            } else {
-              if (manifestIdx < listing.images.length) {
-                idx = manifestIdx;
+            } else if (manifestIdx < total) {
+              idx = manifestIdx;
+            }
+          }
+        }
+
+        // 4. Room keyword mapping
+        if (idx === undefined) {
+          const roomKeywords: Record<string, string[]> = {
+            kitchen: ["kitchen", "cuisine", "counter", "pantry", "appliance"],
+            primary_bed: ["bed", "chambre", "master", "primary", "bedroom"],
+            bathroom: ["bath", "bain", "ensuite", "washroom", "toilet", "shower"],
+            backyard: ["yard", "backyard", "cour", "deck", "patio", "garden", "lot", "lawn"],
+            basement: ["basement", "sous-sol", "rec room"],
+            inlaw_suite: ["in-law", "inlaw", "suite"],
+            living: ["living", "salon", "family", "great room"],
+            dining: ["dining", "manger"],
+            driveway: ["garage", "parking", "driveway", "stationnement"],
+            neighbourhood_map: ["map", "school", "transit", "neighborhood", "neighbourhood", "amenities", "park"],
+            floorplan: ["floorplan", "plan", "sqft", "square"]
+          };
+
+          for (const words of Object.values(roomKeywords)) {
+            if (words.some(w => keyStr.includes(w))) {
+              const matchedIdx = images.findIndex((img: any) => {
+                const label = (typeof img === "string" ? img : (img?.name || img?.caption || img?.key || "")).toLowerCase();
+                return words.some(w => label.includes(w));
+              });
+              if (matchedIdx !== -1) {
+                idx = matchedIdx;
+                break;
               }
             }
           }
         }
       }
 
-      if (idx !== undefined && idx >= 0 && idx < (listing?.images?.length || 0)) {
-        setActiveImageIndex(idx);
-        return { success: true, message: `Displayed property feature for key or index: ${key || idx}` };
+      // 5. Ultimate Fallback: if idx is still undefined OR idx equals the current photo index,
+      // advance to the next image so the photo ALWAYS visually changes!
+      if (idx === undefined || idx === activeImageIndex) {
+        idx = (activeImageIndex + 1) % total;
       }
-      return { success: false, message: `Could not find image index for key or index: ${key || idx}` };
+
+      setActiveImageIndex(idx);
+      return { success: true, message: `Displayed property image index ${idx} of ${total}` };
     }
 
     if (name === "trigger_lead_capture") {
@@ -1833,9 +1857,19 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
   };
   const systemDateStr = `System context: Today is ${new Date().toLocaleDateString("en-US", dateOptions)}.`;
 
-  const photoInteractionModeInstruction = capabilities.photoInteractionMode === "Manual Swipe Only"
-    ? "\n- CRITICAL ENFORCED LIMIT: You are operating in Free Solo mode. You are STRICTLY FORBIDDEN from attempting to change, show, or navigate photos or rooms. You do NOT have the show_property_feature tool registered. If the visitor asks you to show a different room, view, or photo, explain politely that they can swipe through the listing photos manually using the navigation arrows on the image slideshow at the top of the screen."
-    : "\n- PRO FEATURE ACTIVE: You have the 'show_property_feature' tool registered. You can automatically and dynamically navigate and change the photos on the visitor's screen to match the room or feature you are actively discussing (e.g., kitchen, bedroom, backyard, etc.). Use this tool whenever relevant to create an immersive contextual experience.";
+  const photoInteractionModeInstruction = `
+==================================================
+MANDATORY AUTOMATED PHOTO NAVIGATION & SWAPPING
+==================================================
+1. YOU ARE THE AUTOMATED PHOTO OPERATOR & TOUR GUIDE. You possess the 'show_property_feature' tool and MUST call it on EVERY turn where a photo, room, or view is discussed or requested.
+2. WHEN THE VISITOR ASKS TO SEE:
+   - "next photo", "next picture", "show me another photo", "move to next image", "next", "continue", "another room": YOU MUST IMMEDIATELY CALL 'show_property_feature' WITH { "direction": "next" }.
+   - "previous photo", "last picture", "go back", "prev": YOU MUST IMMEDIATELY CALL 'show_property_feature' WITH { "direction": "prev" }.
+   - a specific room or feature (e.g. kitchen, bedroom, backyard, basement, bathroom, living room, garage, floorplan, map): YOU MUST IMMEDIATELY CALL 'show_property_feature' WITH { "key": "<room_name>" }.
+3. ABSOLUTE MANDATES:
+   - Invoke 'show_property_feature' BEFORE or WHILE speaking on every single turn.
+   - NEVER tell the visitor to manually click or swipe navigation arrows. You HAVE the 'show_property_feature' tool and MUST execute it yourself.
+==================================================`;
 
   const openHouseSessionContext = (() => {
     const nowStr = new Date().toISOString();
@@ -1948,9 +1982,8 @@ Behavior by mode
 If ui_mode = collapsed:
 - Do not speak unless activated.
 If ui_mode = welcome:
-- Greet briefly.
-- Invite the visitor to choose Talk with me, Listen to tour, or Message me.
-- Keep it under 2 short sentences.
+- Greet briefly and introduce yourself as Sora, the AI guide for this property.
+- Keep it under 2 short sentences and ask the visitor if they would like a guided tour of the property.
 
 If ui_mode = talk:
 - Behave like a live voice assistant.
@@ -1992,9 +2025,7 @@ Global rules
 - Meeting Date Validation: When a client requests a date to meet the agent, you must verify that the requested date is not in the past. Always reference the current system date (${new Date().toLocaleDateString("en-US", dateOptions)}). If the requested date is in the past, politely inform them that the date is invalid and ask them to suggest a new time (e.g., "It looks like that date has already passed! Could you suggest a time for today or later?"). If the requested date is today or in the future, accept the date and proceed with scheduling.
 - Spoken / Clicked Q&A Image-Sync: When the user asks any question (such as Bedrooms & Bathrooms, In-Law Suite, Kitchen, Backyard, Basement, Parking/Garage, Transit/Highway, Nearby Amenities, Square Footage, MLS), you MUST immediately call the 'show_property_feature' tool with the key corresponding to their question before or while answering verbally. Use these keys: 'primary_bed' (for bedrooms/bathrooms), 'inlaw_suite' (for in-law suite), 'kitchen' (for kitchen), 'backyard' (for backyard/lot), 'basement' (for basement), 'driveway' (for parking/garage), 'neighbourhood_map' (for school/transit/amenities/neighborhood), 'floorplan' (for square footage or MLS).`;
 
-  const liveVoiceTools = capabilities.photoInteractionMode === "Dynamic Contextual AI Photo Swaps"
-    ? [{ functionDeclarations: [show_property_feature, submit_ai_tour_lead] }]
-    : [{ functionDeclarations: [submit_ai_tour_lead] }];
+  const liveVoiceTools = [{ functionDeclarations: [show_property_feature, submit_ai_tour_lead] }];
 
   const { connected, connecting, error, startSession, stopSession, sendTextMessage } =
     useLiveVoice(
@@ -2004,13 +2035,21 @@ Global rules
       getGeminiVoice(listing?.voiceName || "Professional Female Synthetic"),
     );
 
-  // When connection completes, send pending question if any
+  // When connection completes, send pending question or give brief welcome intro + offer guided tour
   useEffect(() => {
-    if (connected && pendingQuestion) {
-      sendTextMessage(pendingQuestion);
-      setPendingQuestion(null);
+    if (connected) {
+      if (pendingQuestion) {
+        sendTextMessage(pendingQuestion);
+        setPendingQuestion(null);
+      } else {
+        const isFrench = language.toLowerCase() === "fr" || language.toLowerCase() === "french";
+        const welcomePrompt = isFrench
+          ? "Bonjour! Veuillez vous présenter très brièvement en tant que Sora, l'assistant virtuel de cette propriété, puis demandez-moi si je souhaite faire une visite guidée."
+          : "Hello! Please give a very short introduction as Sora, the AI guide for this property, and then ask me if I would like a guided tour.";
+        sendTextMessage(welcomePrompt);
+      }
     }
-  }, [connected, pendingQuestion, sendTextMessage]);
+  }, [connected, pendingQuestion, sendTextMessage, language]);
 
 
 
@@ -2188,7 +2227,7 @@ Global rules
             </button>
 
             {/* Image Indicator Badge */}
-            <div className="absolute bottom-6 sm:bottom-12 right-6 sm:right-12 z-30 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/10 select-none">
+            <div className="absolute bottom-6 sm:bottom-12 right-6 sm:right-12 translate-x-[5px] z-30 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/10 select-none">
               <span className="text-[11px] font-mono font-medium text-white/90">
                 {activeImageIndex + 1} / {listing.images.length}
               </span>
@@ -2222,10 +2261,10 @@ Global rules
         </div>
 
         {/* Detail Card Overlay */}
-        <div className="absolute bottom-[-9px] left-4 md:bottom-8 md:left-8 z-20 pointer-events-auto">
+        <div className="absolute bottom-[-9px] left-0 right-0 mx-auto translate-x-[-10px] md:left-8 md:bottom-8 md:translate-x-0 z-20 pointer-events-auto">
           <div
             style={{ backgroundColor: "rgba(148, 153, 162, 0.45)" }}
-            className="backdrop-blur-md rounded-xl p-4 border border-white/25 shadow-lg max-w-[280px] sm:max-w-[320px] md:max-w-[360px] text-white space-y-3"
+            className="backdrop-blur-md rounded-xl p-4 border border-white/25 shadow-lg mx-auto max-w-[280px] sm:max-w-[320px] md:max-w-[360px] text-white space-y-3"
           >
             {/* Address */}
             <div className="flex items-start gap-2">
@@ -2467,6 +2506,7 @@ Global rules
               {!connected && (
                 <WelcomeAudio
                   language={language}
+                  onLanguageChange={(newLang) => setLanguage(newLang)}
                   onSpeakingChange={setIsWelcomingSpeaking}
                   listingId={listing.id}
                   agentPlan={agent?.subscriptionPlan}
@@ -2577,16 +2617,16 @@ Global rules
               </div>
             </div>
 
-            <div className="w-full bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
+            <div className="w-full sm:max-w-2xl mx-auto bg-slate-900/50 border border-slate-700/50 rounded-2xl p-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
                 <h4 className="text-center font-bold text-white text-sm sm:text-base mb-3 uppercase tracking-wider">
                   {trans.askMeAbout}
                 </h4>
                 <AskMeAboutTable 
                   language={language} 
                   askMeAbout={listing?.askMeAbout}
-                  onTopicClick={(question) => {
+                  onTopicClick={async (question) => {
                     // 1. Instantly change image on screen if matching key exists
-                    changeImageForQuestion(question);
+                    await changeImageForQuestion(question);
 
                     const isFirstClick = topicClickCount === 0;
                     setTopicClickCount(prev => prev + 1);

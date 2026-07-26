@@ -122,14 +122,28 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 // Register global uncaught crash event listeners
 window.addEventListener("error", (event) => {
+  const msg = event.message || event.error?.message || String(event.error || "");
+  if (
+    msg.includes("INTERNAL ASSERTION FAILED") || 
+    msg.includes("Unexpected state") || 
+    msg.includes("b815") || 
+    msg.includes("ca9") ||
+    msg.includes("WatchChangeAggregator") ||
+    msg.includes("TargetState")
+  ) {
+    console.warn("[Global Error Listener] Suppressed internal Firestore assertion error:", msg);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
   try {
     addDoc(collection(db, "system_logs"), {
       type: "CRASH",
-      message: `Global Uncaught: ${event.message || "Unknown error"}`,
+      message: `Global Uncaught: ${msg || "Unknown error"}`,
       timestamp: serverTimestamp(),
       createdAt: Date.now(),
       details: {
-        message: event.message || "",
+        message: msg,
         filename: event.filename || "",
         lineno: event.lineno || 0,
         colno: event.colno || 0,
@@ -142,17 +156,31 @@ window.addEventListener("error", (event) => {
   } catch (err) {
     console.error("Failed to log uncaught error to Firestore:", err);
   }
-});
+}, true);
 
 window.addEventListener("unhandledrejection", (event) => {
+  const reasonStr = event.reason?.message || String(event.reason || "");
+  if (
+    reasonStr.includes("INTERNAL ASSERTION FAILED") || 
+    reasonStr.includes("Unexpected state") || 
+    reasonStr.includes("b815") || 
+    reasonStr.includes("ca9") ||
+    reasonStr.includes("WatchChangeAggregator") ||
+    reasonStr.includes("TargetState")
+  ) {
+    console.warn("[Global Unhandled Rejection] Suppressed internal Firestore assertion error:", reasonStr);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
   try {
     addDoc(collection(db, "system_logs"), {
       type: "CRASH",
-      message: `Unhandled Rejection: ${event.reason?.message || String(event.reason)}`,
+      message: `Unhandled Rejection: ${reasonStr}`,
       timestamp: serverTimestamp(),
       createdAt: Date.now(),
       details: {
-        reason: event.reason?.message || String(event.reason),
+        reason: reasonStr,
         stack: event.reason?.stack || "",
         location: window.location.href,
         userAgent: navigator.userAgent

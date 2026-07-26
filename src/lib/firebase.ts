@@ -3,10 +3,9 @@ import { getAuth } from "firebase/auth";
 import { 
   getFirestore, 
   initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager,
+  memoryLocalCache,
   doc,
-  getDocFromServer
+  getDoc
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
@@ -32,23 +31,14 @@ export const app = initializeApp(resolvedConfig);
 export const auth = getAuth(app);
 
 let initializedDb: any;
-const isIframe = typeof window !== "undefined" && window.self !== window.top;
-
-if (isIframe) {
-  console.log("[Firebase Init] Operating inside an iframe sandbox. Initializing standard Firestore without local disk persistence to prevent cache lock contention.");
+try {
+  initializedDb = initializeFirestore(app, {
+    localCache: memoryLocalCache(),
+  }, resolvedConfig.firestoreDatabaseId);
+  console.log("[Firebase Init] Firestore initialized with memoryLocalCache successfully.");
+} catch (err) {
+  console.warn("[Firebase Init] Failed to initialize memoryLocalCache, falling back to default getFirestore:", err);
   initializedDb = getFirestore(app, resolvedConfig.firestoreDatabaseId);
-} else {
-  try {
-    initializedDb = initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    }, resolvedConfig.firestoreDatabaseId);
-    console.log("[Firebase Init] Firestore persistent multi-tab local cache initialized successfully.");
-  } catch (err) {
-    console.warn("[Firebase Init] Failed to initialize persistent local cache, falling back to standard Firestore:", err);
-    initializedDb = getFirestore(app, resolvedConfig.firestoreDatabaseId);
-  }
 }
 
 export const db = initializedDb;
@@ -56,7 +46,7 @@ export const db = initializedDb;
 // Validate Connection to Firestore (MANDATORY skill check constraint)
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, "appConfig", "global"));
+    await getDoc(doc(db, "appConfig", "global"));
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
     const errCode = (error as any)?.code;
@@ -111,12 +101,27 @@ export interface FirestoreErrorInfo {
   };
 }
 
-export function isQuotaError(error: unknown): boolean {
+export function isQuotaOrOfflineError(error: unknown): boolean {
   if (!error) return false;
   const errMsg = error instanceof Error ? error.message : String(error);
   const errCode = (error as any)?.code;
-  return errCode === "resource-exhausted" || errMsg.includes("resource-exhausted") || errMsg.includes("Quota limit exceeded");
+  return (
+    errCode === "resource-exhausted" || 
+    errCode === "unavailable" ||
+    errCode === "auth/network-request-failed" ||
+    errMsg.includes("resource-exhausted") || 
+    errMsg.includes("Quota limit exceeded") ||
+    errMsg.includes("unavailable") ||
+    errMsg.includes("auth/network-request-failed") ||
+    errMsg.includes("client is offline") ||
+    errMsg.includes("INTERNAL ASSERTION FAILED") ||
+    errMsg.includes("Unexpected state") ||
+    errMsg.includes("b815") ||
+    errMsg.includes("ca9")
+  );
 }
+
+export const isQuotaError = isQuotaOrOfflineError;
 
 export function handleFirestoreError(
   error: unknown,
@@ -125,8 +130,8 @@ export function handleFirestoreError(
 ): void {
   const errMsg = error instanceof Error ? error.message : String(error);
 
-  if (isQuotaError(error)) {
-    console.warn(`[Firestore Quota Exceeded] ${operationType.toUpperCase()} on ${path || "document"}: Daily free quota limit reached. Operating in offline/local fallback mode.`);
+  if (isQuotaOrOfflineError(error)) {
+    console.warn(`[Firestore Offline / Quota Fallback] ${operationType.toUpperCase()} on ${path || "document"}: Operating in offline or fallback state. (${errMsg})`);
     return;
   }
 

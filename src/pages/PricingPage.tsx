@@ -142,8 +142,8 @@ export default function PricingPage() {
       feature: "Sora AI voice help",
       solo: "Basic EN-only",
       starter: "Basic EN-only",
-      pro: "Advanced (24 languages)",
-      broker: "Advanced (24 languages)"
+      pro: "Advanced (70 languages)",
+      broker: "Advanced (70 languages)"
     },
     {
       feature: "Branding customizations",
@@ -198,12 +198,12 @@ export default function PricingPage() {
       color: "border-stone-200 bg-white text-stone-900 shadow-sm hover:shadow-md",
       isPopular: false,
       badgeText: "CONNECTED WORKFLOW",
-      description: "Keep your database updated. Automatically syncs every captured lead directly to your Follow Up Boss or kvCORE CRM with no manual effort.",
+      description: "Keep your database updated. Automatically syncs captured leads directly to Follow Up Boss, kvCORE, HubSpot, or any of 47 supported real estate CRMs.",
       features: [
         "Includes everything in Solo",
-        "Automated CRM synchronization",
+        "Automated CRM sync (47+ supported CRMs)",
         "FUB custom tag & field mapping",
-        "kvCORE API integration",
+        "kvCORE, HubSpot & 45+ CRM integrations",
         "Real-time contact status updates"
       ]
     },
@@ -217,10 +217,10 @@ export default function PricingPage() {
       color: "border-blue-600 bg-white ring-4 ring-blue-50 relative",
       isPopular: true,
       badgeText: "MOST POPULAR",
-      description: "Turn listings into immersive interactive experiences. Engages buyers in 24 languages, guided by custom knowledge bases and advanced voice tours.",
+      description: "Turn listings into immersive interactive experiences. Engages buyers in 70 languages, guided by custom knowledge bases and advanced voice tours.",
       features: [
         "Includes everything in Starter",
-        "Full 24-language translation",
+        "Full 70-language translation",
         "Interactive conversational Sora guide",
         "Personal & brokerage branding uploads",
         "Detailed buyer intent scoring"
@@ -230,7 +230,7 @@ export default function PricingPage() {
       id: "brokerage",
       name: "Broker",
       benefitHeader: "Full White-Label & Governance",
-      price: "$249",
+      price: "$299",
       period: "month",
       cta: "Talk to Sales",
       color: "border-slate-900 bg-slate-900 text-white shadow-xl relative",

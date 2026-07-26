@@ -30,7 +30,10 @@ import {
   Trash2,
   ListRestart,
   Play,
-  Square
+  Square,
+  HelpCircle,
+  X,
+  Info
 } from "lucide-react";
 
 export default function AiTours() {
@@ -38,6 +41,7 @@ export default function AiTours() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [showWorkspaceHelp, setShowWorkspaceHelp] = useState(false);
   
   // Script / Tour variables
   const [welcomeEn, setWelcomeEn] = useState("");
@@ -82,68 +86,79 @@ export default function AiTours() {
 
   // Helper for dynamic translation of CTA and action buttons
   const getWalkthroughTranslations = (lang: string) => {
-    const dictionary: Record<string, { preview: string; translateRoom: string; translateAnswer: string }> = {
+    const dictionary: Record<string, { preview: string; translateRoom: string; translateAnswer: string; stopLabel: string }> = {
       French: {
         preview: "Écouter la voix de Sora (Français)",
         translateRoom: "Traduire en Français",
-        translateAnswer: "Traduire la resposta en Français"
+        translateAnswer: "Traduire la réponse en Français",
+        stopLabel: "Arrêt"
       },
       Spanish: {
         preview: "Escuchar la voz de Sora (Español)",
         translateRoom: "Traducir al Español",
-        translateAnswer: "Traducir respuesta al Español"
+        translateAnswer: "Traducir respuesta al Español",
+        stopLabel: "Detener"
       },
       German: {
         preview: "Sora-Stimme anhören (Deutsch)",
         translateRoom: "Auf Deutsch übersetzen",
-        translateAnswer: "Antwort auf Deutsch übersetzen"
+        translateAnswer: "Antwort auf Deutsch übersetzen",
+        stopLabel: "Stopp"
       },
       Italian: {
         preview: "Ascolta la voce di Sora (Italiano)",
         translateRoom: "Traduci in Italiano",
-        translateAnswer: "Traduci la risposta in Italiano"
+        translateAnswer: "Traduci la risposta in Italiano",
+        stopLabel: "Fermare"
       },
       Portuguese: {
         preview: "Ouvir a voz de Sora (Português)",
         translateRoom: "Traduzir para Português",
-        translateAnswer: "Traduzir resposta para Português"
+        translateAnswer: "Traduzir resposta para Português",
+        stopLabel: "Parar"
       },
       Mandarin: {
         preview: "预览Sora语音 (中文)",
         translateRoom: "翻译成中文",
-        translateAnswer: "将回答翻译成中文"
+        translateAnswer: "将回答翻译成中文",
+        stopLabel: "停止"
       },
       Japanese: {
         preview: "Soraの音声プレビュー (日本語)",
         translateRoom: "日本語に翻訳",
-        translateAnswer: "回答を日本語に翻訳"
+        translateAnswer: "回答を日本語に翻訳",
+        stopLabel: "停止"
       },
       Dutch: {
         preview: "Sora-stem beluisteren (Nederlands)",
         translateRoom: "Vertaal naar het Nederlands",
-        translateAnswer: "Vertaal antwoord naar het Nederlands"
+        translateAnswer: "Vertaal antwoord naar het Nederlands",
+        stopLabel: "Stoppen"
       },
       Russian: {
         preview: "Прослушать голос Sora (Русский)",
         translateRoom: "Перевести на русский",
-        translateAnswer: "Перевести ответ на русский"
+        translateAnswer: "Перевести ответ на русский",
+        stopLabel: "Стоп"
       },
       Arabic: {
         preview: "معاينة صوت سورا (العربية)",
         translateRoom: "ترجم إلى العربية",
-        translateAnswer: "ترجم الإجابة إلى العربية"
+        translateAnswer: "ترجم الإجابة إلى العربية",
+        stopLabel: "توقف"
       },
       English: {
         preview: "Preview Sora Voice (English)",
         translateRoom: "Translate to English",
-        translateAnswer: "Translate Answer to English"
+        translateAnswer: "Translate Answer to English",
+        stopLabel: "Stop"
       }
     };
-
     return dictionary[lang] || {
       preview: `Preview Sora Voice (${lang})`,
       translateRoom: `Translate to ${lang}`,
-      translateAnswer: `Translate Answer to ${lang}`
+      translateAnswer: `Translate Answer to ${lang}`,
+      stopLabel: "Stop"
     };
   };
 
@@ -154,7 +169,7 @@ export default function AiTours() {
   const [userHasEdited, setUserHasEdited] = useState(false);
 
   // AI Multilingual States
-  const [targetLang, setTargetLang] = useState("Spanish");
+  const [targetLang, setTargetLang] = useState("French");
   const [roomTargetLang, setRoomTargetLang] = useState("French");
   const [qaTargetLang, setQaTargetLang] = useState("French");
   const [welcomeOtherScript, setWelcomeOtherScript] = useState("");
@@ -323,6 +338,10 @@ export default function AiTours() {
     }
     setTranslating(true);
     try {
+      // Sync walkthrough and Q&A target languages to the selected welcome script language
+      setRoomTargetLang(targetLang);
+      setQaTargetLang(targetLang);
+
       const response = await fetch("/api/translate-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -334,6 +353,8 @@ export default function AiTours() {
       const data = await response.json();
       if (data.success) {
         setWelcomeOtherScript(data.translatedText);
+        setRoomTargetLang(targetLang);
+        setQaTargetLang(targetLang);
         toast.success(`Successfully translated welcome script to ${targetLang}!`);
         await initiateAutoSave(welcomeEn, welcomeFr, data.translatedText, targetLang);
       } else {
@@ -465,9 +486,9 @@ export default function AiTours() {
     }
     setWelcomeFr(initialFrScript);
 
-    setTargetLang(listing.welcome_other_lang || "Spanish");
-    setRoomTargetLang(listing.welcome_other_lang || "Spanish");
-    setQaTargetLang(listing.welcome_other_lang || "Spanish");
+    setTargetLang(listing.welcome_other_lang || "French");
+    setRoomTargetLang(listing.welcome_other_lang || "French");
+    setQaTargetLang(listing.welcome_other_lang || "French");
     setWelcomeOtherScript(listing.welcome_other_script || "");
 
     setTalkingPoints(listing.talkingPoints || [
@@ -549,7 +570,7 @@ export default function AiTours() {
           };
           const initialConfig = {
             voiceId: "Kore",
-            ttsModel: "gemini-2.5-flash-preview-tts",
+            ttsModel: "gemini-3.1-flash-tts-preview",
             welcomeTexts: welcomeTextsMap,
             defaultLanguage: "en",
             rooms: defaultRooms,
@@ -630,7 +651,7 @@ export default function AiTours() {
       // Save tourConfig to listings/{listingId}/tourConfig/main
       const configData = {
         voiceId: voiceIdVal,
-        ttsModel: "gemini-2.5-flash-preview-tts",
+        ttsModel: "gemini-3.1-flash-tts-preview",
         welcomeTexts: welcomeTextsMap,
         defaultLanguage: "en",
         rooms: updatedRooms,
@@ -667,6 +688,30 @@ export default function AiTours() {
         qrDestination: signInPrompt === "start" ? "sign-in" : "tour",
         updatedAt: Date.now()
       });
+
+      // Update in-memory selectedListing & listings array so isWelcomeDirty, isRoomsDirty, etc. turn false
+      const updatedObj: Listing = {
+        ...selectedListing,
+        welcome_en_script: enVal,
+        welcome_fr_script: frVal,
+        welcome_other_lang: langVal,
+        welcome_other_script: otherVal,
+        welcome_en: enVal,
+        welcome_fr: frVal,
+        rooms: updatedRooms,
+        qas: updatedQas,
+        ctas: updatedCtas,
+        voiceName: voiceEnabled ? "Sora Studio Male/Female (Neural)" : "Disabled",
+        voiceEnabled: voiceEnabled,
+        multilingualEnabled: multilingualEnabled,
+        lenderHandoff: lenderHandoff,
+        selectedLenderName: selectedLenderName,
+        qrDestination: signInPrompt === "start" ? "sign-in" : "tour",
+        voiceId: voiceIdVal
+      } as Listing;
+
+      setSelectedListing(updatedObj);
+      setListings(prev => prev.map(l => l.id === updatedObj.id ? updatedObj : l));
 
       toast.success("Changes auto-saved and live!", { duration: 1500 });
       setUserHasEdited(false);
@@ -1198,7 +1243,16 @@ export default function AiTours() {
       {/* Header section with listing selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2 border-b border-stone-200">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-stone-900 font-sans">Sora Tour Workspace</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-stone-900 font-sans">Sora Tour Workspace</h1>
+            <button
+              onClick={() => setShowWorkspaceHelp(!showWorkspaceHelp)}
+              className="inline-flex items-center justify-center p-1.5 rounded-full text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors cursor-pointer"
+              title="Learn about Sora Tour Workspace"
+            >
+              <HelpCircle className="h-5 w-5" />
+            </button>
+          </div>
           <p className="text-slate-500 mt-1">Design, edit, and publish guided AI Tours featuring your brand and a voice-ready narrator.</p>
         </div>
         
@@ -1239,6 +1293,62 @@ export default function AiTours() {
           </select>
         </div>
       </div>
+
+      {/* Workspace Information Guide Card */}
+      {showWorkspaceHelp && (
+        <Card className="border-amber-200 bg-amber-50/60 shadow-md rounded-2xl p-6 relative animate-in fade-in slide-in-from-top-2 duration-200">
+          <button
+            onClick={() => setShowWorkspaceHelp(false)}
+            className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-amber-100 transition-colors cursor-pointer"
+            title="Close guide"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-amber-500/10 text-amber-700 rounded-2xl shrink-0">
+              <Info className="h-6 w-6" />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-base font-bold text-amber-950 font-sans">
+                What is Sora Tour Workspace?
+              </h3>
+              <p className="text-xs text-amber-900/90 leading-relaxed font-sans">
+                Sora Tour Workspace is your central command center for authoring, customizing, and publishing AI-guided voice property tours for your listings. Powered by Gemini AI (Sora), it transforms static property details into interactive, voice-first experiences for open house visitors and online buyers.
+              </p>
+              
+              <div className="grid md:grid-cols-3 gap-3 pt-2">
+                <div className="bg-white/80 p-3 rounded-xl border border-amber-200/60 space-y-1">
+                  <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                    <Volume2 className="h-3.5 w-3.5 text-amber-600" /> Welcome Scripts
+                  </span>
+                  <p className="text-[11px] text-slate-600 leading-snug">
+                    Craft custom opening greetings in English, French, and 11+ additional languages with real-time neural voice previews.
+                  </p>
+                </div>
+
+                <div className="bg-white/80 p-3 rounded-xl border border-amber-200/60 space-y-1">
+                  <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                    <Layers className="h-3.5 w-3.5 text-amber-600" /> Room Narrations & Q&A
+                  </span>
+                  <p className="text-[11px] text-slate-600 leading-snug">
+                    Define step-by-step room walkthroughs and interactive Q&A points that Sora presents during buyer tours.
+                  </p>
+                </div>
+
+                <div className="bg-white/80 p-3 rounded-xl border border-amber-200/60 space-y-1">
+                  <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                    <Lock className="h-3.5 w-3.5 text-amber-600" /> Gating & Lender Pairing
+                  </span>
+                  <p className="text-[11px] text-slate-600 leading-snug">
+                    Configure sign-in gating rules, QR code destinations, and paired lender co-branding for seamless lead capture.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {!selectedListing ? (
         <Card className="text-center p-12 max-w-[calc(640px-15px)] mx-auto">
@@ -1311,7 +1421,7 @@ export default function AiTours() {
                           variant="destructive"
                           className="h-6 text-[9px] py-1 px-2 font-black uppercase bg-red-600 hover:bg-red-700 text-white animate-pulse"
                         >
-                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> STOP
+                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> STOP ENGLISH
                         </Button>
                       ) : (
                         <Button 
@@ -1353,7 +1463,7 @@ export default function AiTours() {
                           variant="destructive"
                           className="h-6 text-[9px] py-1 px-2 font-black uppercase bg-red-600 hover:bg-red-700 text-white animate-pulse"
                         >
-                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> STOP
+                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> Arrêt
                         </Button>
                       ) : (
                         <Button 
@@ -1420,7 +1530,13 @@ export default function AiTours() {
                     <Label className="text-[10px] font-extrabold uppercase text-black">Choose Welcome Translation Language</Label>
                     <select 
                       value={targetLang}
-                      onChange={(e) => { setTargetLang(e.target.value); setUserHasEdited(true); }}
+                      onChange={(e) => { 
+                        const newLang = e.target.value;
+                        setTargetLang(newLang); 
+                        setRoomTargetLang(newLang);
+                        setQaTargetLang(newLang);
+                        setUserHasEdited(true); 
+                      }}
                       className="w-full h-8 px-2 bg-white border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-amber-500 font-sans cursor-pointer text-stone-850"
                     >
                       <option value="French">French (Français)</option>
@@ -1467,7 +1583,7 @@ export default function AiTours() {
                           variant="destructive"
                           className="h-6 text-[9px] py-1 px-2 font-black uppercase bg-red-600 hover:bg-red-700 text-white animate-pulse"
                         >
-                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> STOP
+                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> {getWalkthroughTranslations(targetLang).stopLabel.toUpperCase()}
                         </Button>
                       ) : (
                         <Button 
@@ -1636,7 +1752,7 @@ export default function AiTours() {
                           >
                             {playingLang === `room_${room.id}` ? (
                               <>
-                                <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Voice
+                                <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> {getWalkthroughTranslations(roomTargetLang).stopLabel}
                               </>
                             ) : (
                               <>
@@ -1820,7 +1936,7 @@ export default function AiTours() {
                         >
                           {playingLang === `qa_${idx}` ? (
                             <>
-                              <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Voice
+                              <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> {getWalkthroughTranslations(qaTargetLang).stopLabel}
                             </>
                           ) : (
                             <>

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
-import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage, getOpenHouseSessions, createOpenHouseSession, deleteOpenHouseSession, OpenHouseSession, parseDateTimeToUTC } from "@/lib/api";
+import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage, getOpenHouseSessions, createOpenHouseSession, deleteOpenHouseSession, OpenHouseSession, parseDateTimeToUTC, getTourConfig, saveTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
 import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv, ChevronDown, Check } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
@@ -20,32 +20,53 @@ interface CRMItem {
 }
 
 const FALLBACK_CRMS: CRMItem[] = [
-  { name: "HubSpot", url: "https://www.hubspot.com" },
-  { name: "Follow Up Boss", url: "https://www.followupboss.com" },
-  { name: "Salesforce", url: "https://www.salesforce.com" },
-  { name: "Wise Agent", url: "https://wiseagent.com" },
-  { name: "LionDesk", url: "https://www.liondesk.com" },
-  { name: "kvCORE", url: "https://www.kvcore.com" },
   { name: "ActiveCampaign", url: "https://www.activecampaign.com" },
   { name: "Agile CRM", url: "https://www.agilecrm.com" },
-  { name: "BoomTown", url: "https://boomtownroi.com" },
+  { name: "Apptivo", url: "https://www.apptivo.com" },
+  { name: "Bitrix24", url: "https://www.bitrix24.com" },
+  { name: "BoomTown", url: "https://www.boomtownroi.com" },
   { name: "Brivity", url: "https://www.brivity.com" },
-  { name: "Chime (Lofty)", url: "https://lofty.com" },
-  { name: "Cloze", url: "https://www.cloze.com" },
-  { name: "Contactually", url: "https://www.contactually.com" },
+  { name: "Capsule CRM", url: "https://www.capsulecrm.com" },
+  { name: "Cinc (Commissions Inc)", url: "https://www.cincpro.com" },
   { name: "Copper", url: "https://www.copper.com" },
-  { name: "EZ Coordinator", url: "https://ezcoordinator.com" },
+  { name: "Creatio", url: "https://www.creatio.com" },
+  { name: "ddiSystem", url: "https://www.ddisystem.com" },
+  { name: "EngageBay", url: "https://www.engagebay.com" },
+  { name: "Follow Up Boss", url: "https://www.followupboss.com" },
+  { name: "Freshsales", url: "https://www.freshworks.com" },
+  { name: "HubSpot", url: "https://www.hubspot.com" },
+  { name: "Insightly", url: "https://www.insightly.com" },
   { name: "IXACT Contact", url: "https://www.ixactcontact.com" },
-  { name: "Keap", url: "https://keap.com" },
-  { name: "Mailchimp", url: "https://mailchimp.com" },
+  { name: "Keap", url: "https://www.keap.com" },
+  { name: "kvCORE", url: "https://www.insiderealestate.com" },
+  { name: "kvCORE OpenHouse", url: "https://www.insiderealestate.com" },
+  { name: "LeadSquared", url: "https://www.leadsquared.com" },
+  { name: "Less Annoying CRM", url: "https://www.lessannoyingcrm.com" },
+  { name: "LionDesk", url: "https://www.liondesk.com" },
   { name: "Market Leader", url: "https://www.marketleader.com" },
+  { name: "Monday.com", url: "https://monday.com" },
+  { name: "MoxiWorks", url: "https://moxiworks.com" },
+  { name: "NetSuite CRM", url: "https://www.netsuite.com" },
+  { name: "Nimble", url: "https://www.nimble.com" },
+  { name: "OnePageCRM", url: "https://www.onepagecrm.com" },
   { name: "Pipedrive", url: "https://www.pipedrive.com" },
+  { name: "Placester", url: "https://placester.com" },
+  { name: "Podio", url: "https://www.podio.com" },
   { name: "Propertybase", url: "https://www.propertybase.com" },
   { name: "Real Geeks", url: "https://www.realgeeks.com" },
   { name: "RealtyJuggler", url: "https://www.realtyjuggler.com" },
+  { name: "RedX", url: "https://www.theredx.com" },
+  { name: "Salesforce", url: "https://www.salesforce.com" },
   { name: "Sierra Interactive", url: "https://www.sierrainteractive.com" },
+  { name: "Streak", url: "https://www.streak.com" },
+  { name: "SugarCRM", url: "https://www.sugarcrm.com" },
   { name: "Top Producer", url: "https://www.topproducer.com" },
-  { name: "Zoho CRM", url: "https://www.zoho.com/crm/" }
+  { name: "Total Expert", url: "https://www.totalexpert.com" },
+  { name: "Vtiger", url: "https://www.vtiger.com" },
+  { name: "Vulcan7", url: "https://www.vulcan7.com" },
+  { name: "Wise Agent", url: "https://www.wiseagent.com" },
+  { name: "Zillow Premier Agent CRM", url: "https://www.zillow.com" },
+  { name: "Zoho CRM", url: "https://www.zoho.com" }
 ];
 
 const PRESET_ASK_ME_ABOUT_TEMPLATES = [
@@ -311,6 +332,8 @@ export default function EditListing() {
   const [postalCode, setPostalCode] = useState("");
   const [postalPlaceholder, setPostalPlaceholder] = useState("90001");
   const [price, setPrice] = useState("");
+  const [expiredListingDate, setExpiredListingDate] = useState("");
+  const [listingStatus, setListingStatus] = useState<"Active" | "Expired" | "Inactive">("Active");
   const [beds, setBeds] = useState("");
   const [baths, setBaths] = useState("");
   const [sqft, setSqft] = useState("");
@@ -352,6 +375,7 @@ export default function EditListing() {
   const [description, setDescription] = useState("");
   const [images, setImages] = useState<ListingImage[]>([]);
   const [newImage, setNewImage] = useState("");
+  const [imageSearchQuery, setImageSearchQuery] = useState("");
   
   // Custom Welcome Audios State
   const [welcomeEn, setWelcomeEn] = useState("");
@@ -1241,6 +1265,10 @@ export default function EditListing() {
         }
         
         setPrice(data.price?.toString() || "");
+        setExpiredListingDate(data.expiredListingDate || "");
+        const todayStr = new Date().toISOString().split("T")[0];
+        const isExp = data.status === "Expired" || (data.expiredListingDate && data.expiredListingDate <= todayStr);
+        setListingStatus(isExp ? "Expired" : ((data.status as any) || "Active"));
         setBeds(data.beds?.toString() || "");
         setBaths(data.baths?.toString() || "");
         handleSetSqftAndRange(data.sqft?.toString() || "");
@@ -1539,6 +1567,13 @@ export default function EditListing() {
         }
         
         if (data.price) setPrice(data.price.toString());
+        if (data.expiredListingDate) {
+          setExpiredListingDate(data.expiredListingDate);
+          const todayStr = new Date().toISOString().split("T")[0];
+          if (data.expiredListingDate <= todayStr || data.status === "Expired") {
+            setListingStatus("Expired");
+          }
+        }
         if (data.beds) setBeds(data.beds.toString());
         if (data.baths) setBaths(data.baths.toString());
         if (data.sqft) handleSetSqftAndRange(data.sqft.toString());
@@ -2530,12 +2565,18 @@ export default function EditListing() {
         finalSqft = sqft ? parseInt(sqft) : null;
       }
 
+      const todayStr = new Date().toISOString().split("T")[0];
+      const isExp = listingStatus === "Expired" || (expiredListingDate && expiredListingDate <= todayStr);
+      const computedStatus = isExp ? "Expired" : (listingStatus || "Active");
+
       const payload: Partial<Listing> = {
         address: address || "",
         city: city || "",
         province: province || "",
         postalCode: formattedPostalCode || "",
         price: price ? parseInt(price) : null,
+        status: computedStatus,
+        expiredListingDate: expiredListingDate || "",
         beds: beds ? parseInt(beds) : null,
         baths: baths ? parseInt(baths) : null,
         sqft: finalSqft,
@@ -2556,6 +2597,8 @@ export default function EditListing() {
         voiceName: voiceName || "",
         welcome_en: welcomeEn || "Hi, I'm Sora, your AI property assistant. This tour shows how I connect listings, answer client questions, book showings, and run your open house gate and lead sign-in. Tap each step to follow along.",
         welcome_fr: welcomeFr || "Bonjour, je suis Sora, votre assistante immobilière IA. Cette visite guidée vous montre comment je mets en relation les annonces, réponds aux questions des clients, planifie les visites et gère l'accueil des visiteurs lors des journées portes ouvertes et l'inscription des prospects. Touchez chaque étape pour suivre le tutoriel.",
+        welcome_en_script: welcomeEn || "Hi, I'm Sora, your AI property assistant. This tour shows how I connect listings, answer client questions, book showings, and run your open house gate and lead sign-in. Tap each step to follow along.",
+        welcome_fr_script: welcomeFr || "Bonjour, je suis Sora, votre assistante immobilière IA. Cette visite guidée vous montre comment je mets en relation les annonces, réponds aux questions des clients, planifie les visites et gère l'accueil des visiteurs lors des journées portes ouvertes et l'inscription des prospects. Touchez chaque étape pour suivre le tutoriel.",
         openHouseDate: openHouseDate || "",
         openHouseDateFormat: openHouseDateFormat || "Standard",
         openHouseTime: (openHouseStartTime && openHouseEndTime) ? `${openHouseStartTime} - ${openHouseEndTime}` : "",
@@ -2577,6 +2620,23 @@ export default function EditListing() {
         updatedAt: Date.now()
       };
 
+      const targetPropId = isEdit ? listingId! : activeListingId;
+      if (targetPropId) {
+        try {
+          const existingConfig = await getTourConfig(targetPropId);
+          await saveTourConfig(targetPropId, {
+            welcomeTexts: {
+              ...DEFAULT_WELCOME_TEXTS,
+              ...(existingConfig?.welcomeTexts || {}),
+              en: payload.welcome_en,
+              fr: payload.welcome_fr
+            }
+          });
+        } catch (tcErr) {
+          console.warn("[EditListing] Could not sync tourConfig welcome texts:", tcErr);
+        }
+      }
+
       if (isEdit) {
         await updateListing(listingId!, payload);
         toast.success(isAutosave ? "Changes autosaved successfully!" : "Listing updated");
@@ -2586,7 +2646,7 @@ export default function EditListing() {
           id: newId,
           ownerId: user!.id,
           createdAt: Date.now(),
-          status: "Active",
+          status: computedStatus,
           ...payload
         } as Listing;
         
@@ -3207,9 +3267,80 @@ export default function EditListing() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                 {/* Left side: Price, Beds & Baths */}
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Price ($) *</Label>
-                    <Input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="850000" />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Price ($) *</Label>
+                      <Input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="850000" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center justify-between">
+                        <span>Listing Status</span>
+                        {listingStatus === "Expired" && (
+                          <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded border border-rose-200">
+                            Expired
+                          </span>
+                        )}
+                      </Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950"
+                        value={listingStatus}
+                        onChange={e => {
+                          const newStatus = e.target.value as "Active" | "Expired" | "Inactive";
+                          setListingStatus(newStatus);
+                          const todayStr = new Date().toISOString().split("T")[0];
+                          if (newStatus === "Expired") {
+                            if (!expiredListingDate || expiredListingDate > todayStr) {
+                              setExpiredListingDate(todayStr);
+                            }
+                          } else if (newStatus === "Active") {
+                            if (expiredListingDate && expiredListingDate <= todayStr) {
+                              setExpiredListingDate("");
+                            }
+                          }
+                        }}
+                      >
+                        <option value="Active">Active Listing</option>
+                        <option value="Expired">Expired Listing</option>
+                        <option value="Inactive">Inactive / Suspended</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Expired Listing Date <span className="text-slate-400 font-normal">(Optional)</span></Label>
+                      <div 
+                        className="relative cursor-pointer"
+                        onClick={(e) => {
+                          const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                          if (inputEl) {
+                            try {
+                              inputEl.showPicker();
+                            } catch {}
+                          }
+                        }}
+                      >
+                        <Input 
+                          type="date" 
+                          value={expiredListingDate} 
+                          onChange={e => {
+                            const dateVal = e.target.value;
+                            setExpiredListingDate(dateVal);
+                            const todayStr = new Date().toISOString().split("T")[0];
+                            if (dateVal && dateVal <= todayStr) {
+                              setListingStatus("Expired");
+                            } else if (dateVal && dateVal > todayStr && listingStatus === "Expired") {
+                              setListingStatus("Active");
+                            } else if (!dateVal && listingStatus === "Expired") {
+                              setListingStatus("Active");
+                            }
+                          }} 
+                          onClick={(e) => {
+                            try {
+                              (e.currentTarget as HTMLInputElement).showPicker();
+                            } catch {}
+                          }}
+                          className="cursor-pointer w-full font-medium"
+                        />
+                      </div>
+                    </div>
                   </div>
                   
                   {/* Beds and Baths sharing a row - condensed to 50% width combined */}
@@ -3726,95 +3857,138 @@ export default function EditListing() {
                   </div>
                 </div>
 
+                {/* Searchable Filter Field for Photos */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search photos by name, tag, or URL..."
+                    value={imageSearchQuery}
+                    onChange={(e) => setImageSearchQuery(e.target.value)}
+                    className="pl-9 pr-8 h-9 text-xs bg-white border-slate-200 rounded-lg shadow-2xs"
+                  />
+                  {imageSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setImageSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full cursor-pointer"
+                      title="Clear search"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
                 {/* Ingested Images Grid */}
-                {images && images.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-1">
-                    {images.map((img, idx) => (
-                      <div
-                        key={`listing-img-${idx}`}
-                        className="group relative flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs hover:border-slate-300 transition-all"
-                      >
-                        {/* Image Preview */}
-                        <div className="relative aspect-video bg-slate-100 overflow-hidden">
-                          <img
-                            src={img.url}
-                            alt={img.name || `Photo ${idx + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded-md text-[9px] font-mono font-bold text-white">
-                            #{idx + 1}
-                          </div>
-                        </div>
+                {images && images.length > 0 ? (() => {
+                  const filteredImages = images
+                    .map((img, originalIdx) => ({ img, originalIdx }))
+                    .filter(({ img }) => {
+                      if (!imageSearchQuery.trim()) return true;
+                      const q = imageSearchQuery.toLowerCase();
+                      const nameMatch = (img.name || "").toLowerCase().includes(q);
+                      const urlMatch = (img.url || "").toLowerCase().includes(q);
+                      return nameMatch || urlMatch;
+                    });
 
-                        {/* Title & Actions */}
-                        <div className="p-2.5 flex-1 flex flex-col justify-between gap-2 bg-slate-50/50">
-                          <div className="min-w-0">
-                            <p
-                              className="text-[11px] font-bold text-slate-800 truncate"
-                              title={img.name}
-                            >
-                              {img.name || `Photo ${idx + 1}`}
-                            </p>
-                          </div>
-
-                          {/* Control Actions Row */}
-                          <div className="flex items-center justify-between border-t border-slate-100 pt-2 gap-1">
-                            {/* Reordering */}
-                            <div className="flex items-center gap-0.5">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => moveImageInListing(idx, 'left')}
-                                disabled={idx === 0}
-                                className="h-6 w-6 p-0 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                                title="Move Left"
-                              >
-                                <ArrowLeft className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => moveImageInListing(idx, 'right')}
-                                disabled={idx === images.length - 1}
-                                className="h-6 w-6 p-0 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
-                                title="Move Right"
-                              >
-                                <ArrowRight className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-
-                            {/* Rename & Delete */}
-                            <div className="flex items-center gap-0.5">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRenameImage(idx)}
-                                className="h-6 w-6 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
-                                title="Rename photo"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDeleteImage(idx)}
-                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer"
-                                title="Delete photo"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
+                  if (filteredImages.length === 0) {
+                    return (
+                      <div className="py-8 border border-dashed rounded-xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
+                        <Search className="h-8 w-8 mb-1.5 opacity-30 text-slate-400" />
+                        <p className="text-xs text-slate-500 font-medium">No photos matching &quot;{imageSearchQuery}&quot;</p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-1">
+                      {filteredImages.map(({ img, originalIdx }) => (
+                        <div
+                          key={`listing-img-${originalIdx}`}
+                          className="group relative flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs hover:border-slate-300 transition-all"
+                        >
+                          {/* Image Preview */}
+                          <div className="relative aspect-video bg-slate-100 overflow-hidden">
+                            <img
+                              src={img.url}
+                              alt={img.name || `Photo ${originalIdx + 1}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded-md text-[9px] font-mono font-bold text-white">
+                              #{originalIdx + 1}
+                            </div>
+                          </div>
+
+                          {/* Title & Actions */}
+                          <div className="p-2.5 flex-1 flex flex-col justify-between gap-2 bg-slate-50/50">
+                            <div className="min-w-0">
+                              <p
+                                className="text-[11px] font-bold text-slate-800 truncate"
+                                title={img.name}
+                              >
+                                {img.name || `Photo ${originalIdx + 1}`}
+                              </p>
+                            </div>
+
+                            {/* Control Actions Row */}
+                            <div className="flex items-center justify-between border-t border-slate-100 pt-2 gap-1">
+                              {/* Reordering */}
+                              <div className="flex items-center gap-0.5">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => moveImageInListing(originalIdx, 'left')}
+                                  disabled={originalIdx === 0}
+                                  className="h-6 w-6 p-0 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                                  title="Move Left"
+                                >
+                                  <ArrowLeft className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => moveImageInListing(originalIdx, 'right')}
+                                  disabled={originalIdx === images.length - 1}
+                                  className="h-6 w-6 p-0 text-slate-400 hover:text-slate-700 disabled:opacity-30 cursor-pointer"
+                                  title="Move Right"
+                                >
+                                  <ArrowRight className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+
+                              {/* Rename & Delete */}
+                              <div className="flex items-center gap-0.5">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRenameImage(originalIdx)}
+                                  className="h-6 w-6 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded cursor-pointer"
+                                  title="Rename photo"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteImage(originalIdx)}
+                                  className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer"
+                                  title="Delete photo"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })() : (
                   <div className="py-8 border border-dashed rounded-xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">
                     <ImageIcon className="h-8 w-8 mb-1.5 opacity-30 text-slate-400" />
                     <p className="text-xs text-slate-500 font-medium">No photos ingested yet. Paste a URL above to add.</p>
@@ -3865,24 +4039,41 @@ export default function EditListing() {
                     <h4 className="text-sm font-extrabold text-slate-800">Add Open House Session</h4>
                     <div className="space-y-2">
                       <Label>Session Date</Label>
-                      <Input
-                        type="date"
-                        className="h-10 text-sm font-medium border border-slate-200 focus-visible:ring-blue-500 bg-white"
-                        value={openHouseDate}
-                        min={getTodayDateString()}
-                        onChange={e => {
-                          const nextDate = e.target.value;
-                          if (nextDate) {
-                            const todayStr = getTodayDateString();
-                            if (nextDate < todayStr) {
-                              toast.error("Selecting a past date is not allowed.");
-                              setOpenHouseDate("");
-                              return;
-                            }
+                      <div 
+                        className="relative cursor-pointer"
+                        onClick={(e) => {
+                          const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                          if (inputEl) {
+                            try {
+                              inputEl.showPicker();
+                            } catch {}
                           }
-                          setOpenHouseDate(nextDate);
                         }}
-                      />
+                      >
+                        <Input
+                          type="date"
+                          className="h-10 text-sm font-medium border border-slate-200 focus-visible:ring-blue-500 bg-white cursor-pointer w-full"
+                          value={openHouseDate}
+                          min={getTodayDateString()}
+                          onClick={(e) => {
+                            try {
+                              (e.currentTarget as HTMLInputElement).showPicker();
+                            } catch {}
+                          }}
+                          onChange={e => {
+                            const nextDate = e.target.value;
+                            if (nextDate) {
+                              const todayStr = getTodayDateString();
+                              if (nextDate < todayStr) {
+                                toast.error("Selecting a past date is not allowed.");
+                                setOpenHouseDate("");
+                                return;
+                              }
+                            }
+                            setOpenHouseDate(nextDate);
+                          }}
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-2">

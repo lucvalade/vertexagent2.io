@@ -2,62 +2,167 @@ import { useEffect, useRef, useState } from "react";
 import { Play, Sparkles, Square, AlertCircle, Loader2, Star, ChevronDown, Search, Check } from "lucide-react";
 import { useAgentTierCapabilities } from "./UpdatedFeatureController";
 import { getTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { useAuth } from "@/hooks/useAuth";
 
 /**
  * Mapping language select codes to full language names for TTS parameters
  */
 const LANGUAGE_API_NAMES: Record<string, string> = {
+  af: "Afrikaans",
+  sq: "Albanian",
+  am: "Amharic",
   ar: "Arabic",
+  hy: "Armenian",
+  az: "Azerbaijani",
+  eu: "Basque",
   bn: "Bengali",
+  bs: "Bosnian",
+  bg: "Bulgarian",
+  my: "Burmese",
+  ca: "Catalan",
+  "zh-CN": "Chinese (Simplified)",
+  "zh-TW": "Chinese (Traditional)",
+  hr: "Croatian",
+  cs: "Czech",
+  da: "Danish",
   nl: "Dutch",
   en: "English",
+  et: "Estonian",
+  fa: "Farsi (Persian)",
+  fil: "Filipino (Tagalog)",
+  fi: "Finnish",
   fr: "French",
+  gl: "Galician",
+  ka: "Georgian",
   de: "German",
+  el: "Greek",
+  gu: "Gujarati",
+  he: "Hebrew",
   hi: "Hindi",
+  hu: "Hungarian",
+  is: "Icelandic",
   id: "Indonesian",
   it: "Italian",
   ja: "Japanese",
+  kn: "Kannada",
+  kk: "Kazakh",
+  km: "Khmer",
   ko: "Korean",
+  ky: "Kyrgyz",
+  lo: "Lao",
+  lv: "Latvian",
+  lt: "Lithuanian",
+  mk: "Macedonian",
+  ms: "Malay",
+  ml: "Malayalam",
+  mr: "Marathi",
+  mn: "Mongolian",
+  ne: "Nepali",
+  no: "Norwegian",
+  ps: "Pashto",
   pl: "Polish",
   pt: "Portuguese",
+  pa: "Punjabi",
   ro: "Romanian",
   ru: "Russian",
+  sr: "Serbian",
+  si: "Sinhala",
+  sk: "Slovak",
+  sl: "Slovenian",
+  so: "Somali",
   es: "Spanish",
+  sw: "Swahili",
   sv: "Swedish",
   ta: "Tamil",
+  te: "Telugu",
   th: "Thai",
   tr: "Turkish",
+  uk: "Ukrainian",
   ur: "Urdu",
+  uz: "Uzbek",
   vi: "Vietnamese",
-  "zh-CN": "Chinese (Simplified)",
-  "zh-TW": "Chinese (Traditional)"
+  cy: "Welsh",
+  zu: "Zulu"
 };
 
 const LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
-  ar: "العربية (Arabic - Egyptian)",
+  af: "Afrikaans",
+  sq: "Shqip (Albanian)",
+  am: "አማርኛ (Amharic)",
+  ar: "العربية (Arabic)",
+  hy: "Հայերեն (Armenian)",
+  az: "Azərbaycanca (Azerbaijani)",
+  eu: "Euskara (Basque)",
   bn: "বাংলা (Bengali)",
+  bs: "Bosanski (Bosnian)",
+  bg: "Български (Bulgarian)",
+  my: "ဗမာစာ (Burmese)",
+  ca: "Català (Catalan)",
+  "zh-CN": "简体中文 (Chinese - Simplified)",
+  "zh-TW": "繁體中文 (Chinese - Traditional)",
+  hr: "Hrvatski (Croatian)",
+  cs: "Čeština (Czech)",
+  da: "Dansk (Danish)",
   nl: "Nederlands (Dutch)",
   en: "English (English - US)",
+  et: "Eesti (Estonian)",
+  fa: "فارسی (Farsi / Persian)",
+  fil: "Tagalog (Filipino)",
+  fi: "Suomi (Finnish)",
   fr: "Français (French)",
+  gl: "Galego (Galician)",
+  ka: "ქართული (Georgian)",
   de: "Deutsch (German)",
+  el: "Ελληνικά (Greek)",
+  gu: "ગુજરાતી (Gujarati)",
+  he: "עברית (Hebrew)",
   hi: "हिन्दी (Hindi)",
+  hu: "Magyar (Hungarian)",
+  is: "Íslenska (Icelandic)",
   id: "Bahasa Indonesia (Indonesian)",
   it: "Italiano (Italian)",
   ja: "日本語 (Japanese)",
+  kn: "ಕನ್ನಡ (Kannada)",
+  kk: "Қазақ тілі (Kazakh)",
+  km: "ភាសាខ្មែរ (Khmer)",
   ko: "한국어 (Korean)",
+  ky: "Кыргызча (Kyrgyz)",
+  lo: "ພາສາລາວ (Lao)",
+  lv: "Latviešu (Latvian)",
+  lt: "Lietuvių (Lithuanian)",
+  mk: "Macedonian (Македонски)",
+  ms: "Bahasa Melayu (Malay)",
+  ml: "മലയാളം (Malayalam)",
+  mr: "मराठी (Marathi)",
+  mn: "Монгол (Mongolian)",
+  ne: "नेपाली (Nepali)",
+  no: "Norsk (Norwegian)",
+  ps: "پښتو (Pashto)",
   pl: "Polski (Polish)",
   pt: "Português (Portuguese)",
+  pa: "ਪੰਜਾਬੀ (Punjabi)",
   ro: "Română (Romanian)",
   ru: "Русский (Russian)",
+  sr: "Српски (Serbian)",
+  si: "සිංහல (Sinhala)",
+  sk: "Slovenčina (Slovak)",
+  sl: "Slovenščina (Slovenian)",
+  so: "Soomaali (Somali)",
   es: "Español (Spanish)",
+  sw: "Kiswahili (Swahili)",
   sv: "Svenska (Swedish)",
   ta: "தமிழ் (Tamil)",
-  th: "ภาษาไทย (Thai)",
+  te: "తెలుగు (Telugu)",
+  th: "ไทย (Thai)",
   tr: "Türkçe (Turkish)",
+  uk: "Українська (Ukrainian)",
   ur: "اردو (Urdu)",
+  uz: "Oʻzbekcha (Uzbek)",
   vi: "Tiếng Việt (Vietnamese)",
-  "zh-CN": "简体中文 (Chinese Simplified)",
-  "zh-TW": "繁體中文 (Chinese Traditional)"
+  cy: "Cymraeg (Welsh)",
+  zu: "isiZulu (Zulu)"
 };
 
 const START_TRANSLATIONS: Record<string, string> = {
@@ -116,6 +221,7 @@ const PLAY_TRANSLATIONS: Record<string, string> = {
 
 interface WelcomeAudioProps {
   language?: string;
+  onLanguageChange?: (language: string) => void;
   sources?: {
     en?: string;
     fr?: string;
@@ -130,6 +236,8 @@ interface WelcomeAudioProps {
 }
 
 export default function WelcomeAudio({
+  language: propsLanguage,
+  onLanguageChange,
   onSpeakingChange,
   agentPlan,
   agentId,
@@ -140,10 +248,26 @@ export default function WelcomeAudio({
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const activeUrlRef = useRef<string | null>(null);
 
+  const { user } = useAuth();
+  const isAdmin = user?.email?.toLowerCase() === "luc.valade@gmail.com" || (user as any)?.role === "admin" || (user as any)?.role === "platform_admin";
+
   const { capabilities, loading: capabilitiesLoading } = useAgentTierCapabilities(agentId);
-  const isPro = capabilities.maxConversationTurns > 10 || agentPlan === "pro" || agentPlan === "pro_agent" || agentPlan === "elite" || agentPlan === "team_pro";
+  const isPro = capabilities.maxConversationTurns > 10 || agentPlan === "pro" || agentPlan === "pro_agent" || agentPlan === "elite" || agentPlan === "team_pro" || isAdmin;
 
   const [language, setLanguage] = useState("en");
+
+  // Sync incoming propsLanguage (e.g. "English", "French", "fr", "es") to internal language code (e.g. "en", "fr", "es")
+  useEffect(() => {
+    if (propsLanguage) {
+      const lower = propsLanguage.toLowerCase();
+      const matchedCode = Object.entries(LANGUAGE_API_NAMES).find(
+        ([code, name]) => code.toLowerCase() === lower || name.toLowerCase() === lower
+      )?.[0];
+      if (matchedCode && matchedCode !== language) {
+        setLanguage(matchedCode);
+      }
+    }
+  }, [propsLanguage]);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "playing" | "error">("idle");
   const [speaking, setSpeaking] = useState(false);
@@ -152,7 +276,7 @@ export default function WelcomeAudio({
   // Dynamic configurations loaded from Firestore tourConfig/main
   const [welcomeTexts, setWelcomeTexts] = useState<Record<string, string>>(DEFAULT_WELCOME_TEXTS);
   const [voiceId, setVoiceId] = useState("Kore");
-  const [ttsModel, setTtsModel] = useState("gemini-2.5-flash-preview-tts");
+  const [ttsModel, setTtsModel] = useState("gemini-3.1-flash-tts-preview");
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -266,17 +390,52 @@ export default function WelcomeAudio({
     const fetchTourConfig = async () => {
       try {
         let activeLang = "en";
-        let activeTexts = DEFAULT_WELCOME_TEXTS;
+        let activeTexts: Record<string, string> = { ...DEFAULT_WELCOME_TEXTS };
         let activeVoice = "Kore";
-        let activeModel = "gemini-2.5-flash-preview-tts";
+        let activeModel = "gemini-3.1-flash-tts-preview";
 
         if (listingId) {
           const config = await getTourConfig(listingId);
-          if (config) {
-            if (config.welcomeTexts) {
-              setWelcomeTexts(config.welcomeTexts);
-              activeTexts = config.welcomeTexts;
+          if (config && config.welcomeTexts) {
+            activeTexts = { ...activeTexts, ...config.welcomeTexts };
+          }
+
+          // Merge custom scripts from main listing document as fallback/override
+          try {
+            const listingSnap = await getDoc(doc(db, "listings", listingId));
+            if (listingSnap.exists()) {
+              const lData = listingSnap.data();
+              const customEn = lData.welcome_en_script || lData.welcome_en;
+              const customFr = lData.welcome_fr_script || lData.welcome_fr;
+              const customOther = lData.welcome_other_script;
+              const customOtherLang = lData.welcome_other_lang;
+
+              if (customEn && !customEn.startsWith("data:audio") && !customEn.endsWith(".mp3") && customEn.trim()) {
+                activeTexts.en = customEn;
+              }
+              if (customFr && !customFr.startsWith("data:audio") && !customFr.endsWith(".mp3") && customFr.trim()) {
+                activeTexts.fr = customFr;
+              }
+              if (customOther && customOtherLang && customOther.trim()) {
+                const langCodeMap: Record<string, string> = {
+                  Arabic: "ar", "Chinese (Simplified)": "zh-CN", "Chinese (Traditional)": "zh-TW",
+                  Dutch: "nl", English: "en", French: "fr", German: "de", Hindi: "hi",
+                  Italian: "it", Japanese: "ja", Korean: "ko", Portuguese: "pt",
+                  Russian: "ru", Spanish: "es", Vietnamese: "vi"
+                };
+                const cCode = langCodeMap[customOtherLang];
+                if (cCode) {
+                  activeTexts[cCode] = customOther;
+                }
+              }
             }
+          } catch (docErr) {
+            console.warn("[WelcomeAudio] Error reading listing doc scripts:", docErr);
+          }
+
+          setWelcomeTexts(activeTexts);
+
+          if (config) {
             if (config.voiceId) {
               setVoiceId(config.voiceId);
               activeVoice = config.voiceId;
@@ -506,6 +665,10 @@ export default function WelcomeAudio({
                       disabled={isLocked}
                       onClick={() => {
                         setLanguage(code);
+                        const langName = LANGUAGE_API_NAMES[code] || "English";
+                        if (onLanguageChange) {
+                          onLanguageChange(langName);
+                        }
                         // Clear previous audio on language change
                         if (activeUrlRef.current) {
                           URL.revokeObjectURL(activeUrlRef.current);
@@ -580,7 +743,7 @@ export default function WelcomeAudio({
             className="w-full flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-lg transition-all border border-red-500/20 cursor-pointer"
           >
             <Square className="h-3 w-3 fill-white text-white animate-pulse" />
-            Stop
+            Stop - {LANGUAGE_API_NAMES[language] || "Audio"}
           </button>
         ) : (
           <button

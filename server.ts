@@ -420,13 +420,54 @@ async function startServer() {
       console.warn("[CORS Sheet Proxy Warning] Spreadsheet fetch failed or timed out. Gracefully returning local verified database. Error:", err.message || err);
       
       const fallbackCSV = 
-        "Name,URL\n" +
-        "HubSpot,https://www.hubspot.com\n" +
-        "Follow Up Boss,https://www.followupboss.com\n" +
-        "Salesforce,https://www.salesforce.com\n" +
-        "Wise Agent,https://wiseagent.com\n" +
-        "LionDesk,https://www.liondesk.com\n" +
-        "kvCORE,https://www.kvcore.com";
+        "Name,URL,Has API?,Has Webhooks?,Has an Affiliate Program\n" +
+        "ActiveCampaign,https://www.activecampaign.com,Yes,Yes,\n" +
+        "Agile CRM,https://www.agilecrm.com,Yes,Yes,\n" +
+        "Apptivo,https://www.apptivo.com,Yes,Yes,\n" +
+        "Bitrix24,https://www.bitrix24.com,Yes,Yes,\n" +
+        "BoomTown,https://www.boomtownroi.com,Yes,Yes,\n" +
+        "Brivity,https://www.brivity.com,Yes,No,\n" +
+        "Capsule CRM,https://www.capsulecrm.com,Yes,Yes,\n" +
+        "Cinc (Commissions Inc),https://www.cincpro.com,Yes,Yes,\n" +
+        "Copper,https://www.copper.com,Yes,Yes,\n" +
+        "Creatio,https://www.creatio.com,Yes,No,\n" +
+        "ddiSystem,https://www.ddisystem.com,Yes,No,\n" +
+        "EngageBay,https://www.engagebay.com,Yes,Yes,\n" +
+        "Follow Up Boss,https://www.followupboss.com,Yes,No,\n" +
+        "Freshsales,https://www.freshworks.com,Yes,Yes,\n" +
+        "HubSpot,https://www.hubspot.com,Yes,Yes,\n" +
+        "Insightly,https://www.insightly.com,Yes,No,\n" +
+        "IXACT Contact,https://www.ixactcontact.com,Yes,Yes,\n" +
+        "Keap,https://www.keap.com,Yes,No,\n" +
+        "kvCORE,https://www.insiderealestate.com,Yes,No,\n" +
+        "kvCORE OpenHouse,https://www.insiderealestate.com,Yes,Yes,\n" +
+        "LeadSquared,https://www.leadsquared.com,Yes,Yes,\n" +
+        "Less Annoying CRM,https://www.lessannoyingcrm.com,Yes,No,\n" +
+        "LionDesk,https://www.liondesk.com,Yes,No,\n" +
+        "Market Leader,https://www.marketleader.com,Yes,No,\n" +
+        "Monday.com,https://monday.com,Yes,Yes,\n" +
+        "MoxiWorks,https://moxiworks.com,Yes,Yes,\n" +
+        "NetSuite CRM,https://www.netsuite.com,Yes,Yes,\n" +
+        "Nimble,https://www.nimble.com,Yes,Yes,\n" +
+        "OnePageCRM,https://www.onepagecrm.com,Yes,Yes,\n" +
+        "Pipedrive,https://www.pipedrive.com,Yes,Yes,\n" +
+        "Placester,https://placester.com,Yes,Yes,\n" +
+        "Podio,https://www.podio.com,Yes,Yes,\n" +
+        "Propertybase,https://www.propertybase.com,Yes,Yes,\n" +
+        "Real Geeks,https://www.realgeeks.com,Yes,Yes,\n" +
+        "RealtyJuggler,https://www.realtyjuggler.com,No,No,\n" +
+        "RedX,https://www.theredx.com,Yes,No,\n" +
+        "Salesforce,https://www.salesforce.com,Yes,No,\n" +
+        "Sierra Interactive,https://www.sierrainteractive.com,Yes,Yes,\n" +
+        "Streak,https://www.streak.com,Yes,Yes,\n" +
+        "SugarCRM,https://www.sugarcrm.com,Yes,No,\n" +
+        "Top Producer,https://www.topproducer.com,Yes,Yes,\n" +
+        "Total Expert,https://www.totalexpert.com,Yes,No,\n" +
+        "Vtiger,https://www.vtiger.com,Yes,No,\n" +
+        "Vulcan7,https://www.vulcan7.com,Yes,Yes,\n" +
+        "Wise Agent,https://www.wiseagent.com,Yes,No,\n" +
+        "Zillow Premier Agent CRM,https://www.zillow.com,Yes,No,\n" +
+        "Zoho CRM,https://www.zoho.com,Yes,Yes";
         
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.send(fallbackCSV);
@@ -1119,7 +1160,7 @@ async function startServer() {
 
       const response = await callAiWithRetry(() => 
         ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
+          model: "gemini-3.1-flash-tts-preview",
           contents: [{ parts: [{ text: promptText }] }],
           config: {
             responseModalities: [Modality.AUDIO],
@@ -2190,7 +2231,7 @@ SCRIPT TO CONDENSE:
 
       const response = await callAiWithRetry(() => 
         ai.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
+          model: "gemini-3.1-flash-tts-preview",
           contents: [{ parts: [{ text }] }],
           config: {
             responseModalities: [Modality.AUDIO],
@@ -2274,7 +2315,7 @@ PRICING PLANS & TIERS:
 - Agent Starter with CRM: $14/mo. Includes CRM integration and sync capabilities.
 - Agent Pro: $29/mo. 25 listings, all 15 languages, advanced Sora (unlimited Q&A and memory), full branding, photo swaps, Media Manifest, follow-up automation, buyer intent analytics, CRM sync (Follow Up Boss, kvCORE), 500 sessions/mo, 12-month storage.
 - Team Pro: From $149/mo. Manage rosters, team configs, enforce routing policies and overrides globally.
-- Brokerage: From $249/mo (or $399/mo). White-label branding, subdomains, team admin controls, unlimited listings, custom domains, multi-avatar support.
+- Brokerage: From $299/mo (or $399/mo). White-label branding, subdomains, team admin controls, unlimited listings, custom domains, multi-avatar support.
 - Lenders (Subscribed B2B seats):
   - 1 Paired Agent: $20/month
   - 3 Paired Agents: $45/month
@@ -2402,7 +2443,7 @@ Generate a JSON object matching the schema: { "answer": "string", "links": [ { "
         if (!isTextMode) {
           const ttsResponse = await callAiWithRetry(() => 
             ai.models.generateContent({
-              model: "gemini-2.5-flash-preview-tts",
+              model: "gemini-3.1-flash-tts-preview",
               contents: [{ parts: [{ text: audioText }] }],
               config: {
                 responseModalities: [Modality.AUDIO],
@@ -2456,7 +2497,7 @@ Generate a JSON object matching the schema: { "answer": "string", "links": [ { "
         if (!isTextMode) {
           const ttsResponse = await callAiWithRetry(() => 
             ai.models.generateContent({
-              model: "gemini-2.5-flash-preview-tts",
+              model: "gemini-3.1-flash-tts-preview",
               contents: [{ parts: [{ text: followUpText }] }],
               config: {
                 responseModalities: [Modality.AUDIO],
@@ -2580,7 +2621,7 @@ Generate a JSON object matching the schema: { "spokenReply": "string", "displayT
         // Generate TTS for the spokenReply
         const ttsResponse = await callAiWithRetry(() => 
           ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
+            model: "gemini-3.1-flash-tts-preview",
             contents: [{ parts: [{ text: spokenReply }] }],
             config: {
               responseModalities: [Modality.AUDIO],
@@ -2664,108 +2705,48 @@ If the visitor says no:
 - End politely
 `;
 
-      const rawPrompt = `You are Sora, a warm, professional real-estate assistant acting
-directly on behalf of the listing agent for {brokerage} in {city},
-{province}, helping buyers explore {address}. You are always
-LISTENING unless actively speaking. If the buyer speaks while you
-are talking, stop instantly and listen (barge-in).
+      const rawPrompt = `You are Sora, a professional, bilingual (EN/FR) AI Voice Concierge for a real estate open house. Your role is to guide buyers through the property, answer their questions, and seamlessly change the displayed photos to match the current topic of conversation.
+CRITICAL INSTRUCTION: JSON RESPONSE CONTRACT
+You do not output plain text. Every single response you generate MUST be a valid JSON object matching this exact schema:
+{
+  "schemaVersion": "2.0",
+  "spokenReply": "Your conversational answer to the buyer.",
+  "mediaAction": {
+    "action": "show" | "keep",
+    "key": "exact_manifest_key" | null
+  }
+}
+---
+MEDIA SYNC RULES (NON-NEGOTIABLE)
+You control the photo viewer on the buyer's device using the \`mediaAction\` object. You must strictly follow these rules:
+1. ACTION TYPE:
+   - If the user asks about a specific room, feature, or area, set "action": "show".
+   - If the user asks a non-visual question (e.g., "What is the price?", "When was this built?"), set "action": "keep".
+2. SELECTING THE KEY:
+   - For "show" actions, you MUST select a \`key\` from the provided JSON Media Manifest. 
+   - NEVER invent, guess, or fabricate a key. 
+   - NEVER return a URL. You only return the exact string of the manifest key.
+   - If the user asks for a room that does not exist in the Media Manifest, apologize, explain you don't have a photo of that space, and set "action": "keep" with "key": null.
+3. FOR "KEEP" ACTIONS:
+   - If "action" is "keep", the "key" MUST be null.
+---
+BEHAVIOR & TONE
+- Keep your \`spokenReply\` concise, warm, and conversational in {language}. 
+- If the user interrupts or changes the subject (Barge-in), immediately address their new question and update the \`mediaAction\` to match the new topic.
+- If the user's location or context is ambiguous (e.g., "What is that over there?"), ask them to clarify which room they are currently looking at before attempting to change the photo.
+- OPENING GREETING: If this is the start of a session, introduce yourself as Sora, the AI guide for {address} ({brokerage} in {city}, {province}).
+---
+CONTEXT INJECTION
+PROPERTY LOCATION: {address}, {city}, {province} ({brokerage})
 
-OPENING GREETING (LOCKED RULE — fires automatically the instant
-the buyer presses Start, before the buyer speaks):
-Your very first spokenReply of every session MUST include a
-self-introduction by name — e.g. "Hi, I'm Sora, your AI guide for
-{address}." Never skip straight to the tour-mode question without
-introducing yourself first. After introducing yourself, ask if
-they'd like a guided tour or prefer to explore and ask questions as
-they go, and mention voice notes are available any time. This
-introduction is a single spokenReply, not two separate turns.
+ASK ME ABOUT:
+{askMeAbout}
 
-TOUR MODES:
-- Guided AI Tour: narrate room-by-room, set showMedia to match
-  whatever room/feature you are actively describing.
-- Self-Guided: buyer explores freely. Use the ROOM DETECTION rules
-  below to know their context.
+KNOWLEDGE BASE:
+{knowledgeBase}
 
-ROOM DETECTION & CONTEXT RULES:
-1. Prioritize explicit UI/system hints (e.g. "System Note: user is
-   viewing photo: kitchen_upgrades" or "User tapped: Kitchen
-   Upgrades"). Assume that is their current room/topic.
-2. If a room-specific question has no hint and you cannot infer the
-   room from their words, ask: "Which room are you in right now?"
-3. Once known, set showMedia to the matching manifest key.
-
-BARGE-IN + PHOTO SYNC (LOCKED RULE — the photo must follow the
-NEW question, not stay on the room you were narrating):
-1. If the buyer barges in mid-narration with a question naming or
-   implying a DIFFERENT room/feature than what you were currently
-   showing, you MUST set showMedia to that new room's manifest key
-   in your very next response — do not leave showMedia on the
-   interrupted room, and do not wait for the buyer to ask again.
-2. Resolve the new room the same way as any question: match it to
-   an ASK ME ABOUT entry's [IMAGE_ID] first, then a KNOWLEDGE BASE
-   fact, then the MEDIA MANIFEST KEYS list directly if neither has
-   an entry but the room name still maps to a known manifest key.
-3. If the buyer's interrupting question does NOT reference a room
-   or feature (e.g. "how much is it", "can I book a showing"),
-   leave showMedia as null and do not change the photo.
-4. After answering the barge-in question, resume Guided narration
-   from where you left off (or ask the buyer if they'd like you to
-   continue) — do not silently skip ahead.
-
-ASK ME ABOUT — HOW TO READ IT:
-The ASK ME ABOUT block below is structured data, formatted exactly
-as the buyer sees it on screen:
-  ## [Category]              <- tappable heading buyer may select
-  *[Sample question]*        <- italic suggested question
-  [IMAGE_ID: manifest_key]   <- photo to show when this is answered
-  Answer: [text]             <- what you say, in your own words
-  ---                        <- separates one entry from the next
-Each entry maps 1:1 to a category the buyer can tap OR ask aloud in
-their own words. Never speak the Markdown syntax, headings, dashes,
-or "[IMAGE_ID: ...]" tag out loud or in spokenReply — only the
-answer content, said naturally.
-
-ASK ME ABOUT — MATCHING RULES (apply first, before Knowledge Base):
-1. If the buyer taps a category or speaks its exact sample question,
-   go straight to that entry's Answer.
-2. If the buyer asks ANY free-form variation — including a single
-   bare topic word with no full sentence, e.g. just "kitchen?" or
-   "what about the kitchen" — match it to the closest ## Category
-   by topic/intent, then use that entry's Answer. A bare topic word
-   is enough to trigger a match; do not require a fully-formed
-   question.
-3. EVERY time you answer from an entry that has an [IMAGE_ID: key],
-   you MUST set showMedia.key to that key in the SAME response that
-   contains the spoken answer — never answer the question and leave
-   showMedia null, and never send the photo change in a later turn.
-   This applies whether the buyer tapped the category or spoke the
-   question, in any phrasing.
-4. Speak the Answer content in your own conversational phrasing,
-   under 40 words — do not just read it verbatim if it reads stiff.
-
-ANSWERING PRIORITY:
-1. ASK ME ABOUT (see matching rules above) — check first, always.
-2. KNOWLEDGE BASE — use only if no ASK ME ABOUT entry matches.
-3. If neither source covers it, say so honestly and redirect to
-   2-3 categories that ARE covered (e.g. "I don't have that handy,
-   but ask me about the Kitchen Upgrades or the Backyard!"), and
-   offer an agent follow-up.
-Never invent or extrapolate facts not present in either source.
-
-GENERAL RULES:
-- Answer in {language} only. Never switch languages mid-answer.
-- Keep spokenReply under 40 words, conversational, not a brochure.
-  Never say "according to the data" or "based on the Q&A" — speak
-  as if you simply know it.
-- Periodically remind the buyer they can swipe the photo or tap the
-  bold white arrows on either side to browse on their own, in
-  addition to asking you.
-
-ASK ME ABOUT: {askMeAbout}
-KNOWLEDGE BASE: {knowledgeBase}
-MEDIA MANIFEST KEYS: {manifestKeys}
-
-Return JSON matching the schema: { spokenReply, showMedia }`;
+JSON MEDIA MANIFEST KEYS:
+{manifestKeys}`;
 
       const brokerageVal = listing?.brokerage || listing?.brokerageName || "Michael St. Jean Realty";
       const cityVal = listing?.city || "Hamilton";
@@ -2876,13 +2857,31 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
           contents: contents,
           config: {
             systemInstruction: systemPrompt,
+            responseMimeType: "application/json",
             temperature: 0.7,
           }
         })
       );
 
-      const reply = result.text;
-      res.json({ success: true, reply });
+      let parsed: any = null;
+      try {
+        const cleanJson = (result.text || "").trim().replace(/^```json\s*/i, '').replace(/```$/i, '');
+        parsed = JSON.parse(cleanJson);
+      } catch (e) {
+        console.warn("[Sora Chat JSON Parse Warning]:", e);
+      }
+
+      const spokenReply = parsed?.spokenReply || result.text || "I'm here to help you explore the property!";
+      const mediaAction = parsed?.mediaAction || { action: "keep", key: null };
+
+      res.json({ 
+        success: true, 
+        reply: spokenReply,
+        spokenReply: spokenReply,
+        mediaAction: mediaAction,
+        schemaVersion: parsed?.schemaVersion || "2.0",
+        rawResponse: parsed 
+      });
     } catch (err: any) {
       console.error("[Sora Chat Endpoint Error]:", err);
       res.status(500).json({ error: err.message || "Failed to process message in Sora agent" });
@@ -4519,7 +4518,7 @@ Input Message:
           console.log(`[Welcome Save] Synthesizing [${locale}] using voice character ${geminiVoice}...`);
           const response = await callAiWithRetry(() => 
             ai.models.generateContent({
-              model: "gemini-2.5-flash-preview-tts",
+              model: "gemini-3.1-flash-tts-preview",
               contents: [{ parts: [{ text }] }],
               config: {
                 responseModalities: [Modality.AUDIO],

@@ -227,7 +227,15 @@ export default function ProtectedLayout() {
 
   const navLinks = [
     { label: "Dashboard", icon: LayoutDashboard, path: "/app/overview" },
-    { label: "Listings", icon: List, path: "/app/listings" },
+    { 
+      label: "Listings", 
+      icon: List, 
+      path: "/app/listings",
+      subLinks: [
+        { label: "Active Listings", path: "/app/listings?tab=active" },
+        { label: "Expired Listings", path: "/app/listings?tab=expired" }
+      ]
+    },
     { label: "AI Tour", icon: Mic2, path: "/app/aitours" },
     { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
     { 
@@ -344,6 +352,8 @@ export default function ProtectedLayout() {
                     {link.subLinks.map((sub: any) => {
                       const searchTab = new URLSearchParams(location.search).get("tab");
                       const subActive = active && (
+                        (sub.path.includes("tab=active") && (searchTab === "active" || !searchTab)) ||
+                        (sub.path.includes("tab=expired") && searchTab === "expired") ||
                         (sub.path.includes("tab=scheduled") && (searchTab === "scheduled" || !searchTab)) || 
                         (sub.path.includes("tab=completed") && searchTab === "completed") ||
                         (sub.path.includes("tab=results") && searchTab === "results")

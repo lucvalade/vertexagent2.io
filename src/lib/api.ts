@@ -48,6 +48,7 @@ export interface Listing {
   voiceName?: string;
   tourDescriptors?: string[];
   openHouseDate?: string;
+  expiredListingDate?: string;
   openHouseDateFormat?: string;
   openHouseTime?: string;
   welcome_en?: string;
@@ -62,7 +63,7 @@ export interface Listing {
   selectedLenderName?: string;
   enforcePhoneGate?: boolean;
   enforceOptInConsent?: boolean;
-  status?: "Active" | "Inactive" | "Processing";
+  status?: "Active" | "Expired" | "Inactive" | "Processing";
   qrBrandingOption?: "logo" | "photo" | "none";
   ctas?: { label: string; action: string }[];
   rooms?: any[];
@@ -120,6 +121,18 @@ export interface Listing {
     copyLink?: boolean;
   };
   askMeAbout?: any[];
+}
+
+export function isListingExpired(listing: Partial<Listing>): boolean {
+  if (!listing) return false;
+  if (listing.status === "Expired") return true;
+  if (listing.expiredListingDate && typeof listing.expiredListingDate === "string" && listing.expiredListingDate.trim() !== "") {
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (listing.expiredListingDate <= todayStr) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export interface Lead {

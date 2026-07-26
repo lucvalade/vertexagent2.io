@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import { getUserListings, getAllListings, deleteListingOp, Listing, createListing, updateListing, getAgent } from "@/lib/api";
+import { getUserListings, getAllListings, deleteListingOp, Listing, createListing, updateListing, getAgent, isListingExpired } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -341,6 +341,12 @@ export default function Dashboard() {
     }
   }
 
+  const searchTab = new URLSearchParams(location.search).get("tab");
+  const isExpiredTab = searchTab === "expired";
+
+  const activeListingsCount = listings.filter(l => !isListingExpired(l)).length;
+  const expiredListingsCount = listings.filter(l => isListingExpired(l)).length;
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -359,8 +365,12 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Your Listings</h1>
-          <p className="text-slate-500 mt-1">Manage and create AI-powered listing tours.</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isExpiredTab ? "Expired Listings" : "Your Listings"}
+          </h1>
+          <p className="text-slate-500 mt-1">
+            {isExpiredTab ? "View and manage expired property listings." : "Manage and create AI-powered listing tours."}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <div>
@@ -424,6 +434,36 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Navigation Tab Bar */}
+      <div className="flex border-b border-slate-200">
+        <button
+          onClick={() => navigate("/app/listings?tab=active")}
+          className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            !isExpiredTab
+              ? "border-blue-600 text-blue-600 font-extrabold"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <span>Active Listings</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-extrabold ${!isExpiredTab ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+            {activeListingsCount}
+          </span>
+        </button>
+        <button
+          onClick={() => navigate("/app/listings?tab=expired")}
+          className={`pb-3 px-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            isExpiredTab
+              ? "border-amber-600 text-amber-700 font-extrabold"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <span>Expired Listings</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-extrabold ${isExpiredTab ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+            {expiredListingsCount}
+          </span>
+        </button>
+      </div>
+
       {listings.length === 0 ? (
         <Card className="flex flex-col items-center justify-center h-64 text-center p-6 border-dashed">
           <div className="rounded-full bg-slate-100 p-3 mb-4">
@@ -480,7 +520,8 @@ export default function Dashboard() {
 
           {(() => {
             const uniqueRaw = Array.from(new Map(listings.map(l => [l.id, l])).values());
-            const filtered = uniqueRaw.filter(listing => {
+            const tabFiltered = uniqueRaw.filter(listing => isExpiredTab ? isListingExpired(listing) : !isListingExpired(listing));
+            const filtered = tabFiltered.filter(listing => {
               if (!appliedQuery) return true;
               const query = appliedQuery.toLowerCase();
               const addressMatch = (listing.address || "").toLowerCase().includes(query);
@@ -492,11 +533,23 @@ export default function Dashboard() {
               return (
                 <Card className="flex flex-col items-center justify-center h-64 text-center p-6 border-dashed">
                   <MapPin className="h-8 w-8 text-slate-400 mb-2" />
-                  <h3 className="text-lg font-medium">No matches found</h3>
+                  <h3 className="text-lg font-medium">
+                    {appliedQuery 
+                      ? `No matches found`
+                      : (isExpiredTab ? "No expired listings" : "No active listings found")}
+                  </h3>
                   <p className="text-sm text-slate-500 mt-1 mb-4 max-w-sm">
-                    We couldn't find any listings matching "{appliedQuery}". Try checking for typos or clear the search.
+                    {appliedQuery 
+                      ? `We couldn't find any listings matching "${appliedQuery}". Try checking for typos or clear the search.` 
+                      : (isExpiredTab 
+                          ? "Listings set to Expired or whose expired date has passed will automatically appear here." 
+                          : "Create your first property listing to generate an interactive AI talking tour.")}
                   </p>
-                  <Button onClick={() => { setSearchQuery(""); setAppliedQuery(""); }}>Clear Search</Button>
+                  {appliedQuery ? (
+                    <Button onClick={() => { setSearchQuery(""); setAppliedQuery(""); }}>Clear Search</Button>
+                  ) : !isExpiredTab ? (
+                    <Button onClick={() => navigate("/app/listings/edit")}>Create Listing</Button>
+                  ) : null}
                 </Card>
               );
             }
@@ -516,6 +569,11 @@ export default function Dashboard() {
                         className="h-48 bg-slate-100 relative cursor-pointer overflow-hidden"
                         onClick={() => navigate(`/app/listings/${listing.id}`)}
                       >
+                        {isListingExpired(listing) && (
+                          <div className="absolute top-3 left-3 z-10 bg-rose-600 text-white font-black text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md shadow-md border border-rose-400">
+                            Expired
+                          </div>
+                        )}
                         {listing.images && listing.images.length > 0 ? (
                           <img 
                             src={typeof listing.images[0] === 'string' ? listing.images[0] : listing.images[0].url} 
@@ -544,6 +602,20 @@ export default function Dashboard() {
                                 </Button>
                               } />
                               <DropdownMenuContent align="end" className="w-52 p-2 rounded-xl shadow-xl border-slate-200" onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}>
+                                {isListingExpired(listing) && (
+                                  <DropdownMenuItem onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await updateListing(listing.id, { status: "Active", expiredListingDate: "" });
+                                      toast.success("Listing reactivated and moved to Active Listings!");
+                                      loadListings();
+                                    } catch {
+                                      toast.error("Failed to reactivate listing");
+                                    }
+                                  }} className="rounded-lg font-bold gap-2 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 my-1">
+                                    <Sparkles className="h-4 w-4 text-emerald-600" /> Reactivate Listing
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/${listing.id}`); }} className="rounded-lg font-bold gap-2 text-xs">
                                   <Eye className="h-4 w-4 text-blue-600" /> View Tour
                                 </DropdownMenuItem>

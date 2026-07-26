@@ -704,7 +704,7 @@ export default function Billing() {
               <div className="space-y-1">
                 <span className="text-[10px] font-black uppercase text-amber-300">Scales Them</span>
                 <h3 className="font-extrabold text-lg text-white">Broker</h3>
-                <p className="font-extrabold text-amber-400 text-xl font-mono">$249 / mo</p>
+                <p className="font-extrabold text-amber-400 text-xl font-mono">$299 / mo</p>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed min-h-[64px]">Empower your entire brokerage. Enforce brand templates, manage team-wide assignments, configure custom domains, and route shared listing leads.</p>
               <div className="border-t border-slate-800 pt-3 space-y-2 text-xs text-slate-300">
@@ -808,7 +808,7 @@ export default function Billing() {
                       <div className="text-slate-500 text-[10px] uppercase font-bold">Team management, custom domains</div>
                     </div>
                   </div>
-                  <span className="font-bold text-xs text-slate-900">$249 / mo</span>
+                  <span className="font-bold text-xs text-slate-900">$299 / mo</span>
                 </label>
 
                 <label className={`flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer ${

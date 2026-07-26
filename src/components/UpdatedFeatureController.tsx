@@ -32,7 +32,7 @@ export function initializeAgentTierCapabilities(agentProfile: any) {
     return {
       maxConversationTurns: 10, // Updated from 3-5 to 10-turn limit
       aiMediaManifestTagging: AUTOMATED_MEDIA_MANIFEST_TAGGING, // Enabled for Free Tier
-      photoInteractionMode: "Manual Swipe Only", // AI will not auto-navigate photos
+      photoInteractionMode: "Dynamic Contextual AI Photo Swaps", // AI will auto-navigate photos dynamically for all users
       allowedBrandingLayout: {
         showHeadshot: true,
         showLogo: true,

@@ -475,9 +475,9 @@ export default function PublicSite() {
         soloDesc: "Replaces paper sign-in sheets with digital capture.",
         proName: "Pro Agent",
         proPrice: "$29",
-        proDesc: "Unlock all 24 languages, Follow Up Boss CRM sync, and advanced analytics.",
+        proDesc: "Unlock all 70 languages, Follow Up Boss CRM sync, and advanced analytics.",
         brokerName: "Broker",
-        brokerPrice: "$249",
+        brokerPrice: "$299",
         brokerDesc: "Unlimited listings, team routing overrides, and white-label tools."
       }
     },
@@ -533,7 +533,7 @@ export default function PublicSite() {
         proPrice: "29 $",
         proDesc: "Débloquez les 15 langues, la synchronisation avec Follow Up Boss et les analyses avancées.",
         brokerName: "Broker",
-        brokerPrice: "249 $",
+        brokerPrice: "299 $",
         brokerDesc: "Listings illimités, règles de transmission d'équipe et marque blanche."
       }
     }
@@ -549,7 +549,7 @@ export default function PublicSite() {
           
           {/* Left Text Column */}
           <div className="lg:col-span-6 space-y-8 text-left">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 border text-stone-800 text-xs font-bold uppercase">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 border text-stone-800 text-[10px] sm:text-xs font-bold uppercase">
               <Sparkles className="h-3.5 w-3.5 text-[#0052A5] fill-[#0052A5] animate-pulse" />
               <span>{curr.hero.eyebrow}</span>
             </div>
