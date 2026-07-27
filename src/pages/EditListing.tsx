@@ -88,6 +88,23 @@ const PRESET_ASK_ME_ABOUT_TEMPLATES = [
   { category: "Year Built", sampleQuestion: "When was this home constructed and has it been renovated?" },
 ];
 
+const isAudioUrl = (str?: string) => {
+  if (!str) return false;
+  const s = str.trim().toLowerCase();
+  return (
+    s.startsWith("data:audio") ||
+    s.endsWith(".mp3") ||
+    s.endsWith(".wav") ||
+    s.endsWith(".ogg") ||
+    s.endsWith(".m4a") ||
+    s.includes("storage.googleapis.com") ||
+    s.includes("firebasestorage.app") ||
+    s.startsWith("http://") ||
+    s.startsWith("https://") ||
+    s.startsWith("/")
+  );
+};
+
 const MEDIA_MANIFEST_KEYS = [
   "exterior_front",
   "driveway",
@@ -1363,8 +1380,32 @@ export default function EditListing() {
 
         setWebhookUrl(data.webhookUrl || "");
         setDocuments(data.documents || []);
-        setWelcomeEn(data.welcome_en || "");
-        setWelcomeFr(data.welcome_fr || "");
+        const isAudioUrl = (str?: string) => {
+          if (!str) return false;
+          const s = str.trim().toLowerCase();
+          return (
+            s.startsWith("data:audio") ||
+            s.endsWith(".mp3") ||
+            s.endsWith(".wav") ||
+            s.endsWith(".ogg") ||
+            s.endsWith(".m4a") ||
+            s.includes("storage.googleapis.com") ||
+            s.includes("firebasestorage.app") ||
+            s.startsWith("http://") ||
+            s.startsWith("https://") ||
+            s.startsWith("/")
+          );
+        };
+
+        const enScript = data.welcome_en_script && !isAudioUrl(data.welcome_en_script)
+          ? data.welcome_en_script
+          : (data.welcome_en && !isAudioUrl(data.welcome_en) ? data.welcome_en : "");
+        setWelcomeEn(enScript);
+
+        const frScript = data.welcome_fr_script && !isAudioUrl(data.welcome_fr_script)
+          ? data.welcome_fr_script
+          : (data.welcome_fr && !isAudioUrl(data.welcome_fr) ? data.welcome_fr : "");
+        setWelcomeFr(frScript);
         setEnforcePhoneGate(data.enforcePhoneGate !== undefined ? !!data.enforcePhoneGate : true);
         setEnforceOptInConsent(data.enforceOptInConsent !== undefined ? !!data.enforceOptInConsent : true);
         setSocialShareEnabled((data as any).socialShareEnabled !== undefined ? !!(data as any).socialShareEnabled : true);

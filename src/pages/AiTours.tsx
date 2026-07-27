@@ -1,6 +1,23 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { getAllListings, getUserListings, updateListing, Listing, getTourConfig, saveTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
+
+const isAudioUrl = (str?: string) => {
+  if (!str) return false;
+  const s = str.trim().toLowerCase();
+  return (
+    s.startsWith("data:audio") ||
+    s.endsWith(".mp3") ||
+    s.endsWith(".wav") ||
+    s.endsWith(".ogg") ||
+    s.endsWith(".m4a") ||
+    s.includes("storage.googleapis.com") ||
+    s.includes("firebasestorage.app") ||
+    s.startsWith("http://") ||
+    s.startsWith("https://") ||
+    s.startsWith("/")
+  );
+};
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -464,22 +481,22 @@ export default function AiTours() {
     setSelectedListing(listing);
     setUserHasEdited(false); // Reset edit state when switching/selecting a listing
     
-    // Determine the English script text (avoiding base64 binary sound URLs)
+    // Determine the English script text (avoiding audio URLs / base64 binary sound paths)
     let initialEnScript = "";
-    if (listing.welcome_en_script) {
+    if (listing.welcome_en_script && !isAudioUrl(listing.welcome_en_script)) {
       initialEnScript = listing.welcome_en_script;
-    } else if (listing.welcome_en && !listing.welcome_en.startsWith("data:audio") && !listing.welcome_en.endsWith(".mp3") && listing.welcome_en.length < 1000) {
+    } else if (listing.welcome_en && !isAudioUrl(listing.welcome_en)) {
       initialEnScript = listing.welcome_en;
     } else {
       initialEnScript = "Hi, I'm Sora, your AI property assistant. This tour shows how I connect listings, answer client questions, book showings, and run your open house gate and lead sign-in. Tap each step to follow along.";
     }
     setWelcomeEn(initialEnScript);
 
-    // Determine the French script text (avoiding base64 binary sound URLs)
+    // Determine the French script text (avoiding audio URLs / base64 binary sound paths)
     let initialFrScript = "";
-    if (listing.welcome_fr_script) {
+    if (listing.welcome_fr_script && !isAudioUrl(listing.welcome_fr_script)) {
       initialFrScript = listing.welcome_fr_script;
-    } else if (listing.welcome_fr && !listing.welcome_fr.startsWith("data:audio") && !listing.welcome_fr.endsWith(".mp3") && listing.welcome_fr.length < 1000) {
+    } else if (listing.welcome_fr && !isAudioUrl(listing.welcome_fr)) {
       initialFrScript = listing.welcome_fr;
     } else {
       initialFrScript = "Bonjour, je suis Sora, votre assistante immobilière IA. Cette visite guidée vous montre comment je mets en relation les annonces, réponds aux questions des clients, planifie les visites et gère l'accueil des visiteurs lors des journées portes ouvertes et l'inscription des prospects. Touchez chaque étape pour suivre le tutoriel.";
@@ -522,8 +539,8 @@ export default function AiTours() {
         if (config) {
           // Document exists! Set the loaded states
           if (config.welcomeTexts) {
-            setWelcomeEn(config.welcomeTexts.en || initialEnScript);
-            setWelcomeFr(config.welcomeTexts.fr || initialFrScript);
+            setWelcomeEn(config.welcomeTexts.en && !isAudioUrl(config.welcomeTexts.en) ? config.welcomeTexts.en : initialEnScript);
+            setWelcomeFr(config.welcomeTexts.fr && !isAudioUrl(config.welcomeTexts.fr) ? config.welcomeTexts.fr : initialFrScript);
             // Detect other language code
             const otherLangCode = Object.keys(config.welcomeTexts).find(k => k !== "en" && k !== "fr");
             if (otherLangCode) {
@@ -1110,9 +1127,16 @@ export default function AiTours() {
     }
   };
 
+  const currentEnBase = (selectedListing?.welcome_en_script && !isAudioUrl(selectedListing.welcome_en_script)) 
+    ? selectedListing.welcome_en_script 
+    : (selectedListing?.welcome_en && !isAudioUrl(selectedListing.welcome_en) ? selectedListing.welcome_en : "");
+  const currentFrBase = (selectedListing?.welcome_fr_script && !isAudioUrl(selectedListing.welcome_fr_script)) 
+    ? selectedListing.welcome_fr_script 
+    : (selectedListing?.welcome_fr && !isAudioUrl(selectedListing.welcome_fr) ? selectedListing.welcome_fr : "");
+
   const isWelcomeDirty = !!(selectedListing && (
-    welcomeEn !== (selectedListing.welcome_en_script || selectedListing.welcome_en || "") ||
-    welcomeFr !== (selectedListing.welcome_fr_script || selectedListing.welcome_fr || "") ||
+    welcomeEn !== currentEnBase ||
+    welcomeFr !== currentFrBase ||
     targetLang !== (selectedListing.welcome_other_lang || "Spanish") ||
     welcomeOtherScript !== (selectedListing.welcome_other_script || "")
   ));

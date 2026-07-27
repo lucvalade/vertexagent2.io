@@ -12,6 +12,7 @@ import {
   finishTourAndGetNotes,
   getTourConfig,
   getOpenHouseSessions,
+  DEFAULT_WELCOME_TEXTS,
 } from "@/lib/api";
 import TourGate from "@/components/TourGate";
 import { useAgentTierCapabilities } from "@/components/UpdatedFeatureController";
@@ -1646,6 +1647,84 @@ If the visitor says no:
 - End politely
 `;
 
+  const isAudioUrl = (str?: string) => {
+    if (!str) return false;
+    const s = str.trim().toLowerCase();
+    return (
+      s.startsWith("data:audio") ||
+      s.endsWith(".mp3") ||
+      s.endsWith(".wav") ||
+      s.endsWith(".ogg") ||
+      s.endsWith(".m4a") ||
+      s.includes("storage.googleapis.com") ||
+      s.includes("firebasestorage.app") ||
+      s.startsWith("http://") ||
+      s.startsWith("https://") ||
+      s.startsWith("/")
+    );
+  };
+
+  const getWelcomeScriptForLanguage = (lang: string) => {
+    const lLower = (lang || "english").toLowerCase();
+    let code = "en";
+    if (lLower === "fr" || lLower === "french" || lLower === "français") {
+      code = "fr";
+    } else if (lLower === "es" || lLower === "spanish" || lLower === "español") {
+      code = "es";
+    } else if (lLower === "de" || lLower === "german" || lLower === "deutsch") {
+      code = "de";
+    } else if (lLower === "zh" || lLower === "chinese" || lLower.includes("zh")) {
+      code = lLower.includes("tw") ? "zh-TW" : "zh-CN";
+    } else if (lLower === "ar" || lLower === "arabic") {
+      code = "ar";
+    } else if (lLower === "it" || lLower === "italian") {
+      code = "it";
+    } else if (lLower === "ja" || lLower === "japanese") {
+      code = "ja";
+    } else if (lLower === "ko" || lLower === "korean") {
+      code = "ko";
+    } else if (lLower === "pt" || lLower === "portuguese") {
+      code = "pt";
+    } else if (lLower === "ru" || lLower === "russian") {
+      code = "ru";
+    } else if (lLower === "hi" || lLower === "hindi") {
+      code = "hi";
+    } else if (lLower === "nl" || lLower === "dutch") {
+      code = "nl";
+    } else if (lLower === "vi" || lLower === "vietnamese") {
+      code = "vi";
+    } else {
+      if (tourConfig?.welcomeTexts && tourConfig.welcomeTexts[lLower]) {
+        code = lLower;
+      }
+    }
+
+    if (tourConfig?.welcomeTexts && tourConfig.welcomeTexts[code] && isAudioUrl(tourConfig.welcomeTexts[code])) {
+      // It's audio URL, skip to fallback script
+    } else if (tourConfig?.welcomeTexts && tourConfig.welcomeTexts[code]) {
+      return tourConfig.welcomeTexts[code];
+    }
+
+    if (code === "fr") {
+      const frScript = (listing as any)?.welcome_fr_script;
+      if (frScript && !isAudioUrl(frScript)) return frScript;
+      const fr = (listing as any)?.welcome_fr;
+      if (fr && !isAudioUrl(fr)) return fr;
+    } else if (code === "en") {
+      const enScript = (listing as any)?.welcome_en_script;
+      if (enScript && !isAudioUrl(enScript)) return enScript;
+      const en = (listing as any)?.welcome_en;
+      if (en && !isAudioUrl(en)) return en;
+    } else {
+      if ((listing as any)?.welcome_other_lang?.toLowerCase() === lLower && (listing as any)?.welcome_other_script) {
+        const otherScript = (listing as any).welcome_other_script;
+        if (!isAudioUrl(otherScript)) return otherScript;
+      }
+    }
+
+    return DEFAULT_WELCOME_TEXTS[code] || DEFAULT_WELCOME_TEXTS.en;
+  };
+
   const getFormattedPrompt = () => {
     const rawTemplate = customPrompt || `You are Sora, a warm, professional real-estate assistant acting
 directly on behalf of the listing agent for {brokerage} in {city},
@@ -1833,6 +1912,8 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
       }).join(", ");
     }
 
+    const activeWelcomeScript = getWelcomeScriptForLanguage(langVal);
+
     const basePrompt = rawTemplate
       .replace(/{brokerage}/g, brokerageVal)
       .replace(/{city}/g, cityVal)
@@ -1844,7 +1925,7 @@ Return JSON matching the schema: { spokenReply, showMedia }`;
       .replace(/{knowledgeBase}/g, kbVal)
       .replace(/{manifestKeys}/g, manifestKeysVal);
 
-    return `${basePrompt}\n\n${leadCollectionInstruction}`;
+    return `${basePrompt}\n\nSORA WELCOME SCRIPT (${langVal}):\n"${activeWelcomeScript}"\n\n${leadCollectionInstruction}`;
   };
 
   const promptTemplate = getFormattedPrompt();
@@ -2042,14 +2123,15 @@ Global rules
         sendTextMessage(pendingQuestion);
         setPendingQuestion(null);
       } else {
-        const isFrench = language.toLowerCase() === "fr" || language.toLowerCase() === "french";
+        const welcomeScript = getWelcomeScriptForLanguage(language);
+        const isFrench = language.toLowerCase() === "fr" || language.toLowerCase() === "french" || language.toLowerCase() === "français";
         const welcomePrompt = isFrench
-          ? "Bonjour! Veuillez vous présenter très brièvement en tant que Sora, l'assistant virtuel de cette propriété, puis demandez-moi si je souhaite faire une visite guidée."
-          : "Hello! Please give a very short introduction as Sora, the AI guide for this property, and then ask me if I would like a guided tour.";
+          ? `[SCRIPT DE BIENVENUE DE L'AGENT DANS LE TOUR WORKSPACE]: "${welcomeScript}"\n\nBonjour ! Veuillez vous présenter brièvement en tant que Sora, le guide IA pour cette propriété, en prononçant ce message de bienvenue ci-dessus ou en vous en inspirant directement, puis demandez-moi si je souhaite faire une visite guidée.`
+          : `[AGENT WELCOME SCRIPT FROM SORA TOUR WORKSPACE]: "${welcomeScript}"\n\nHello! Please introduce yourself briefly as Sora, the AI guide for this property, speaking or drawing directly from the welcome script above, and ask me if I would like a guided tour.`;
         sendTextMessage(welcomePrompt);
       }
     }
-  }, [connected, pendingQuestion, sendTextMessage, language]);
+  }, [connected, pendingQuestion, sendTextMessage, language, tourConfig, listing]);
 
 
 

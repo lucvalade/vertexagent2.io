@@ -410,10 +410,27 @@ export default function WelcomeAudio({
               const customOther = lData.welcome_other_script;
               const customOtherLang = lData.welcome_other_lang;
 
-              if (customEn && !customEn.startsWith("data:audio") && !customEn.endsWith(".mp3") && customEn.trim()) {
+              const isAudioUrl = (str?: string) => {
+                if (!str) return false;
+                const s = str.trim().toLowerCase();
+                return (
+                  s.startsWith("data:audio") ||
+                  s.endsWith(".mp3") ||
+                  s.endsWith(".wav") ||
+                  s.endsWith(".ogg") ||
+                  s.endsWith(".m4a") ||
+                  s.includes("storage.googleapis.com") ||
+                  s.includes("firebasestorage.app") ||
+                  s.startsWith("http://") ||
+                  s.startsWith("https://") ||
+                  s.startsWith("/")
+                );
+              };
+
+              if (customEn && !isAudioUrl(customEn) && customEn.trim()) {
                 activeTexts.en = customEn;
               }
-              if (customFr && !customFr.startsWith("data:audio") && !customFr.endsWith(".mp3") && customFr.trim()) {
+              if (customFr && !isAudioUrl(customFr) && customFr.trim()) {
                 activeTexts.fr = customFr;
               }
               if (customOther && customOtherLang && customOther.trim()) {
@@ -447,6 +464,10 @@ export default function WelcomeAudio({
             if (config.defaultLanguage) {
               setLanguage(config.defaultLanguage);
               activeLang = config.defaultLanguage;
+              if (onLanguageChange) {
+                const name = LANGUAGE_API_NAMES[config.defaultLanguage] || config.defaultLanguage;
+                onLanguageChange(name);
+              }
             }
           }
         }
@@ -502,9 +523,14 @@ export default function WelcomeAudio({
     const selectedLang = e.target.value;
     if (!isPro && selectedLang !== "en") {
       setLanguage("en");
+      if (onLanguageChange) onLanguageChange("English");
       return;
     }
     setLanguage(selectedLang);
+    const langName = LANGUAGE_API_NAMES[selectedLang] || selectedLang;
+    if (onLanguageChange) {
+      onLanguageChange(langName);
+    }
     // Clear previous audio on language change, so it's generated on-demand
     if (activeUrlRef.current) {
       URL.revokeObjectURL(activeUrlRef.current);
