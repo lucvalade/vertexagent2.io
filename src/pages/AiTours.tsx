@@ -1265,7 +1265,7 @@ export default function AiTours() {
   return (
     <div className="space-y-8">
       {/* Header section with listing selector */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2 border-b border-stone-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2 mb-5 border-b border-stone-200">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight text-stone-900 font-sans">Sora Tour Workspace</h1>

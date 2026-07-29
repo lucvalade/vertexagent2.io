@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect, useEffect } from "react";
 import { Share2, Facebook, Instagram, Send, Mail, Link as LinkIcon, Check, X, ShieldAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,6 +10,97 @@ interface SocialShareBubbleProps {
 export default function SocialShareBubble({ listing, inline = false }: SocialShareBubbleProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+
+    const panelHeight = panelRef.current ? panelRef.current.offsetHeight : 340;
+    const panelWidth = panelRef.current ? panelRef.current.offsetWidth : 288;
+
+    const spaceAbove = rect.top;
+    const spaceBelow = viewportHeight - rect.bottom;
+
+    // Check if there is enough room above to show the information box
+    const fitsAbove = spaceAbove >= panelHeight + 10;
+    const placeAbove = fitsAbove || spaceAbove > spaceBelow;
+
+    // Position horizontally (aligned with icon center, clamped within viewport)
+    let left = rect.left + rect.width / 2 - panelWidth / 2;
+    left = Math.max(12, Math.min(left, viewportWidth - panelWidth - 12));
+
+    // Position vertically
+    let top: number;
+    if (placeAbove) {
+      top = Math.max(12, rect.top - panelHeight - 10);
+    } else {
+      top = Math.min(viewportHeight - panelHeight - 12, rect.bottom + 10);
+    }
+
+    setPanelStyle({
+      position: "fixed",
+      top: `${top}px`,
+      left: `${left}px`,
+      zIndex: 100,
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        buttonRef.current && !buttonRef.current.contains(e.target as Node) &&
+        panelRef.current && !panelRef.current.contains(e.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const handleToggle = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const panelHeight = 340;
+      const panelWidth = 288;
+      const spaceAbove = rect.top;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const placeAbove = spaceAbove >= panelHeight + 10 || spaceAbove > spaceBelow;
+      let left = rect.left + rect.width / 2 - panelWidth / 2;
+      left = Math.max(12, Math.min(left, viewportWidth - panelWidth - 12));
+      let top = placeAbove
+        ? Math.max(12, rect.top - panelHeight - 10)
+        : Math.min(viewportHeight - panelHeight - 12, rect.bottom + 10);
+      setPanelStyle({
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        zIndex: 100,
+      });
+    }
+    setIsOpen(!isOpen);
+  };
 
   // Email Action Modal States
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -259,10 +350,11 @@ export default function SocialShareBubble({ listing, inline = false }: SocialSha
     <div className={inline ? "font-sans text-left" : "fixed bottom-6 right-6 z-50 font-sans text-left"}>
       {/* Sliding bubble panel */}
       {isOpen && (
-        <div className={inline 
-          ? "absolute bottom-[72px] left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl w-72 animate-fade-in z-50 text-slate-100"
-          : "absolute bottom-[63px] right-[10px] bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl w-72 animate-fade-in z-50 text-slate-100"
-        }>
+        <div
+          ref={panelRef}
+          style={panelStyle}
+          className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl w-72 animate-fade-in text-slate-100"
+        >
           <button
             onClick={() => setIsOpen(false)}
             className="absolute top-3 right-3 text-slate-400 hover:text-slate-100 transition cursor-pointer"
@@ -357,7 +449,8 @@ export default function SocialShareBubble({ listing, inline = false }: SocialSha
       {/* Trigger Button with Variant Layouts */}
       {inline ? (
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          ref={buttonRef}
+          onClick={handleToggle}
           className="flex items-center justify-center h-[56px] w-[56px] rounded-full bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.8)] border-2 border-purple-300/40 transition-all hover:scale-110 active:scale-95 cursor-pointer relative scale-105 animate-[pulse_0.6s_infinite_ease-in-out]"
           title="Share this listing"
         >
@@ -367,7 +460,8 @@ export default function SocialShareBubble({ listing, inline = false }: SocialSha
         </button>
       ) : (
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          ref={buttonRef}
+          onClick={handleToggle}
           className="flex items-center justify-center h-14 w-14 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.5)] border-2 border-white/15 transition-transform hover:scale-105 active:scale-95 cursor-pointer relative animate-fade-in"
           title="Share this listing"
         >

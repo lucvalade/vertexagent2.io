@@ -5,6 +5,7 @@ import { getTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
+import { getUserRegion, getEnglishLabel } from "@/lib/region";
 
 /**
  * Mapping language select codes to full language names for TTS parameters
@@ -255,6 +256,20 @@ export default function WelcomeAudio({
   const isPro = capabilities.maxConversationTurns > 10 || agentPlan === "pro" || agentPlan === "pro_agent" || agentPlan === "elite" || agentPlan === "team_pro" || isAdmin;
 
   const [language, setLanguage] = useState("en");
+  const [userRegion, setUserRegion] = useState<string>("United States (en-US)");
+
+  useEffect(() => {
+    getUserRegion().then((reg) => {
+      setUserRegion(reg);
+    });
+  }, []);
+
+  const getLanguageDisplayName = (code: string) => {
+    if (code === "en") {
+      return getEnglishLabel(userRegion);
+    }
+    return LANGUAGE_DISPLAY_NAMES[code] || code;
+  };
 
   // Sync incoming propsLanguage (e.g. "English", "French", "fr", "es") to internal language code (e.g. "en", "fr", "es")
   useEffect(() => {
@@ -294,7 +309,10 @@ export default function WelcomeAudio({
     };
   }, []);
 
-  const filteredLanguages = Object.entries(LANGUAGE_DISPLAY_NAMES).filter(([code, name]) =>
+  const filteredLanguages = Object.entries(LANGUAGE_DISPLAY_NAMES).map(([code, name]) => {
+    const displayName = code === "en" ? getEnglishLabel(userRegion) : name;
+    return [code, displayName] as [string, string];
+  }).filter(([code, name]) =>
     name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     code.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -649,7 +667,7 @@ export default function WelcomeAudio({
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           className="w-full bg-slate-800 border border-slate-700/80 text-slate-200 rounded-lg p-2.5 text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between text-left"
         >
-          <span>{LANGUAGE_DISPLAY_NAMES[language] || "English (English - US)"}</span>
+          <span>{getLanguageDisplayName(language)}</span>
           <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
         </button>
 

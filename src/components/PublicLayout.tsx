@@ -712,7 +712,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         { name: "Automations & Analytics", desc: "Track scans, visits, conversations and hot leads automatically", href: "/product#features" }
       ]
     },
-    { label: "How it Works", href: "/how-it-works" },
+    { label: "How it Works", href: "/how-it-works#how-it-works" },
     { label: "Use Cases", href: "/#features" },
     { label: "Demo", href: "/demo" },
     {
@@ -826,7 +826,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       `}</style>
       {/* HEADER */}
       <header 
-        className="fixed top-0 inset-x-0 w-full rounded-none lg:top-3 lg:inset-x-4 lg:rounded-[20px] max-w-7xl lg:mx-auto h-16 z-50 border-b lg:border border-white/20 transition-all duration-300 backdrop-blur-md shadow-lg"
+        className="fixed top-0 inset-x-0 w-full rounded-none lg:top-3 lg:inset-x-4 lg:rounded-[20px] max-w-7xl lg:mx-auto h-16 z-[100] border-b lg:border border-white/20 transition-all duration-300 backdrop-blur-md shadow-lg"
         style={{ backgroundColor: scrolled ? "rgba(80, 162, 255, 0.55)" : "rgba(80, 162, 255, 1)" }}
       >
         <div className="max-w-7xl mx-auto h-full px-6 flex items-center justify-between">
@@ -1032,7 +1032,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             {/* How It Works */}
             <div className="border-b border-slate-100 py-3">
               <Link 
-                to="/how-it-works" 
+                to="/how-it-works#how-it-works" 
                 onClick={() => setMobileMenuOpen(false)}
                 className={`font-extrabold text-base hover:text-blue-500 transition-colors block text-left ${
                   isLinkActive("/how-it-works") ? "text-blue-600 font-black" : "text-[#111827]"

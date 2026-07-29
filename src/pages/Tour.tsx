@@ -14,6 +14,7 @@ import {
   getOpenHouseSessions,
   DEFAULT_WELCOME_TEXTS,
 } from "@/lib/api";
+import { getUserRegion, getEnglishLabel } from "@/lib/region";
 import TourGate from "@/components/TourGate";
 import { useAgentTierCapabilities } from "@/components/UpdatedFeatureController";
 import { trackEvent } from "@/lib/analytics";
@@ -222,10 +223,78 @@ const LANGUAGE_NATIVE_MAP: Record<string, string> = {
   Zulu: "isiZulu",
 };
 
-const getLanguageDisplay = (lang: string) => {
+const getLanguageDisplay = (lang: string, userRegion?: string) => {
+  if (lang === "English" || lang === "en") {
+    return userRegion ? getEnglishLabel(userRegion) : "English (US)";
+  }
   const native = LANGUAGE_NATIVE_MAP[lang];
   if (!native || native === lang) return lang;
   return `${lang} = ${native}`;
+};
+
+const getUpcomingOpenHouseInfo = (sessions: any[], listing?: any) => {
+  const now = new Date();
+
+  // 1. Check sessions for upcoming/scheduled events where end_datetime > now
+  const scheduled = (sessions || []).filter(
+    (s) => s?.end_datetime && new Date(s.end_datetime) > now
+  );
+  if (scheduled.length > 0) {
+    scheduled.sort((a, b) => a.start_datetime.localeCompare(b.start_datetime));
+    const targetSession = scheduled[0];
+    const startDate = new Date(targetSession.start_datetime);
+    const endDate = new Date(targetSession.end_datetime);
+
+    const year = startDate.getFullYear();
+    const month = String(startDate.getMonth() + 1).padStart(2, "0");
+    const day = String(startDate.getDate()).padStart(2, "0");
+    const dateStr = `${year}-${month}-${day}`;
+
+    const formatTimeLocal = (d: Date) => {
+      let h = d.getHours();
+      const m = String(d.getMinutes()).padStart(2, "0");
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12;
+      h = h ? h : 12;
+      return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+    };
+
+    const timeStr = `${formatTimeLocal(startDate)} - ${formatTimeLocal(endDate)}`;
+    return { displayOpenHouseDate: dateStr, displayOpenHouseTime: timeStr, isUpcoming: true };
+  }
+
+  // 2. Fall back to listing.openHouseDate ONLY IF it is in the future
+  if (listing?.openHouseDate) {
+    const rawDate = listing.openHouseDate.trim();
+    const rawTime = listing.openHouseTime?.trim() || "";
+
+    if (rawDate) {
+      let endDateTime = new Date(rawDate + "T23:59:59");
+      if (rawTime) {
+        const parts = rawTime.split("-");
+        const endTimePart = parts.length > 1 ? parts[1].trim() : parts[0].trim();
+        const match = endTimePart.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+        if (match) {
+          let hours = parseInt(match[1], 10);
+          const minutes = parseInt(match[2], 10);
+          const ampm = match[3] ? match[3].toUpperCase() : null;
+          if (ampm === "PM" && hours < 12) hours += 12;
+          if (ampm === "AM" && hours === 12) hours = 0;
+          const dt = new Date(rawDate + "T00:00:00");
+          dt.setHours(hours, minutes, 59, 999);
+          if (!isNaN(dt.getTime())) {
+            endDateTime = dt;
+          }
+        }
+      }
+
+      if (endDateTime > now) {
+        return { displayOpenHouseDate: rawDate, displayOpenHouseTime: rawTime, isUpcoming: true };
+      }
+    }
+  }
+
+  return { displayOpenHouseDate: "", displayOpenHouseTime: "", isUpcoming: false };
 };
 
 const getListeningInstruction = (lang: string) => {
@@ -1158,6 +1227,14 @@ export default function Tour() {
   };
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [language, setLanguage] = useState("English");
+  const [userRegion, setUserRegion] = useState<string>("United States (en-US)");
+
+  useEffect(() => {
+    getUserRegion().then((reg) => {
+      setUserRegion(reg);
+    });
+  }, []);
+
   const [isWelcomingSpeaking, setIsWelcomingSpeaking] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [customPrompt, setCustomPrompt] = useState<string>("");
@@ -1953,42 +2030,9 @@ MANDATORY AUTOMATED PHOTO NAVIGATION & SWAPPING
 ==================================================`;
 
   const openHouseSessionContext = (() => {
-    const nowStr = new Date().toISOString();
-    const scheduled = sessions.filter(s => s.end_datetime > nowStr);
-    scheduled.sort((a, b) => a.start_datetime.localeCompare(b.start_datetime));
-    
-    let targetSession = scheduled[0];
-    if (!targetSession && sessions.length > 0) {
-      const sortedAll = [...sessions].sort((a, b) => b.start_datetime.localeCompare(a.start_datetime));
-      targetSession = sortedAll[0];
-    }
-
-    let displayOpenHouseDate = listing?.openHouseDate || "";
-    let displayOpenHouseTime = listing?.openHouseTime || "";
-
-    if (targetSession) {
-      const startDate = new Date(targetSession.start_datetime);
-      const endDate = new Date(targetSession.end_datetime);
-      
-      const year = startDate.getFullYear();
-      const month = String(startDate.getMonth() + 1).padStart(2, "0");
-      const day = String(startDate.getDate()).padStart(2, "0");
-      displayOpenHouseDate = `${year}-${month}-${day}`;
-      
-      const formatTimeLocal = (d: Date) => {
-        let h = d.getHours();
-        const m = String(d.getMinutes()).padStart(2, "0");
-        const ampm = h >= 12 ? "PM" : "AM";
-        h = h % 12;
-        h = h ? h : 12;
-        return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
-      };
-      
-      displayOpenHouseTime = `${formatTimeLocal(startDate)} - ${formatTimeLocal(endDate)}`;
-    }
-    
-    if (displayOpenHouseDate || displayOpenHouseTime) {
-      return `\n- Open House Scheduled Date: ${displayOpenHouseDate || "N/A"}\n- Open House Scheduled Time: ${displayOpenHouseTime || "N/A"}`;
+    const info = getUpcomingOpenHouseInfo(sessions, listing);
+    if (info.isUpcoming && (info.displayOpenHouseDate || info.displayOpenHouseTime)) {
+      return `\n- Open House Scheduled Date: ${info.displayOpenHouseDate || "N/A"}\n- Open House Scheduled Time: ${info.displayOpenHouseTime || "N/A"}`;
     }
     return "\n- Open House: No upcoming sessions scheduled at this moment.";
   })();
@@ -2003,7 +2047,9 @@ You are Sora, the AI assistant for this property on aiopenhouseconnect.com.
 Session context
 - UI mode: welcome
 - Interaction mode: talk
-- Selected language: ${language}
+- Selected language: ${language} (${getEnglishLabel(userRegion)})
+- User region: ${userRegion}
+- Regional Formatting Note: The user's browser is connecting from ${userRegion}. Strictly use localized formatting, spelling, and units for this region (e.g., metric vs imperial, local spelling variants, regional terminology).
 - Device type: Mobile (Optimized)
 - Visitor location context: Remote preview
 - Sign-in status: Not signed in
@@ -2425,41 +2471,11 @@ Global rules
 
             {/* Clean Open House block inside the card */}
             {(() => {
-              const nowStr = new Date().toISOString();
-              const scheduled = sessions.filter(s => s.end_datetime > nowStr);
-              scheduled.sort((a, b) => a.start_datetime.localeCompare(b.start_datetime));
-              
-              let targetSession = scheduled[0];
-              if (!targetSession && sessions.length > 0) {
-                const sortedAll = [...sessions].sort((a, b) => b.start_datetime.localeCompare(a.start_datetime));
-                targetSession = sortedAll[0];
+              const info = getUpcomingOpenHouseInfo(sessions, listing);
+              if (!info.isUpcoming || (!info.displayOpenHouseDate && !info.displayOpenHouseTime)) {
+                return null;
               }
-
-              let displayOpenHouseDate = listing?.openHouseDate || "";
-              let displayOpenHouseTime = listing?.openHouseTime || "";
-
-              if (targetSession) {
-                const startDate = new Date(targetSession.start_datetime);
-                const endDate = new Date(targetSession.end_datetime);
-                
-                const year = startDate.getFullYear();
-                const month = String(startDate.getMonth() + 1).padStart(2, "0");
-                const day = String(startDate.getDate()).padStart(2, "0");
-                displayOpenHouseDate = `${year}-${month}-${day}`;
-                
-                const formatTimeLocal = (d: Date) => {
-                  let h = d.getHours();
-                  const m = String(d.getMinutes()).padStart(2, "0");
-                  const ampm = h >= 12 ? "PM" : "AM";
-                  h = h % 12;
-                  h = h ? h : 12;
-                  return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
-                };
-                
-                displayOpenHouseTime = `${formatTimeLocal(startDate)} - ${formatTimeLocal(endDate)}`;
-              }
-
-              if (!displayOpenHouseDate && !displayOpenHouseTime) return null;
+              const { displayOpenHouseDate, displayOpenHouseTime } = info;
 
               return (
                 <>
@@ -2707,6 +2723,9 @@ Global rules
                   language={language} 
                   askMeAbout={listing?.askMeAbout}
                   onTopicClick={async (question) => {
+                    // 0. Scroll to top of page
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+
                     // 1. Instantly change image on screen if matching key exists
                     await changeImageForQuestion(question);
 

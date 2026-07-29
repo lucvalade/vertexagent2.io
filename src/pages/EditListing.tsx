@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage, getOpenHouseSessions, createOpenHouseSession, deleteOpenHouseSession, OpenHouseSession, parseDateTimeToUTC, getTourConfig, saveTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
-import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv, ChevronDown, Check } from "lucide-react";
+import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv, ChevronDown, Check } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -2164,21 +2164,31 @@ export default function EditListing() {
     
     setActiveLimitError(false);
     const updatedRaw = askMeAbout.map(e => e.id === id ? { ...e, active: !e.active } : e);
-    const updated = sortAskMeAboutAlphabetically(updatedRaw);
+    await handleSaveAskMeAboutChange(updatedRaw);
+  };
+
+  const handleMoveOrder = async (id: string, direction: "up" | "down") => {
+    const sorted = [...askMeAbout].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const currentIndex = sorted.findIndex(item => item.id === id);
+    if (currentIndex === -1) return;
+    
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
+
+    // Swap positions
+    const temp = sorted[currentIndex];
+    sorted[currentIndex] = sorted[targetIndex];
+    sorted[targetIndex] = temp;
+
+    // Reassign sortOrder sequentially
+    const updated = sorted.map((item, idx) => ({ ...item, sortOrder: idx }));
     await handleSaveAskMeAboutChange(updated);
   };
 
-  const handleMoveOrder = async (index: number, direction: "up" | "down") => {
-    const sorted = [...askMeAbout].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= sorted.length) return;
-    
-    // Swap sortOrder
-    const tempOrder = sorted[index].sortOrder;
-    sorted[index].sortOrder = sorted[targetIndex].sortOrder;
-    sorted[targetIndex].sortOrder = tempOrder;
-    
+  const handleSortAlphabetically = async () => {
+    const sorted = sortAskMeAboutAlphabetically(askMeAbout);
     await handleSaveAskMeAboutChange(sorted);
+    toast.success("Custom Q&A questions sorted alphabetically!");
   };
 
   const handleOpenEdit = (entry: any) => {
@@ -2224,19 +2234,17 @@ export default function EditListing() {
         : e
     );
     
-    const updated = sortAskMeAboutAlphabetically(updatedRaw);
-    await handleSaveAskMeAboutChange(updated);
+    await handleSaveAskMeAboutChange(updatedRaw);
     setEditingEntryId(null);
     setEditFormAutoMatched(false);
-    toast.success(`'${formattedCategory}' updated & sorted alphabetically!`);
+    toast.success(`'${formattedCategory}' updated successfully!`);
   };
 
   const handleConfirmDelete = async () => {
     if (!deletingEntry) return;
     const updatedRaw = askMeAbout.filter(e => e.id !== deletingEntry.id);
-    const updated = sortAskMeAboutAlphabetically(updatedRaw);
       
-    await handleSaveAskMeAboutChange(updated);
+    await handleSaveAskMeAboutChange(updatedRaw);
     setDeletingEntry(null);
     toast.success(`'${deletingEntry.category}' deleted successfully`);
   };
@@ -2268,27 +2276,31 @@ export default function EditListing() {
       mediaKey: chosenMediaKey,
       isPreset: false,
       active: true,
+      sortOrder: askMeAbout.length
     };
     
-    const updated = sortAskMeAboutAlphabetically([...askMeAbout, newEntry]);
-    await handleSaveAskMeAboutChange(updated);
+    const updatedRaw = [...askMeAbout, newEntry];
+    await handleSaveAskMeAboutChange(updatedRaw);
     setIsAddFormOpen(false);
     setAddForm({ category: "", sampleQuestion: "", answer: "", mediaKey: "" });
     setAddFormAutoMatched(false);
 
     if (chosenMediaKey) {
-      toast.success(`'${formattedCategory}' added with connected photo & sorted alphabetically!`);
+      toast.success(`'${formattedCategory}' added with connected photo!`);
     } else {
-      toast.success(`'${formattedCategory}' added & sorted alphabetically!`);
+      toast.success(`'${formattedCategory}' added successfully!`);
     }
   };
 
   const handleSaveAskMeAboutChange = async (newAskMeAbout: any[]) => {
-    const sortedList = sortAskMeAboutAlphabetically(newAskMeAbout);
-    setAskMeAbout(sortedList);
+    const listWithOrder = newAskMeAbout.map((item, idx) => ({
+      ...item,
+      sortOrder: item.sortOrder ?? idx
+    }));
+    setAskMeAbout(listWithOrder);
     const targetListingId = isEdit ? listingId! : activeListingId;
     try {
-      await updateListing(targetListingId, { askMeAbout: sortedList });
+      await updateListing(targetListingId, { askMeAbout: listWithOrder });
     } catch (err) {
       console.error("Failed to autosave Ask Me About changes:", err);
       toast.error("Failed to autosave changes");
@@ -3679,11 +3691,21 @@ export default function EditListing() {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 shrink-0">
+                <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSortAlphabetically}
+                    className="gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold shadow-xs cursor-pointer text-xs h-10 w-full sm:w-auto"
+                    title="Sort all Custom Q&A questions alphabetically"
+                  >
+                    <ArrowUpDown className="h-3.5 w-3.5 text-blue-600" />
+                    Sort Alphabetically
+                  </Button>
                   <Button 
                     type="button" 
                     onClick={() => setIsAddFormOpen(true)}
-                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md cursor-pointer w-full"
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md cursor-pointer text-xs h-10 w-full sm:w-auto"
                   >
                     <Plus className="h-4 w-4" />
                     Add Custom Q&A
@@ -3696,7 +3718,7 @@ export default function EditListing() {
                         toast.success("Ask Me About Q&As saved successfully!");
                       }
                     }}
-                    className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer w-full text-xs"
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer text-xs h-10 w-full sm:w-auto"
                   >
                     Save
                   </Button>
@@ -3714,18 +3736,20 @@ export default function EditListing() {
               {/* Card List of Questions */}
               {askMeAbout.length > 0 ? (
                 <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-                  {askMeAbout
-                    .filter((entry) => {
-                      if (!askMeAboutSearch.trim()) return true;
-                      const q = askMeAboutSearch.toLowerCase().trim();
-                      const cat = (entry.category || "").toLowerCase();
-                      const sampleQ = (entry.sampleQuestion || "").toLowerCase();
-                      const ans = (entry.answer || "").toLowerCase();
-                      const media = (entry.mediaKey || "").toLowerCase();
-                      return cat.includes(q) || sampleQ.includes(q) || ans.includes(q) || media.includes(q);
-                    })
-                    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-                    .map((entry, index) => {
+                  {(() => {
+                    const filteredSorted = askMeAbout
+                      .filter((entry) => {
+                        if (!askMeAboutSearch.trim()) return true;
+                        const q = askMeAboutSearch.toLowerCase().trim();
+                        const cat = (entry.category || "").toLowerCase();
+                        const sampleQ = (entry.sampleQuestion || "").toLowerCase();
+                        const ans = (entry.answer || "").toLowerCase();
+                        const media = (entry.mediaKey || "").toLowerCase();
+                        return cat.includes(q) || sampleQ.includes(q) || ans.includes(q) || media.includes(q);
+                      })
+                      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+                    return filteredSorted.map((entry, index) => {
                       const isCardActive = !!entry.active;
                       const thumbnail = getThumbnailForMediaKey(entry.mediaKey);
                       
@@ -3799,7 +3823,7 @@ export default function EditListing() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleMoveOrder(index, "up")}
+                              onClick={() => handleMoveOrder(entry.id, "up")}
                               disabled={index === 0}
                               className="h-8 w-8 text-slate-500 hover:text-slate-800 disabled:opacity-35 cursor-pointer"
                               title="Move Up"
@@ -3812,8 +3836,8 @@ export default function EditListing() {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleMoveOrder(index, "down")}
-                              disabled={index === askMeAbout.length - 1}
+                              onClick={() => handleMoveOrder(entry.id, "down")}
+                              disabled={index === filteredSorted.length - 1}
                               className="h-8 w-8 text-slate-500 hover:text-slate-800 disabled:opacity-35 cursor-pointer"
                               title="Move Down"
                             >
@@ -3846,7 +3870,8 @@ export default function EditListing() {
                           </div>
                         </div>
                       );
-                    })}
+                    });
+                  })()}
                 </div>
               ) : (
                 <div className="py-12 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-slate-400 bg-slate-50/50">

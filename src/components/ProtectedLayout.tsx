@@ -404,7 +404,7 @@ export default function ProtectedLayout() {
       
       {/* Mobile Topbar & Content */}
       <div className="flex flex-col flex-1 min-w-0 max-w-full overflow-x-hidden lg:pl-72">
-        <header className="flex h-16 items-center gap-4 border-b border-white/20 px-4 lg:hidden sticky top-0 z-30" style={{ backgroundColor: '#50a2ff' }}>
+        <header className="flex h-16 items-center gap-4 border-b border-white/20 px-4 lg:hidden fixed top-0 inset-x-0 z-[100]" style={{ backgroundColor: '#50a2ff' }}>
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger>
               <div className="flex h-10 w-10 items-center justify-center rounded-md border border-white/20 text-sm shrink-0 lg:hidden hover:bg-white/10 transition-colors">
@@ -428,7 +428,7 @@ export default function ProtectedLayout() {
         </header>
 
         {/* Top Bar Header for Client App Search & Portal Switches */}
-        <div className="bg-white border-b border-stone-200 px-4 md:px-8 py-3 flex items-center justify-between sticky top-0 z-20 shadow-2xs">
+        <div className="bg-white border-b border-stone-200 px-4 md:px-8 py-3 flex items-center justify-between fixed top-16 lg:top-0 inset-x-0 lg:left-72 z-50 shadow-2xs">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSearchModalOpen(true)}
@@ -469,7 +469,7 @@ export default function ProtectedLayout() {
           </div>
         </div>
 
-        <main className="flex-1 p-4 md:p-8">
+        <main className="flex-1 p-4 md:p-8 pt-[140px] lg:pt-[78px]">
           <div className={`mx-auto ${location.pathname.includes('/flyers') || location.pathname.includes('/aitours') ? 'max-w-7xl lg:max-w-[1380px] w-full' : 'max-w-5xl'}`}>
             {(user?.role === 'ADMIN' || user?.email === 'luc.valade@gmail.com') && maintenanceMode && (
               <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 text-amber-900 shadow-sm animate-in fade-in slide-in-from-top-2">

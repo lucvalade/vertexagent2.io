@@ -223,7 +223,7 @@ export default function VoiceNoteRecorderModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-2xl p-6">
+      <DialogContent className="sm:max-w-md w-[calc(100%-30px)] bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-2xl p-4 sm:p-6">
         <DialogHeader className="space-y-1.5">
           <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
             {role === 'buyer' ? (

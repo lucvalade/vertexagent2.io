@@ -1426,11 +1426,18 @@ export default function OpenHousesPage() {
                           </div>
                           
                           {/* Open House Badge */}
-                          {(l.openHouseDate || l.openHouseTime) && (
-                            <div className="absolute bottom-3 left-3 bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> {l.openHouseDate ? new Date(l.openHouseDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Active Open House"}
-                            </div>
-                          )}
+                          {(() => {
+                            if (!l.openHouseDate && !l.openHouseTime) return null;
+                            if (l.openHouseDate) {
+                              const todayStr = new Date().toISOString().split("T")[0];
+                              if (l.openHouseDate < todayStr) return null;
+                            }
+                            return (
+                              <div className="absolute bottom-3 left-3 bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> {l.openHouseDate ? new Date(l.openHouseDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Active Open House"}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Card Details */}

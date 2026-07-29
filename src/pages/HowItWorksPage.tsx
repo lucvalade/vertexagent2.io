@@ -10,7 +10,7 @@ export default function HowItWorksPage() {
 
   return (
     <PublicLayout>
-      <div className="relative min-h-[80vh] flex flex-col justify-center py-20 px-6 bg-gradient-to-b from-slate-50 via-white to-slate-50 overflow-hidden">
+      <div id="how-it-works" className="relative min-h-[80vh] flex flex-col justify-center py-20 px-6 bg-gradient-to-b from-slate-50 via-white to-slate-50 overflow-hidden">
         {/* Background decorative blob elements */}
         <div className="absolute top-20 right-0 w-96 h-96 bg-blue-100 rounded-full filter blur-3xl opacity-40 -z-10 animate-pulse duration-[6000ms]" />
         <div className="absolute bottom-20 left-10 w-96 h-96 bg-indigo-100 rounded-full filter blur-3xl opacity-30 -z-10" />
@@ -90,11 +90,11 @@ export default function HowItWorksPage() {
             <div className="relative bg-slate-50 hover:bg-blue-600 border border-slate-200 hover:border-blue-700 p-6 rounded-2xl h-52 flex flex-col items-center justify-center text-center transition-all duration-300 group cursor-help shadow-sm hover:shadow-lg overflow-hidden">
               <div className="flex flex-col items-center transition-all duration-300 group-hover:-translate-y-8 group-hover:opacity-0">
                 <Database className="h-8 w-8 text-blue-600 group-hover:text-white mb-3 transition-colors duration-300" />
-                <span className="text-sm font-extrabold text-slate-800">MLS URL Ingestion</span>
+                <span className="text-sm font-extrabold text-slate-800">MLS & More URL Ingestion</span>
               </div>
               <div className="absolute inset-0 p-4 flex flex-col items-center justify-center bg-blue-600 text-white opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
                 <Database className="h-5 w-5 mb-1 text-blue-100" />
-                <span className="text-xs font-black uppercase tracking-wider mb-1 text-center">MLS URL Ingestion</span>
+                <span className="text-xs font-black uppercase tracking-wider mb-1 text-center">MLS & More URL Ingestion</span>
                 <p className="text-[11px] leading-relaxed font-medium text-blue-50 select-none text-left w-full px-2 mt-1">
                   Paste any public MLS, Zillow, or Redfin link to import listing data in under twenty seconds. Our parser extracts room descriptions, price changes, and main specs with high accuracy.
                 </p>

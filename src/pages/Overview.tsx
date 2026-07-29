@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getUserListings, getAllListings, getGlobalPromptSettings, saveGlobalPromptSettings, Listing } from "@/lib/api";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot, collection, query, where, getDocs, limit, orderBy, updateDoc } from "firebase/firestore";
@@ -52,8 +52,106 @@ import {
   ChevronLeft,
   ChevronRight,
   QrCode,
-  Activity
+  Activity,
+  HelpCircle,
+  Info,
+  X
 } from "lucide-react";
+
+function HelpTooltip({ 
+  title, 
+  content, 
+  iconClassName = "h-3.5 w-3.5 text-stone-400 hover:text-stone-700 cursor-pointer transition-colors", 
+  darkTheme = false,
+  align = "right",
+  position = "top"
+}: { 
+  title?: string; 
+  content: string; 
+  iconClassName?: string;
+  darkTheme?: boolean;
+  align?: "center" | "left" | "right";
+  position?: "top" | "bottom";
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const alignClasses = {
+    center: "left-1/2 -translate-x-1/2",
+    left: "left-0",
+    right: "right-0"
+  }[align];
+
+  const arrowAlignClasses = {
+    center: "left-1/2 -translate-x-1/2",
+    left: "left-3",
+    right: "right-3"
+  }[align];
+
+  const posClasses = position === "top" ? "bottom-full mb-2" : "top-full mt-2";
+  const arrowPosClasses = position === "top" 
+    ? "-bottom-1 border-r border-b" 
+    : "-top-1 border-l border-t";
+
+  return (
+    <div className="relative inline-flex items-center shrink-0 z-30" ref={ref}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        onMouseEnter={() => setIsOpen(true)}
+        className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer focus:outline-none shrink-0"
+        title="Click for information"
+        aria-label="Information"
+      >
+        <HelpCircle className={iconClassName} />
+      </button>
+
+      {isOpen && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className={`absolute ${posClasses} ${alignClasses} w-64 sm:w-72 p-3.5 rounded-xl shadow-2xl text-xs z-50 animate-fade-in border pointer-events-auto ${
+            darkTheme 
+              ? "bg-slate-900 text-slate-100 border-slate-700 shadow-black/80" 
+              : "bg-stone-900 text-stone-100 border-stone-700 shadow-2xl"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-white/10">
+            <span className="font-bold flex items-center gap-1.5 text-[11px] text-amber-400">
+              <Info className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              {title || "Information"}
+            </span>
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+              }}
+              className="text-stone-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <p className="text-[11px] leading-relaxed opacity-90 font-normal">{content}</p>
+          <div className={`absolute ${arrowPosClasses} ${arrowAlignClasses} w-2.5 h-2.5 ${darkTheme ? 'bg-slate-900 border-slate-700' : 'bg-stone-900 border-stone-700'} rotate-45`} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "";
@@ -995,40 +1093,90 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           </Card>
 
           {/* Quick Actions Panel */}
-          <Card className="border-stone-200 shadow-sm rounded-2xl bg-white p-5 space-y-3">
-            <p className="text-xs font-black uppercase text-black font-extrabold tracking-wider">Quick Actions</p>
+          <Card className="border-stone-200 shadow-sm rounded-2xl bg-white p-5 space-y-3 overflow-visible relative z-20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-black uppercase text-black font-extrabold tracking-wider">Quick Actions</p>
+                <HelpTooltip 
+                  title="Quick Actions Overview"
+                  content="Quick Actions provide 1-click access to core tasks: importing property listings, tailoring Sora AI tour voice scripts, launching event sign-in kiosks, and creating promotional marketing flyers."
+                  align="left"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <button 
-                onClick={() => navigate("/app/listings")} 
-                className="p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer"
-              >
-                <Home className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
-                <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Imports URL Listing</p>
-              </button>
+              <div className="relative group/qa">
+                <button 
+                  onClick={() => navigate("/app/listings")} 
+                  className="w-full p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer pr-7"
+                >
+                  <Home className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
+                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Imports URL Listing</p>
+                </button>
+                <div className="absolute top-2 right-2 z-10">
+                  <HelpTooltip 
+                    title="Imports URL Listing"
+                    content="Import property details, photos, and MLS info automatically from an external URL to build listings and generate automated AI tour scripts."
+                    iconClassName="h-3.5 w-3.5 text-stone-400 group-hover/qa:text-stone-600 hover:text-blue-600 cursor-pointer transition-colors"
+                    align="right"
+                  />
+                </div>
+              </div>
 
-              <button 
-                onClick={() => navigate("/app/aitours")} 
-                className="p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer"
-              >
-                <Mic2 className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
-                <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Customize Sora Script</p>
-              </button>
+              <div className="relative group/qa">
+                <button 
+                  onClick={() => navigate("/app/aitours")} 
+                  className="w-full p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer pr-7"
+                >
+                  <Mic2 className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
+                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Customize Sora Script</p>
+                </button>
+                <div className="absolute top-2 right-2 z-10">
+                  <HelpTooltip 
+                    title="Customize Sora Script"
+                    content="Tailor the voice persona, multi-language greetings, key property highlights, and room descriptions spoken by Sora during audio tours."
+                    iconClassName="h-3.5 w-3.5 text-stone-400 group-hover/qa:text-stone-600 hover:text-blue-600 cursor-pointer transition-colors"
+                    align="right"
+                  />
+                </div>
+              </div>
 
-              <button 
-                onClick={() => navigate("/app/openhouses")} 
-                className="p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer"
-              >
-                <Calendar className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
-                <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Deploy Show Kiosk</p>
-              </button>
+              <div className="relative group/qa">
+                <button 
+                  onClick={() => navigate("/app/openhouses")} 
+                  className="w-full p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer pr-7"
+                >
+                  <Calendar className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
+                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Deploy Show Kiosk</p>
+                </button>
+                <div className="absolute top-2 right-2 z-10">
+                  <HelpTooltip 
+                    title="Deploy Show Kiosk"
+                    content="Launch full-screen kiosk sign-in mode on tablet or mobile devices at open house events to collect attendee leads with PIN security and offline buffering."
+                    iconClassName="h-3.5 w-3.5 text-stone-400 group-hover/qa:text-stone-600 hover:text-blue-600 cursor-pointer transition-colors"
+                    align="right"
+                  />
+                </div>
+              </div>
 
-              <button 
-                onClick={() => navigate("/app/flyers")} 
-                className="p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer"
-              >
-                <FileText className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
-                <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Create Luxury Promo</p>
-              </button>
+              <div className="relative group/qa">
+                <button 
+                  onClick={() => navigate("/app/flyers")} 
+                  className="w-full p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer pr-7"
+                >
+                  <FileText className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
+                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Create Luxury Promo</p>
+                </button>
+                <div className="absolute top-2 right-2 z-10">
+                  <HelpTooltip 
+                    title="Create Luxury Promo"
+                    content="Design and export branded print or digital promotional flyers equipped with dynamic QR codes linking directly to your Sora AI Tour."
+                    iconClassName="h-3.5 w-3.5 text-stone-400 group-hover/qa:text-stone-600 hover:text-blue-600 cursor-pointer transition-colors"
+                    align="right"
+                  />
+                </div>
+              </div>
             </div>
           </Card>
 
@@ -1037,11 +1185,18 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
       </div>
 
       {/* Admin Character Guard Block */}
-      <Card className="border-white/20 shadow-sm overflow-hidden text-left bg-[#50a2ff] text-white rounded-2xl">
+      <Card className="border-white/20 shadow-sm overflow-visible text-left bg-[#50a2ff] text-white rounded-2xl relative z-10">
         <CardHeader className="pb-3 border-b border-white/20 bg-[#50a2ff] flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <CardTitle className="text-base font-bold flex items-center gap-2 text-white">
-              <Shield className="h-5 w-5 text-yellow-200 animate-pulse" /> AI System Instruction & Character Guard
+              <Shield className="h-5 w-5 text-yellow-200 animate-pulse" />
+              <span>AI System Instruction & Character Guard</span>
+              <HelpTooltip 
+                title="AI System Instruction & Character Guard"
+                content="The Character Guard allows administrators to lock down and customize the master system prompt and persona for Sora across all property tours. Password protection ensures agency compliance guidelines, voice tone, and safety rules remain locked against unauthorized edits."
+                iconClassName="h-4 w-4 text-yellow-200/90 hover:text-yellow-100 cursor-pointer transition-colors"
+                darkTheme={true}
+              />
             </CardTitle>
             <CardDescription className="text-xs font-medium text-white/90">Lock down custom AI conversational prompts, agency characters, and safety triggers under a master control password.</CardDescription>
           </div>
@@ -1087,7 +1242,15 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           ) : (
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label className="text-xs font-black uppercase text-white tracking-wider">AI System Instruction Template Override</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs font-black uppercase text-white tracking-wider">AI System Instruction Template Override</Label>
+                  <HelpTooltip 
+                    title="System Instruction Override"
+                    content="This master system prompt dictates Sora's core conversational persona, brokerage representation rules, and safety boundaries across all listing tours. Leave blank to use system defaults."
+                    iconClassName="h-3.5 w-3.5 text-white/80 hover:text-white cursor-pointer transition-colors"
+                    darkTheme={true}
+                  />
+                </div>
                 <p className="text-[11px] text-white/90 leading-normal">
                   Customize the core system prompt that dictates how Sora represents your brokerage. This is prepended to the live session parameters. Leave blank to fallback to default settings.
                 </p>
@@ -1102,7 +1265,15 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
 
               <div className="p-4 bg-white/10 rounded-xl border border-white/20 grid sm:grid-cols-2 gap-4 text-left">
                 <div className="space-y-1">
-                  <Label className="text-xs font-black uppercase text-white tracking-wider">Change Dashboard Password</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-xs font-black uppercase text-white tracking-wider">Change Dashboard Password</Label>
+                    <HelpTooltip 
+                      title="Dashboard Master Password"
+                      content="Set a custom administrator password to lock down the Character Guard settings and prevent unauthorized changes to Sora's system prompts."
+                      iconClassName="h-3.5 w-3.5 text-white/80 hover:text-white cursor-pointer transition-colors"
+                      darkTheme={true}
+                    />
+                  </div>
                   <p className="text-[11px] text-white/90">Provide a new password to upgrade administrative lockbox protection.</p>
                 </div>
                 <div className="flex items-center">
