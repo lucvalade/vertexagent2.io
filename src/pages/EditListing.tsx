@@ -322,6 +322,8 @@ export default function EditListing() {
   const [activeLimitError, setActiveLimitError] = useState(false);
   const [addFormAutoMatched, setAddFormAutoMatched] = useState(false);
   const [editFormAutoMatched, setEditFormAutoMatched] = useState(false);
+  const [isAskMeAboutInfoOpen, setIsAskMeAboutInfoOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string; mediaKey: string } | null>(null);
 
   const prevStepRef = useRef(currentStep);
   useEffect(() => {
@@ -3645,12 +3647,23 @@ export default function EditListing() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
                 <div>
-                  <CardTitle className="text-slate-800 flex items-center gap-2">
-                    Ask Me About Q&A Builder
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                      Step 3
-                    </span>
-                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-slate-800 flex items-center gap-2">
+                      Ask Me About Q&A Builder
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                        Step 3
+                      </span>
+                    </CardTitle>
+                    <button
+                      type="button"
+                      onClick={() => setIsAskMeAboutInfoOpen(true)}
+                      className="h-7 w-7 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs hover:scale-110 active:scale-95 shrink-0"
+                      title="What can Ask Me About Q&A Builder do?"
+                      aria-label="Information about Ask Me About Q&A Builder"
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                    </button>
+                  </div>
                   <CardDescription>
                     Configure up to 24 active questions that Sora can speak answers for. When selected, the tour photo will automatically swap to the designated room. These preset will be synced with the AI Tour, Ask Me About section.
                   </CardDescription>
@@ -3801,15 +3814,34 @@ export default function EditListing() {
                             
                             {/* Thumbnail if mediaKey is set */}
                             {entry.mediaKey && (
-                              <div className="hidden sm:flex flex-col items-center shrink-0 border rounded-lg overflow-hidden bg-slate-50 p-1 select-none" title={`Linked to: ${entry.mediaKey}`}>
+                              <div 
+                                onClick={() => {
+                                  if (thumbnail) {
+                                    setPreviewImage({
+                                      url: thumbnail,
+                                      title: entry.category || entry.sampleQuestion || "Photo Preview",
+                                      mediaKey: entry.mediaKey
+                                    });
+                                  } else {
+                                    toast.info(`Linked room key: ${entry.mediaKey} (No image file uploaded)`);
+                                  }
+                                }}
+                                className="flex flex-col items-center shrink-0 border border-slate-200 hover:border-blue-500 rounded-lg overflow-hidden bg-slate-50 p-1 select-none cursor-pointer hover:shadow-md transition-all group" 
+                                title="Click to view full photo"
+                              >
                                 {thumbnail ? (
-                                  <img src={thumbnail} className="h-9 w-12 object-cover rounded" referrerPolicy="no-referrer" />
+                                  <div className="relative overflow-hidden rounded">
+                                    <img src={thumbnail} className="h-10 w-14 object-cover rounded group-hover:scale-105 transition-transform" referrerPolicy="no-referrer" />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded">
+                                      <Search className="h-3.5 w-3.5 text-white drop-shadow-md" />
+                                    </div>
+                                  </div>
                                 ) : (
-                                  <div className="h-9 w-12 flex items-center justify-center text-[9px] text-slate-400 font-black bg-slate-100 uppercase">
+                                  <div className="h-10 w-14 flex items-center justify-center text-[9px] text-slate-400 font-black bg-slate-100 uppercase rounded">
                                     {entry.mediaKey.split('_')[0].slice(0, 4)}
                                   </div>
                                 )}
-                                <span className="text-[8px] font-mono font-bold text-slate-500 mt-1 uppercase tracking-wide truncate max-w-[50px]">
+                                <span className="text-[8px] font-mono font-bold text-slate-500 mt-1 uppercase tracking-wide truncate max-w-[56px] group-hover:text-blue-600">
                                   {entry.mediaKey.replace(/_/g, ' ')}
                                 </span>
                               </div>
@@ -4080,6 +4112,107 @@ export default function EditListing() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Ask Me About Information Modal */}
+        {isAskMeAboutInfoOpen && (
+          <div 
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setIsAskMeAboutInfoOpen(false)}
+          >
+            <div 
+              className="relative max-w-lg w-full bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 sm:p-7 text-slate-800"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setIsAskMeAboutInfoOpen(false)}
+                className="absolute top-4 right-4 h-9 w-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5 stroke-[2.5]" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <HelpCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Ask Me About Q&A Builder</h3>
+                  <p className="text-xs text-slate-500 font-medium">Interactive AI Tour Voice Knowledge Base</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
+                <p>
+                  The <strong>Ask Me About Q&A Builder</strong> allows real estate agents to equip <strong>Sora</strong> (your AI Tour Guide) with customized answers to high-intent buyer questions.
+                </p>
+                <ul className="space-y-2 list-disc pl-5 text-slate-700">
+                  <li>
+                    <strong>Instant Room Swapping:</strong> Connect each question to a property photo (e.g., Kitchen, Backyard, In-Law Suite). When a visitor taps or speaks a question, the AI Tour automatically displays that room image.
+                  </li>
+                  <li>
+                    <strong>Voice-Spoken Answers:</strong> Sora speaks your custom answer aloud to visitors during live open house tours or online walkthroughs.
+                  </li>
+                  <li>
+                    <strong>Customizable & Organizable:</strong> Activate up to 24 questions, reorder them manually, or sort them alphabetically with a single click.
+                  </li>
+                </ul>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+                <Button 
+                  type="button" 
+                  onClick={() => setIsAskMeAboutInfoOpen(false)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 text-xs h-9 cursor-pointer"
+                >
+                  Got it, Thanks!
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Clickable Photo Preview Modal */}
+        {previewImage && (
+          <div 
+            className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setPreviewImage(null)}
+          >
+            <div 
+              className="relative max-w-2xl w-full bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl flex flex-col items-center justify-center p-4 sm:p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* BIG X at top right corner */}
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="absolute top-3 right-3 h-12 w-12 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center shadow-xl transition-transform hover:scale-110 active:scale-95 cursor-pointer z-50 border-2 border-white/20"
+                aria-label="Close photo preview"
+                title="Close"
+              >
+                <X className="h-7 w-7 stroke-[3]" />
+              </button>
+
+              {/* Image Preview Container */}
+              <div className="w-full max-h-[70vh] overflow-hidden rounded-xl bg-black flex items-center justify-center p-1 border border-slate-800">
+                <img 
+                  src={previewImage.url} 
+                  alt={previewImage.title} 
+                  className="max-h-[65vh] w-auto max-w-full object-contain rounded-lg shadow-md"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              {/* Title & Room Key Label */}
+              <div className="w-full mt-4 px-1 flex flex-col sm:flex-row items-center justify-between text-white gap-2">
+                <span className="font-bold text-base sm:text-lg text-slate-100">{previewImage.title}</span>
+                <span className="text-xs font-mono font-bold text-blue-300 bg-blue-950/90 px-3 py-1 rounded-lg border border-blue-800/80 uppercase tracking-wider">
+                  Linked Room: {previewImage.mediaKey.replace(/_/g, ' ')}
+                </span>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* STEP 4: GUEST SIGN-IN AND AUTOMATIONS */}

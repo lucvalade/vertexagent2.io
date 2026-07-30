@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
   getListing,
@@ -1246,7 +1246,7 @@ export default function Tour() {
   const trans = getTranslation(language);
 
   const [isVoiceNoteOpen, setIsVoiceNoteOpen] = useState(false);
-  const [showVoiceNoteTooltip, setShowVoiceNoteTooltip] = useState(true);
+  const [isVoiceNoteHovered, setIsVoiceNoteHovered] = useState(false);
 
   const handleSaveVoiceNote = async (
     audioUrl: string,
@@ -1835,19 +1835,25 @@ ROOM DETECTION & CONTEXT RULES:
 
 BARGE-IN + PHOTO SYNC (LOCKED RULE — the photo must follow the
 NEW question, not stay on the room you were narrating):
-1. If the buyer barges in mid-narration with a question naming or
+1. MULTILINGUAL BARGE-IN COMPREHENSION: Sora supports real-time speech comprehension and barge-in in 4 primary testing languages:
+   - English
+   - French (Français)
+   - Italian (Italiano)
+   - Spanish (Español)
+   If the buyer interrupts (barges in) or speaks in English, French, Italian, or Spanish at any point, Sora must immediately listen, comprehend their question in that language, respond naturally in that language, and update showMedia accordingly.
+2. If the buyer barges in mid-narration with a question naming or
    implying a DIFFERENT room/feature than what you were currently
    showing, you MUST set showMedia to that new room's manifest key
    in your very next response — do not leave showMedia on the
    interrupted room, and do not wait for the buyer to ask again.
-2. Resolve the new room the same way as any question: match it to
+3. Resolve the new room the same way as any question: match it to
    an ASK ME ABOUT entry's [IMAGE_ID] first, then a KNOWLEDGE BASE
    fact, then the MEDIA MANIFEST KEYS list directly if neither has
    an entry but the room name still maps to a known manifest key.
-3. If the buyer's interrupting question does NOT reference a room
+4. If the buyer's interrupting question does NOT reference a room
    or feature (e.g. "how much is it", "can I book a showing"),
    leave showMedia as null and do not change the photo.
-4. After answering the barge-in question, resume Guided narration
+5. After answering the barge-in question, resume Guided narration
    from where you left off (or ask the buyer if they'd like you to
    continue) — do not silently skip ahead.
 
@@ -2162,9 +2168,17 @@ Global rules
       getGeminiVoice(listing?.voiceName || "Professional Female Synthetic"),
     );
 
+  const hasSentWelcomeRef = useRef(false);
+
   // When connection completes, send pending question or give brief welcome intro + offer guided tour
   useEffect(() => {
-    if (connected) {
+    if (!connected) {
+      hasSentWelcomeRef.current = false;
+      return;
+    }
+
+    if (connected && !hasSentWelcomeRef.current) {
+      hasSentWelcomeRef.current = true;
       if (pendingQuestion) {
         sendTextMessage(pendingQuestion);
         setPendingQuestion(null);
@@ -2624,16 +2638,24 @@ Global rules
           </div>
 
           <div className="relative flex flex-col gap-4 items-center justify-center w-full max-w-sm px-4">
-            <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 animate-in fade-in duration-700">
+            <div className="w-full bg-slate-900/40 border border-slate-800/80 rounded-2xl p-4 animate-in fade-in duration-700 space-y-3">
+              <div className="flex items-center justify-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-[9px] font-extrabold text-amber-300 shadow-xs text-center">
+                <Mic className="h-3 w-3 text-amber-400 animate-pulse shrink-0" />
+                <span>Multilingual Barge-In Active: EN • FR • IT • ES</span>
+              </div>
               <div className="grid grid-cols-3 gap-3 items-start justify-items-center">
                 
                 {/* Column 1: Private Voice Notes */}
                 <div className="flex flex-col items-center justify-center text-center w-full">
                   {!(listing?.qrDestination === "sign-in" && !hasCheckedIn && !bypassSignIn) ? (
-                    <div className="relative">
-                      {/* Tooltip Popup */}
-                      {showVoiceNoteTooltip && (
-                        <div className="absolute bottom-[64px] left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white text-[10px] font-semibold py-1.5 px-2.5 rounded-lg border border-blue-500/30 shadow-[0_4px_15px_rgba(59,130,246,0.35)] w-[160px] animate-bounce text-center">
+                    <div 
+                      className="relative"
+                      onMouseEnter={() => setIsVoiceNoteHovered(true)}
+                      onMouseLeave={() => setIsVoiceNoteHovered(false)}
+                    >
+                      {/* Tooltip Popup on Mouse Over */}
+                      {isVoiceNoteHovered && (
+                        <div className="absolute bottom-[64px] left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-[10px] font-semibold py-1.5 px-2.5 rounded-lg border border-blue-500/30 shadow-[0_4px_15px_rgba(59,130,246,0.35)] w-[160px] text-center pointer-events-none transition-opacity duration-200">
                           <p>🎙️ Tap to record private voice notes</p>
                           <div className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-slate-900 border-r border-b border-blue-500/30 transform rotate-45" />
                         </div>
@@ -2641,7 +2663,7 @@ Global rules
                       <button
                         onClick={() => {
                           setIsVoiceNoteOpen(true);
-                          setShowVoiceNoteTooltip(false);
+                          setIsVoiceNoteHovered(false);
                         }}
                         className="flex items-center justify-center h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-[0_4px_15px_rgba(37,99,235,0.3)] border border-blue-500/20 hover:scale-110 active:scale-95 transition-all cursor-pointer shrink-0"
                         title="Record Private Voice Notes"
@@ -2737,15 +2759,15 @@ Global rules
                     let formattedMessage = "";
                     if (isFrench) {
                       if (isFirstClick) {
-                        formattedMessage = `Merci d'avoir posé la question ! Veuillez répondre très brièvement à "${question}".`;
+                        formattedMessage = `Veuillez commencer votre réponse en vous présentant : "Bonjour, je suis Sora, votre assistante virtuelle IA." puis répondre brièvement à la question suivante : "${question}".`;
                       } else {
                         formattedMessage = `Veuillez répondre très brièvement à "${question}".`;
                       }
                     } else {
                       if (isFirstClick) {
-                        formattedMessage = `Thank you for asking! Please answer "${question}" using a very short response.`;
+                        formattedMessage = `Please start your response by introducing yourself: "Hi, I'm Sora, your virtual AI Assistant." and then answer "${question}" using a concise response.`;
                       } else {
-                        formattedMessage = `Please answer "${question}" using a very short response.`;
+                        formattedMessage = `Please answer "${question}" using a concise response.`;
                       }
                     }
 

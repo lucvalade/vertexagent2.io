@@ -185,7 +185,8 @@ export default function PricingPage() {
         "Secure local buffer (works offline)",
         "Basic English-only Sora assistant",
         "Built-in visitor contact lists",
-        "Lender pairing option"
+        "Lender pairing option",
+        "15 Gemini Mins/mo (3-min session max)"
       ]
     },
     {
@@ -204,7 +205,8 @@ export default function PricingPage() {
         "Automated CRM sync (47+ supported CRMs)",
         "FUB custom tag & field mapping",
         "kvCORE, HubSpot & 45+ CRM integrations",
-        "Real-time contact status updates"
+        "Real-time contact status updates",
+        "30 Gemini Mins/mo (5-min session max)"
       ]
     },
     {
@@ -223,7 +225,8 @@ export default function PricingPage() {
         "Full 70-language translation",
         "Interactive conversational Sora guide",
         "Personal & brokerage branding uploads",
-        "Detailed buyer intent scoring"
+        "Detailed buyer intent scoring",
+        "300 Gemini Mins/mo (15-min session max)"
       ]
     },
     {
@@ -243,7 +246,8 @@ export default function PricingPage() {
         "Centralized team and admin controls",
         "Custom domain configuration",
         "Shared listing override rules",
-        "Priority onboarding support"
+        "Priority onboarding support",
+        "Unlimited Gemini Mins"
       ]
     }
   ];
@@ -382,7 +386,15 @@ export default function PricingPage() {
                                   ? "text-amber-400" 
                                   : "text-emerald-500"
                             }`} />
-                            <span className={isBroker ? "text-slate-300" : "text-stone-600"}>{feature}</span>
+                            <span className={
+                              feature.includes("Gemini Mins") 
+                                ? (isBroker ? "font-extrabold text-white" : "font-extrabold text-black")
+                                : feature.includes("Basic English-only Sora assistant") 
+                                  ? "font-extrabold text-black animate-pulse" 
+                                  : (isBroker ? "text-slate-300" : "text-stone-600")
+                            }>
+                              {feature}
+                            </span>
                           </li>
                         ))}
                       </ul>

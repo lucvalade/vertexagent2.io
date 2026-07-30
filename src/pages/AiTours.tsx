@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { getAllListings, getUserListings, updateListing, Listing, getTourConfig, saveTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
+import { getAllListings, getUserListings, updateListing, Listing, getTourConfig, saveTourConfig, DEFAULT_WELCOME_TEXTS, isListingExpired } from "@/lib/api";
 
 const isAudioUrl = (str?: string) => {
   if (!str) return false;
@@ -50,11 +50,13 @@ import {
   Square,
   HelpCircle,
   X,
-  Info
+  Info,
+  Save
 } from "lucide-react";
 
 export default function AiTours() {
   const { user } = useAuth();
+  const isPro = user?.email?.toLowerCase() === "luc.valade@gmail.com" || (user as any)?.role === "admin" || (user as any)?.role === "platform_admin" || (user as any)?.plan === "pro" || (user as any)?.plan === "pro_agent" || (user as any)?.plan === "elite" || (user as any)?.plan === "team_pro";
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
@@ -196,8 +198,16 @@ export default function AiTours() {
   const [shorteningOther, setShorteningOther] = useState(false);
   const [playingLang, setPlayingLang] = useState<string | null>(null); // "en" | "fr" | "other"
 
+  // Card Info (?) Toggle States
+  const [showRoomWalkthroughInfo, setShowRoomWalkthroughInfo] = useState(false);
+  const [showQaInfo, setShowQaInfo] = useState(false);
+  const [showGreetingInfo, setShowGreetingInfo] = useState(false);
+  const [showGatingInfo, setShowGatingInfo] = useState(false);
+
   const [translatingRoomId, setTranslatingRoomId] = useState<string | null>(null);
   const [translatingQaIdx, setTranslatingQaIdx] = useState<number | null>(null);
+  const [rewritingRoomId, setRewritingRoomId] = useState<string | null>(null);
+  const [rewritingQaIdx, setRewritingQaIdx] = useState<number | null>(null);
 
   const getLangCode = (lang: string): string => {
     switch (lang) {
@@ -448,6 +458,110 @@ export default function AiTours() {
     }
   };
 
+  const handleLuxuryRewriteRoom = async (roomId: string) => {
+    setUserHasEdited(true);
+    const room = rooms.find(r => r.id === roomId);
+    if (!room || !room.script) return;
+    
+    setRewritingRoomId(roomId);
+    try {
+      const response = await fetch("/api/luxury-rewrite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: room.script, type: "room" })
+      });
+      if (!response.ok) throw new Error("Luxury rewrite request failed.");
+      const data = await response.json();
+      if (data.success && data.rewrittenText) {
+        const updated = rooms.map(r => r.id === roomId ? { ...r, script: data.rewrittenText } : r);
+        setRooms(updated);
+        if (selectedListing) {
+          localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
+          await initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, updated);
+        }
+        toast.success(`🎉 Generated rewritten luxury text for ${room.name}! Saved to Firestore.`);
+      } else {
+        toast.error(data.error || "Failed luxury rewrite.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate luxury rewrite.");
+    } finally {
+      setRewritingRoomId(null);
+    }
+  };
+
+  const handleLuxuryRewriteQa = async (index: number) => {
+    setUserHasEdited(true);
+    const qaItem = qas[index];
+    if (!qaItem || !qaItem.answer) return;
+    
+    setRewritingQaIdx(index);
+    try {
+      const response = await fetch("/api/luxury-rewrite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: qaItem.answer, type: "qa" })
+      });
+      if (!response.ok) throw new Error("Luxury rewrite request failed.");
+      const data = await response.json();
+      if (data.success && data.rewrittenText) {
+        const updated = qas.map((q, i) => i === index ? { ...q, answer: data.rewrittenText } : q);
+        setQas(updated);
+        if (selectedListing) {
+          localStorage.setItem(`qas_tour_${selectedListing.id}`, JSON.stringify(updated));
+          await initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, updated);
+        }
+        toast.success(`🎉 Generated rewritten luxury text for Q&A answer! Saved to Firestore.`);
+      } else {
+        toast.error(data.error || "Failed luxury rewrite.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate luxury rewrite.");
+    } finally {
+      setRewritingQaIdx(null);
+    }
+  };
+
+  // Latest state ref for screen leave / unmount / beforeunload autosave
+  const latestRef = useRef({
+    welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas, ctas, soraVoice, selectedListing, userHasEdited
+  });
+
+  useEffect(() => {
+    latestRef.current = {
+      welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas, ctas, soraVoice, selectedListing, userHasEdited
+    };
+  }, [welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas, ctas, soraVoice, selectedListing, userHasEdited]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const curr = latestRef.current;
+      if (curr.userHasEdited && curr.selectedListing) {
+        localStorage.setItem(`rooms_tour_${curr.selectedListing.id}`, JSON.stringify(curr.rooms));
+        localStorage.setItem(`qas_tour_${curr.selectedListing.id}`, JSON.stringify(curr.qas));
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      const curr = latestRef.current;
+      if (curr.userHasEdited && curr.selectedListing) {
+        console.log("[AiTours] Screen leave / unmount detected. Performing automatic background save...");
+        initiateAutoSave(
+          curr.welcomeEn,
+          curr.welcomeFr,
+          curr.welcomeOtherScript,
+          curr.targetLang,
+          curr.rooms,
+          curr.qas,
+          curr.ctas,
+          curr.soraVoice
+        );
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (user) {
       loadListings();
@@ -459,8 +573,9 @@ export default function AiTours() {
     try {
       if (!user) return;
       const isAdmin = (user as any).role === 'ADMIN';
-      const data = isAdmin ? await getAllListings() : await getUserListings(user.id);
-      setListings(data || []);
+      const rawData = isAdmin ? await getAllListings() : await getUserListings(user.id);
+      const data = (rawData || []).filter(l => !isListingExpired(l));
+      setListings(data);
       if (data && data.length > 0) {
         const idToSelect = preserveId || selectedListing?.id || data[0].id;
         const matching = data.find(l => l.id === idToSelect);
@@ -469,6 +584,8 @@ export default function AiTours() {
         } else {
           handleSelectListing(data[0]);
         }
+      } else {
+        setSelectedListing(null);
       }
     } catch (err) {
       toast.error("Failed to load listings for AI Tour configuration");
@@ -478,6 +595,11 @@ export default function AiTours() {
   }
 
   const handleSelectListing = (listing: Listing) => {
+    if (userHasEdited && selectedListing && selectedListing.id !== listing.id) {
+      console.log(`[AiTours] Autosaving pending edits before switching from ${selectedListing.id} to ${listing.id}`);
+      initiateAutoSave();
+    }
+    
     setSelectedListing(listing);
     setUserHasEdited(false); // Reset edit state when switching/selecting a listing
     
@@ -692,8 +814,8 @@ export default function AiTours() {
         welcome_fr_script: frVal,
         welcome_other_lang: langVal,
         welcome_other_script: otherVal,
-        ...(selectedListing.welcome_en?.startsWith("data:audio") ? {} : { welcome_en: enVal }),
-        ...(selectedListing.welcome_fr?.startsWith("data:audio") ? {} : { welcome_fr: frVal }),
+        welcome_en: enVal,
+        welcome_fr: frVal,
         rooms: updatedRooms,
         qas: updatedQas,
         ctas: updatedCtas,
@@ -738,34 +860,68 @@ export default function AiTours() {
   };
 
   // AI (Sora) action: Generate Tour Intro
-  const handleGenerateTourIntro = () => {
+  const handleGenerateTourIntro = async () => {
     if (!selectedListing) return;
     setSoraGenerating(true);
     setUserHasEdited(true);
     
     // Simulate premium human-like Sora response based on the listing facts
-    setTimeout(() => {
-      const generated = `Welcome to the exquisite property at ${selectedListing.address}. I am Sora, your dedicated real estate AI advisor. Today, I'll be guiding you through a modern masterpiece featuring ${selectedListing.beds || 3} bedrooms and ${selectedListing.baths || 3} bathrooms across ${selectedListing.sqft || "3,200"} finished square feet of absolute luxury. Let's pause in the foyer and begin our tour of these premium spaces.`;
-      setWelcomeEn(generated);
-      setSoraGenerating(false);
-      toast.success("Sora generated a beautiful, professional tour introduction!");
-      initiateAutoSave(generated, welcomeFr, welcomeOtherScript, targetLang);
-    }, 1200);
+    const generated = `Welcome to the exquisite property at ${selectedListing.address}. I am Sora, your dedicated real estate AI advisor. Today, I'll be guiding you through a modern masterpiece featuring ${selectedListing.beds || 3} bedrooms and ${selectedListing.baths || 3} bathrooms across ${selectedListing.sqft || "3,200"} finished square feet of absolute luxury. Let's pause in the foyer and begin our tour of these premium spaces.`;
+    setWelcomeEn(generated);
+
+    let updatedFr = welcomeFr;
+    try {
+      const res = await fetch("/api/translate-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: generated, targetLanguage: "French" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.translatedText) {
+          updatedFr = data.translatedText;
+          setWelcomeFr(updatedFr);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed translating intro to French:", e);
+    }
+
+    setSoraGenerating(false);
+    toast.success("Sora generated intro in English and updated French translation!");
+    await initiateAutoSave(generated, updatedFr, welcomeOtherScript, targetLang);
   };
 
   // AI (Sora) action: Rewrite Tour with more premium copywriting
-  const handleRewriteTour = () => {
+  const handleRewriteTour = async () => {
     if (!selectedListing) return;
     setSoraGenerating(true);
     setUserHasEdited(true);
     
-    setTimeout(() => {
-      const rewritten = `Step inside ${selectedListing.address}, where classic sophistication meets state-of-the-art living. I am Sora, your AI companion. Notice the abundance of dramatic natural light and refined structural symmetry surrounding you. Every corner of this ${selectedListing.propertyType || "estate"} has been meticulously curated. Let's begin searching for your perfect sanctuary.`;
-      setWelcomeEn(rewritten);
-      setSoraGenerating(false);
-      toast.success("Sora rewrote the welcome script into ultra-premium luxury style.");
-      initiateAutoSave(rewritten, welcomeFr, welcomeOtherScript, targetLang);
-    }, 1200);
+    const rewritten = `Step inside ${selectedListing.address}, where classic sophistication meets state-of-the-art living. I am Sora, your AI companion. Notice the abundance of dramatic natural light and refined structural symmetry surrounding you. Every corner of this ${selectedListing.propertyType || "estate"} has been meticulously curated. Let's begin searching for your perfect sanctuary.`;
+    setWelcomeEn(rewritten);
+
+    let updatedFr = welcomeFr;
+    try {
+      const res = await fetch("/api/translate-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: rewritten, targetLanguage: "French" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.translatedText) {
+          updatedFr = data.translatedText;
+          setWelcomeFr(updatedFr);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed translating rewritten intro to French:", e);
+    }
+
+    setSoraGenerating(false);
+    toast.success("Sora rewrote welcome script and updated French translation!");
+    await initiateAutoSave(rewritten, updatedFr, welcomeOtherScript, targetLang);
   };
 
   const handleShortenScript = async (type: "en" | "fr" | "other") => {
@@ -1518,8 +1674,51 @@ export default function AiTours() {
                   onClick={async () => {
                     setLoading(true);
                     try {
-                      await initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang);
-                      toast.success("Sora Welcome Script saved successfully!");
+                      let updatedFr = welcomeFr;
+                      let updatedOther = welcomeOtherScript;
+                      
+                      if (welcomeEn && welcomeEn.trim()) {
+                        // Translate to French automatically
+                        try {
+                          const resFr = await fetch("/api/translate-script", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ text: welcomeEn, targetLanguage: "French" })
+                          });
+                          if (resFr.ok) {
+                            const dataFr = await resFr.json();
+                            if (dataFr.success && dataFr.translatedText) {
+                              updatedFr = dataFr.translatedText;
+                              setWelcomeFr(updatedFr);
+                            }
+                          }
+                        } catch (e) {
+                          console.warn("Failed translating French welcome script on save:", e);
+                        }
+
+                        // Also translate to 3rd target language if selected
+                        if (targetLang && targetLang !== "English" && targetLang !== "French") {
+                          try {
+                            const resOther = await fetch("/api/translate-script", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ text: welcomeEn, targetLanguage: targetLang })
+                            });
+                            if (resOther.ok) {
+                              const dataOther = await resOther.json();
+                              if (dataOther.success && dataOther.translatedText) {
+                                updatedOther = dataOther.translatedText;
+                                setWelcomeOtherScript(updatedOther);
+                              }
+                            }
+                          } catch (e) {
+                            console.warn(`Failed translating ${targetLang} welcome script on save:`, e);
+                          }
+                        }
+                      }
+                      
+                      await initiateAutoSave(welcomeEn, updatedFr, updatedOther, targetLang);
+                      toast.success("Sora Welcome Script saved & French script updated automatically!");
                     } catch (err) {
                       toast.error("Failed to save Welcome Script");
                     } finally {
@@ -1536,171 +1735,107 @@ export default function AiTours() {
               </CardFooter>
             </Card>
 
-            {/* Multilingual Scripts Companion Card */}
-            <Card className="w-full border-stone-200 shadow-sm bg-white text-black rounded-2xl overflow-hidden mx-0">
-              <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xs font-black flex items-center gap-1.5 text-stone-900 uppercase tracking-tight">
-                      <Globe2 className="h-4 w-4 text-emerald-600" /> Multilingual Scripts & Translation
-                    </CardTitle>
-                    <CardDescription className="text-[10px] font-medium text-left">Convert your English script into other global languages instantly in a single click using Gemini neural translation.</CardDescription>
-                  </div>
+            {/* Multilingual Conversion Notice */}
+            <Card className="w-full border-blue-200 bg-blue-50/70 shadow-xs rounded-2xl overflow-hidden mx-0 p-4 sm:p-5">
+              <div className="flex items-start gap-3.5">
+                <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 mt-0.5 border border-blue-200/80 shadow-xs">
+                  <Globe2 className="h-5 w-5 stroke-[2.2]" />
                 </div>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3">
-                <div className="grid sm:grid-cols-3 gap-3 items-end">
-                  <div className="sm:col-span-2 space-y-1 text-left">
-                    <Label className="text-[10px] font-extrabold uppercase text-black">Choose Welcome Translation Language</Label>
-                    <select 
-                      value={targetLang}
-                      onChange={(e) => { 
-                        const newLang = e.target.value;
-                        setTargetLang(newLang); 
-                        setRoomTargetLang(newLang);
-                        setQaTargetLang(newLang);
-                        setUserHasEdited(true); 
-                      }}
-                      className="w-full h-8 px-2 bg-white border border-stone-200 rounded-lg text-xs focus:ring-1 focus:ring-amber-500 font-sans cursor-pointer text-stone-850"
-                    >
-                      <option value="French">French (Français)</option>
-                      <option value="Spanish">Spanish (Español)</option>
-                      <option value="German">German (Deutsch)</option>
-                      <option value="Italian">Italian (Italiano)</option>
-                      <option value="Portuguese">Portuguese (Português)</option>
-                      <option value="Mandarin">Mandarin (普通话)</option>
-                      <option value="Japanese">Japanese (日本語)</option>
-                      <option value="Dutch">Dutch (Nederlands)</option>
-                      <option value="Russian">Russian (Русский)</option>
-                      <option value="Arabic">Arabic (العربية)</option>
-                      <option value="English">English (English)</option>
-                    </select>
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-blue-950">
+                      Multilingual Auto-Translation Active
+                    </h4>
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-blue-200/90 text-blue-900 px-2.5 py-0.5 rounded-full border border-blue-300/80">
+                      Automatic
+                    </span>
                   </div>
-                  <div className="sm:col-span-1">
-                    <Button 
-                      onClick={handleTranslateScript} 
-                      disabled={translating || !welcomeEn}
-                      className="w-full h-8 bg-emerald-600 hover:bg-emerald-500 text-[9px] uppercase font-black tracking-wider text-white flex items-center justify-center gap-1 shadow-sm"
-                    >
-                      {translating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                      Convert Script
-                    </Button>
-                  </div>
+                  <p className="text-xs text-blue-900 font-medium leading-relaxed">
+                    <strong>Notice:</strong> Your welcome message, Room-by-Room Walkthrough content, and Sora's Knowledge Base (Buyer Q&A) in English will automatically be converted to all available multilingual languages (French, Spanish, German, Italian, Portuguese, Mandarin, Japanese, Dutch, Russian, Arabic, etc.) whenever you click <strong>Save Script</strong>. <strong className="font-extrabold text-black">You must have the Pro Advanced Conversational AI plan.</strong>
+                  </p>
                 </div>
-
-                <div className="space-y-1.5 border-t pt-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
-                    <Label className="text-[11px] font-black uppercase text-stone-700">{targetLang} Translation Draft</Label>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Button 
-                        onClick={() => handleShortenScript("other")}
-                        disabled={shorteningOther || !welcomeOtherScript}
-                        variant="outline"
-                        className="h-6 text-[9px] py-1 px-2 font-black uppercase border-amber-200 text-amber-800 hover:bg-amber-50"
-                      >
-                        {shorteningOther ? <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" /> : <Sparkles className="h-2.5 w-2.5 mr-1 text-amber-850" />}
-                        Shorten
-                      </Button>
-                      {playingLang === "other" ? (
-                        <Button 
-                          onClick={stopSpeaking}
-                          variant="destructive"
-                          className="h-6 text-[9px] py-1 px-2 font-black uppercase bg-red-600 hover:bg-red-700 text-white animate-pulse"
-                        >
-                          <Square className="h-2.5 w-2.5 mr-1 fill-white" /> {getWalkthroughTranslations(targetLang).stopLabel.toUpperCase()}
-                        </Button>
-                      ) : (
-                        <Button 
-                          onClick={() => speakText(welcomeOtherScript, targetLang, "other")}
-                          variant="outline"
-                          className="h-6 text-[9px] py-1 px-2 font-bold uppercase border-emerald-200 text-emerald-800 hover:bg-emerald-50 text-left whitespace-normal leading-normal"
-                        >
-                          <Play className="h-2.5 w-2.5 mr-1 fill-emerald-850 text-emerald-850 shrink-0" /> {getWalkthroughTranslations(targetLang).preview}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <Textarea 
-                    value={welcomeOtherScript} 
-                    onChange={(e) => { setWelcomeOtherScript(e.target.value); setUserHasEdited(true); }} 
-                    onBlur={() => initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang)}
-                    rows={3} 
-                    placeholder={`The computed ${targetLang} welcome script will display here once converted. You can also manually paste/edit translations.`}
-                    className="text-xs font-sans text-stone-850 focus-visible:ring-1 focus-visible:ring-amber-500 bg-stone-50/50"
-                  />
-                  <p className="text-[9px] text-stone-400 italic font-medium leading-tight">This translated script is stored securely and activates when foreign visitors access multilingual mode.</p>
-                </div>
-              </CardContent>
-              <CardFooter className="py-2.5 px-4 border-t border-slate-100 bg-white flex items-center justify-between">
-                <span className="text-[10px] font-medium text-slate-500">
-                  {isWelcomeDirty ? "● Unsaved changes" : "✓ Saved to Firestore"}
-                </span>
-                <Button 
-                  onClick={async () => {
-                    setLoading(true);
-                    try {
-                      await initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang);
-                      toast.success("Multilingual Script saved successfully!");
-                    } catch (err) {
-                      toast.error("Failed to save translation");
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  disabled={loading}
-                  size="sm"
-                  className="h-7 px-3 bg-[#e17100] hover:bg-[#b05800] text-white font-black text-[9px] uppercase cursor-pointer rounded-lg border-none flex items-center gap-1"
-                >
-                  {loading && <Loader2 className="h-3 w-3 animate-spin" />}
-                  Save Translation
-                </Button>
-              </CardFooter>
+              </div>
             </Card>
 
             {/* Room-by-room audio sequences */}
             <Card className="w-full border-slate-200 shadow-sm bg-white text-black rounded-2xl overflow-hidden mx-0">
-              <CardHeader className="py-2 px-3.5 border-b border-slate-100 bg-white">
-                <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900">
-                  <Layers className="h-4 w-4 text-amber-600" /> Room-by-Room Walkthrough content
-                </CardTitle>
-                <CardDescription className="text-[10px] text-slate-500 font-medium">Define high-fidelity scripts to narrate key areas of the home when visitors select a room.</CardDescription>
+              <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-white">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900">
+                    <Layers className="h-4 w-4 text-amber-600" /> Room-by-Room Walkthrough content
+                    <button 
+                      type="button"
+                      onClick={() => setShowRoomWalkthroughInfo(!showRoomWalkthroughInfo)}
+                      className="p-1 rounded-full text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer ml-1"
+                      title="What is Room-by-Room Walkthrough? Click for info."
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                    </button>
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                      🇬🇧 English Master Content
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        await initiateAutoSave();
+                        toast.success("✅ Room walkthrough scripts saved successfully!");
+                      }}
+                      className="h-6 text-[9px] font-black uppercase bg-slate-900 hover:bg-slate-800 text-white px-2.5 cursor-pointer"
+                    >
+                      <Save className="h-2.5 w-2.5 mr-1" /> Save Walkthroughs
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription className="text-[10px] text-slate-500 font-medium">Define high-fidelity scripts in English to narrate key areas of the home. Use <strong>Generate Rewritten Luxury Text</strong> to upgrade prose. On Pro plans, Sora auto-converts this on the fly to 70+ languages during live client tours.</CardDescription>
+
+                {showRoomWalkthroughInfo && (
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1.5 animate-in fade-in slide-in-from-top-1 text-left">
+                    <div className="flex items-center justify-between font-bold text-amber-900">
+                      <span className="flex items-center gap-1.5"><Info className="h-3.5 w-3.5 text-amber-600" /> What is Room-by-Room Walkthrough?</span>
+                      <button onClick={() => setShowRoomWalkthroughInfo(false)} className="text-amber-700 hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer">✕ Close</button>
+                    </div>
+                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                      This section defines custom voice scripts for individual rooms or areas of the property (e.g. Master Suite, Chef's Kitchen, Covered Patio).
+                    </p>
+                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
+                      <li><strong>Interactive Guided Tour:</strong> Sora reads these exact room descriptions aloud when visitors take an interactive guided tour or tap on specific rooms.</li>
+                      <li><strong>Custom Editing:</strong> You can edit room names, re-sequence the tour order, or update the script content anytime.</li>
+                      <li><strong>Individual Save Entry Buttons:</strong> Click the <strong>Save Entry</strong> button on each room card below to immediately commit changes for that specific room.</li>
+                      <li><strong>Luxury AI Rewriter:</strong> Click <em>"Generate Rewritten Luxury Text"</em> to rewrite prose using high-end real estate descriptors.</li>
+                      <li><strong>Multilingual Support:</strong> On Pro plans, these English scripts automatically translate into 70+ languages on the fly during live tours.</li>
+                    </ul>
+                  </div>
+                )}
               </CardHeader>
               
               <CardContent className="p-4 space-y-3">
-                {/* Dedicated Walkthrough translation dropdown selector */}
-                <div id="room-lang-select-container" className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-left">
-                  <div className="space-y-0.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-700 tracking-wider font-bold">Walkthrough language</Label>
-                    <p className="text-[9px] text-slate-500 font-medium font-sans">Select a translation language to convert/preview individual rooms.</p>
-                  </div>
-                  <select 
-                    value={roomTargetLang}
-                    onChange={(e) => { setRoomTargetLang(e.target.value); setUserHasEdited(true); }}
-                    className="h-7 min-w-[130px] px-2 bg-white border border-stone-250 rounded-lg text-xs font-bold focus:ring-1 focus:ring-amber-500 cursor-pointer text-stone-850"
-                  >
-                    <option value="French">French (Français)</option>
-                    <option value="Spanish">Spanish (Español)</option>
-                    <option value="German">German (Deutsch)</option>
-                    <option value="Italian">Italian (Italiano)</option>
-                    <option value="Portuguese">Portuguese (Português)</option>
-                    <option value="Mandarin">Mandarin (普通话)</option>
-                    <option value="Japanese">Japanese (日本語)</option>
-                    <option value="Dutch">Dutch (Nederlands)</option>
-                    <option value="Russian">Russian (Русский)</option>
-                    <option value="Arabic">Arabic (العربية)</option>
-                    <option value="English">English (English)</option>
-                  </select>
-                </div>
-
                 <div className="space-y-2">
                   {rooms.map((room, idx) => (
                     <div key={room.id} className="p-3 border rounded-xl border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-start gap-3">
-                      <div className="h-5 w-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center shrink-0">
+                      <div className="h-5 w-5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-black flex items-center justify-center shrink-0 mt-1">
                         {idx + 1}
                       </div>
-                      <div className="flex-1 space-y-0.5 w-full">
+                      <div className="flex-1 space-y-1.5 w-full">
                         <div className="flex items-center justify-between font-sans gap-2 flex-wrap">
-                          <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">{room.name}</p>
+                          <Input
+                            value={room.name}
+                            onChange={(e) => {
+                              const updatedName = e.target.value;
+                              const updated = rooms.map(r => r.id === room.id ? { ...r, name: updatedName } : r);
+                              setRooms(updated);
+                              setUserHasEdited(true);
+                              if (selectedListing) {
+                                localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
+                              }
+                            }}
+                            onBlur={() => {
+                              initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms);
+                            }}
+                            className="text-xs font-bold text-slate-900 uppercase tracking-wider h-7 bg-white border-slate-200 flex-1 max-w-xs"
+                            placeholder="Room Title (e.g. Master Suite)"
+                          />
                           <div className="flex items-center gap-1">
                             {/* Sequence Position adjustment buttons */}
                             <Button
@@ -1760,15 +1895,43 @@ export default function AiTours() {
                             )}
                           </div>
                         </div>
-                        <p className="text-[10px] text-slate-600 leading-normal font-sans italic pr-4">"{room.script}"</p>
+
+                        <Textarea
+                          value={room.script}
+                          onChange={(e) => {
+                            const updatedScript = e.target.value;
+                            const updated = rooms.map(r => r.id === room.id ? { ...r, script: updatedScript } : r);
+                            setRooms(updated);
+                            setUserHasEdited(true);
+                            if (selectedListing) {
+                              localStorage.setItem(`rooms_tour_${selectedListing.id}`, JSON.stringify(updated));
+                            }
+                          }}
+                          onBlur={() => {
+                            initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms);
+                          }}
+                          rows={2}
+                          className="text-xs text-slate-800 bg-white border-slate-200 font-sans resize-y"
+                          placeholder="Enter voice walkthrough narration script for this room..."
+                        />
                         
-                        <div className="flex flex-wrap gap-1.5 pt-1.5 mt-1.5 border-t border-dashed border-slate-200">
+                        <div className="flex flex-wrap gap-1.5 pt-1.5 mt-1 border-t border-dashed border-slate-200">
+                          <Button
+                            onClick={async () => {
+                              await initiateAutoSave();
+                              toast.success(`Saved room walkthrough script for "${room.name || 'Room'}"!`);
+                            }}
+                            className="whitespace-normal h-auto min-h-5.5 py-1 px-2.5 text-[9px] font-black uppercase bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-2xs"
+                          >
+                            <Save className="h-2.5 w-2.5 mr-1" /> Save Entry
+                          </Button>
+
                           <Button
                             onClick={() => {
                               if (playingLang === `room_${room.id}`) {
                                 stopSpeaking();
                               } else {
-                                speakText(room.script, roomTargetLang, `room_${room.id}`);
+                                speakText(room.script, "English", `room_${room.id}`);
                               }
                             }}
                             variant="outline"
@@ -1776,30 +1939,26 @@ export default function AiTours() {
                           >
                             {playingLang === `room_${room.id}` ? (
                               <>
-                                <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> {getWalkthroughTranslations(roomTargetLang).stopLabel}
+                                <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Audio
                               </>
                             ) : (
                               <>
-                                <Play className="h-2 w-2 mr-1 fill-slate-500 text-slate-500" /> {getWalkthroughTranslations(roomTargetLang).preview}
+                                <Play className="h-2 w-2 mr-1 fill-slate-500 text-slate-500" /> Preview Sora Voice (English)
                               </>
                             )}
                           </Button>
                           
                           <Button
-                            onClick={() => handleTranslateRoomScript(room.id)}
-                            disabled={translatingRoomId === room.id}
-                            className={`whitespace-normal h-auto min-h-5.5 py-1 px-2 text-[9px] font-bold uppercase select-none transition-all duration-300 text-left ${
-                              translatingRoomId === room.id 
-                                ? 'bg-blue-400 hover:bg-blue-500 border border-blue-400 text-white font-bold' 
-                                : 'bg-white hover:bg-slate-50 text-black border border-stone-200'
-                            }`}
+                            onClick={() => handleLuxuryRewriteRoom(room.id)}
+                            disabled={rewritingRoomId === room.id}
+                            className="whitespace-normal h-auto min-h-5.5 py-1 px-2.5 text-[9px] font-extrabold uppercase select-none transition-all duration-300 bg-amber-500 hover:bg-amber-600 text-slate-950 border border-amber-400 cursor-pointer shadow-2xs"
                           >
-                            {translatingRoomId === room.id ? (
-                              <Loader2 className="h-2 w-2 animate-spin mr-1" />
+                            {rewritingRoomId === room.id ? (
+                              <Loader2 className="h-2.5 w-2.5 animate-spin mr-1 text-slate-950" />
                             ) : (
-                              <Sparkles className="h-2 w-2 mr-1" />
+                              <Sparkles className="h-2.5 w-2.5 mr-1 text-slate-950 fill-slate-950" />
                             )}
-                            {getWalkthroughTranslations(roomTargetLang).translateRoom}
+                            Generate Rewritten Luxury Text
                           </Button>
                         </div>
                       </div>
@@ -1810,11 +1969,11 @@ export default function AiTours() {
                 {/* Add room console */}
                 <div className="border-t border-slate-100 pt-3 space-y-2 bg-slate-50/50 p-3 rounded-xl border border-slate-200 mt-1">
                   <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider flex items-center gap-1">
-                    <Plus className="h-3 w-3 text-amber-600" /> Add Tour Room Sequence
+                    <Plus className="h-3 w-3 text-amber-600" /> Add Tour Room Sequence (English)
                   </p>
                   <div className="grid sm:grid-cols-3 gap-2">
                     <div className="sm:col-span-1">
-                      <Label htmlFor="room-name" className="text-[9px] uppercase font-bold text-slate-600">Room Title</Label>
+                      <Label htmlFor="room-name" className="text-[9px] uppercase font-bold text-slate-600">Room Title (English)</Label>
                       <Input 
                         id="room-name"
                         placeholder="e.g., Wine Cellar, Patio" 
@@ -1824,7 +1983,7 @@ export default function AiTours() {
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Label htmlFor="room-script" className="text-[9px] uppercase font-bold text-slate-600">Voice Tour Script (Speak out)</Label>
+                      <Label htmlFor="room-script" className="text-[9px] uppercase font-bold text-slate-600">Voice Tour Script (English)</Label>
                       <Input 
                         id="room-script"
                         placeholder="Underneath the stairs lies our climate-gated cellar space..." 
@@ -1873,43 +2032,80 @@ export default function AiTours() {
             {/* Buyer Q&A Repository */}
             <Card className="w-full border-stone-200 shadow-sm bg-white rounded-2xl overflow-hidden mx-0">
               <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-white">
-                <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-stone-900">
-                  <MessageSquare className="h-4 w-4 text-amber-600" /> Sora's Knowledge Base (Buyer Q&A)
-                </CardTitle>
-                <CardDescription className="text-[10px] text-stone-500 font-medium">Teach Sora listing facts. If a consumer asks these questions, Sora responds with these exact vetted answers.</CardDescription>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-stone-900">
+                    <MessageSquare className="h-4 w-4 text-amber-600" /> Sora's Knowledge Base (Buyer Q&A)
+                    <button 
+                      type="button"
+                      onClick={() => setShowQaInfo(!showQaInfo)}
+                      className="p-1 rounded-full text-stone-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer ml-1"
+                      title="What is Sora's Knowledge Base? Click for info."
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                    </button>
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+                      🇬🇧 English Master Knowledge
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        await initiateAutoSave();
+                        toast.success("✅ Sora Q&A Knowledge Base saved successfully!");
+                      }}
+                      className="h-6 text-[9px] font-black uppercase bg-slate-900 hover:bg-slate-800 text-white px-2.5 cursor-pointer"
+                    >
+                      <Save className="h-2.5 w-2.5 mr-1" /> Save Q&A
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription className="text-[10px] text-stone-500 font-medium">Teach Sora listing facts in English. Use <strong>Generate Rewritten Luxury Text</strong> to polish answers. On Pro plans, Sora auto-converts responses on the fly to 70+ client languages.</CardDescription>
+
+                {showQaInfo && (
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1.5 animate-in fade-in slide-in-from-top-1 text-left">
+                    <div className="flex items-center justify-between font-bold text-amber-900">
+                      <span className="flex items-center gap-1.5"><Info className="h-3.5 w-3.5 text-amber-600" /> What is Sora's Knowledge Base (Buyer Q&A)?</span>
+                      <button onClick={() => setShowQaInfo(false)} className="text-amber-700 hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer">✕ Close</button>
+                    </div>
+                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                      Sora's Knowledge Base contains vetted property facts that Sora uses to answer prospective buyer questions accurately during open house visits and online voice tours.
+                    </p>
+                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
+                      <li><strong>Grounding & Accuracy:</strong> Guarantees Sora answers with facts you provide (e.g. HOA dues, roof/HVAC age, school zones, inclusions, recent updates) and avoids AI hallucination.</li>
+                      <li><strong>Individual Save Entry Buttons:</strong> Click <strong>Save Entry</strong> on any fact card below to instantly save edits for that specific Q&A topic.</li>
+                      <li><strong>Add Custom Facts:</strong> Add new listing topics and custom answers using the console at the bottom of the card.</li>
+                      <li><strong>Multilingual Answers:</strong> On Pro plans, Sora auto-converts these answers on the fly to match the client's language during live voice chat.</li>
+                    </ul>
+                  </div>
+                )}
               </CardHeader>
               
               <CardContent className="p-4 space-y-3">
-                {/* Dedicated Q&A translation dropdown selector */}
-                <div id="qa-lang-select-container" className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-amber-50/20 rounded-xl border border-stone-200 text-left">
-                  <div className="space-y-0.5">
-                    <Label className="text-[10px] font-black uppercase text-stone-700 tracking-wider">Q&A translation language</Label>
-                    <p className="text-[9px] text-stone-500 font-medium font-sans">Select a translation language to convert/preview individual answers.</p>
-                  </div>
-                  <select 
-                    value={qaTargetLang}
-                    onChange={(e) => { setQaTargetLang(e.target.value); setUserHasEdited(true); }}
-                    className="h-7 min-w-[130px] px-2 bg-white border border-stone-250 rounded-lg text-xs font-bold focus:ring-1 focus:ring-amber-500 cursor-pointer text-stone-850"
-                  >
-                    <option value="French">French (Français)</option>
-                    <option value="Spanish">Spanish (Español)</option>
-                    <option value="German">German (Deutsch)</option>
-                    <option value="Italian">Italian (Italiano)</option>
-                    <option value="Portuguese">Portuguese (Português)</option>
-                    <option value="Mandarin">Mandarin (普通话)</option>
-                    <option value="Japanese">Japanese (日本語)</option>
-                    <option value="Dutch">Dutch (Nederlands)</option>
-                    <option value="Russian">Russian (Русский)</option>
-                    <option value="Arabic">Arabic (العربية)</option>
-                    <option value="English">English (English)</option>
-                  </select>
-                </div>
-
                 <div className="space-y-2">
                   {qas.map((qaItem, idx) => (
-                    <div key={idx} className="p-2.5 bg-stone-50/20 border rounded-xl border-stone-200 space-y-1.5">
+                    <div key={idx} className="p-3 bg-stone-50/50 border rounded-xl border-stone-200 space-y-2">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <p className="text-[11px] font-bold text-stone-850">Q: {qaItem.question}</p>
+                        <div className="flex items-center gap-1.5 flex-1">
+                          <span className="text-xs font-black text-amber-700 shrink-0">Q:</span>
+                          <Input
+                            value={qaItem.question}
+                            onChange={(e) => {
+                              const updatedQ = e.target.value;
+                              const updated = qas.map((q, i) => i === idx ? { ...q, question: updatedQ } : q);
+                              setQas(updated);
+                              setUserHasEdited(true);
+                              if (selectedListing) {
+                                localStorage.setItem(`qas_tour_${selectedListing.id}`, JSON.stringify(updated));
+                              }
+                            }}
+                            onBlur={() => {
+                              initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas);
+                            }}
+                            className="h-7 text-xs font-bold text-stone-900 bg-white border-stone-200 flex-1"
+                            placeholder="Question topic or prompt..."
+                          />
+                        </div>
                         
                         {/* Safe iFrame-Friendly Deletion Popup */}
                         {confirmDeleteQaIdx === idx ? (
@@ -1944,15 +2140,46 @@ export default function AiTours() {
                           </button>
                         )}
                       </div>
-                      <p className="text-[10px] text-stone-600 leading-normal pl-3 border-l-2 border-amber-300 font-sans italic">A: {qaItem.answer}</p>
+
+                      <div className="flex items-start gap-1.5 w-full">
+                        <span className="text-xs font-black text-amber-700 shrink-0 mt-1">A:</span>
+                        <Textarea
+                          value={qaItem.answer}
+                          onChange={(e) => {
+                            const updatedA = e.target.value;
+                            const updated = qas.map((q, i) => i === idx ? { ...q, answer: updatedA } : q);
+                            setQas(updated);
+                            setUserHasEdited(true);
+                            if (selectedListing) {
+                              localStorage.setItem(`qas_tour_${selectedListing.id}`, JSON.stringify(updated));
+                            }
+                          }}
+                          onBlur={() => {
+                            initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas);
+                          }}
+                          rows={2}
+                          className="text-xs text-stone-800 bg-white border-stone-200 font-sans resize-y"
+                          placeholder="Sora's vetted answer for this property fact..."
+                        />
+                      </div>
                       
                       <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-dashed border-stone-200/80">
+                        <Button
+                          onClick={async () => {
+                            await initiateAutoSave();
+                            toast.success(`Saved Q&A fact "${qaItem.question || 'Entry'}"!`);
+                          }}
+                          className="whitespace-normal h-auto min-h-5.5 py-1 px-2.5 text-[9px] font-black uppercase bg-slate-900 hover:bg-slate-800 text-white cursor-pointer shadow-2xs"
+                        >
+                          <Save className="h-2.5 w-2.5 mr-1" /> Save Entry
+                        </Button>
+
                         <Button
                           onClick={() => {
                             if (playingLang === `qa_${idx}`) {
                               stopSpeaking();
                             } else {
-                              speakText(qaItem.answer, qaTargetLang, `qa_${idx}`);
+                              speakText(qaItem.answer, "English", `qa_${idx}`);
                             }
                           }}
                           variant="outline"
@@ -1960,30 +2187,26 @@ export default function AiTours() {
                         >
                           {playingLang === `qa_${idx}` ? (
                             <>
-                              <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> {getWalkthroughTranslations(qaTargetLang).stopLabel}
+                              <Square className="h-2 w-2 mr-1 fill-rose-600 text-rose-600 animate-pulse" /> Stop Audio
                             </>
                           ) : (
                             <>
-                              <Play className="h-2 w-2 mr-1 fill-stone-700 text-stone-700" /> {getWalkthroughTranslations(qaTargetLang).preview}
+                              <Play className="h-2 w-2 mr-1 fill-stone-700 text-stone-700" /> Preview Sora Voice (English)
                             </>
                           )}
                         </Button>
                         
                         <Button
-                          onClick={() => handleTranslateQaAnswer(idx)}
-                          disabled={translatingQaIdx === idx}
-                          className={`whitespace-normal h-auto min-h-5.5 py-1 px-2 text-[9px] font-bold uppercase select-none transition-all duration-300 text-left ${
-                            translatingQaIdx === idx 
-                              ? 'bg-blue-400 hover:bg-blue-500 border border-blue-400 text-white font-bold' 
-                              : 'bg-white hover:bg-slate-50 text-black border border-stone-200'
-                          }`}
+                          onClick={() => handleLuxuryRewriteQa(idx)}
+                          disabled={rewritingQaIdx === idx}
+                          className="whitespace-normal h-auto min-h-5.5 py-1 px-2.5 text-[9px] font-extrabold uppercase select-none transition-all duration-300 bg-amber-500 hover:bg-amber-600 text-slate-950 border border-amber-400 cursor-pointer shadow-2xs"
                         >
-                          {translatingQaIdx === idx ? (
-                            <Loader2 className="h-2 w-2 animate-spin mr-1" />
+                          {rewritingQaIdx === idx ? (
+                            <Loader2 className="h-2.5 w-2.5 animate-spin mr-1 text-slate-950" />
                           ) : (
-                            <Sparkles className="h-2 w-2 mr-1" />
+                            <Sparkles className="h-2.5 w-2.5 mr-1 text-slate-950 fill-slate-950" />
                           )}
-                          {getWalkthroughTranslations(qaTargetLang).translateAnswer}
+                          Generate Rewritten Luxury Text
                         </Button>
                       </div>
                     </div>
@@ -1991,10 +2214,10 @@ export default function AiTours() {
                 </div>
 
                 <div className="border-t border-stone-100 pt-3 space-y-1.5">
-                  <p className="text-[10px] font-black uppercase text-stone-700">Add Custom Listing Fact</p>
+                  <p className="text-[10px] font-black uppercase text-stone-700">Add Custom Listing Fact (English)</p>
                   <div className="space-y-1.5">
                     <Input 
-                      placeholder="e.g., What are the school zonings?" 
+                      placeholder="e.g., What are the school zonings? (English)" 
                       value={newQuestion}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -2004,7 +2227,7 @@ export default function AiTours() {
                       className="h-8 text-xs" 
                     />
                     <Textarea 
-                      placeholder="Sighted inside the coveted Hilltop Elementary and Westlake High jurisdictions, ranking among the top 5% provincially..." 
+                      placeholder="Situated in top Hilltop Elementary and Westlake High jurisdictions... (English)" 
                       value={newAnswer}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -2173,8 +2396,38 @@ export default function AiTours() {
             {/* AI Tour Entry Gates & Flow */}
             <Card className="border-slate-200 shadow-sm bg-white text-black rounded-2xl overflow-hidden w-full mx-0 flex flex-col justify-between">
               <CardHeader className="py-2.5 px-4 border-b border-slate-100 bg-white">
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-900">Verification & Gating Rules</CardTitle>
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    Verification & Gating Rules
+                    <button 
+                      type="button"
+                      onClick={() => setShowGatingInfo(!showGatingInfo)}
+                      className="p-1 rounded-full text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer ml-0.5"
+                      title="What are Verification & Gating Rules? Click for info."
+                    >
+                      <HelpCircle className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                </CardTitle>
                 <CardDescription className="text-[10px] text-slate-500 font-medium">Govern when playing tours prompt and lock behind guest sign-ins.</CardDescription>
+
+                {showGatingInfo && (
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1.5 animate-in fade-in slide-in-from-top-1 text-left">
+                    <div className="flex items-center justify-between font-bold text-amber-900">
+                      <span className="flex items-center gap-1.5"><Info className="h-3.5 w-3.5 text-amber-600" /> What are Verification & Gating Rules?</span>
+                      <button onClick={() => setShowGatingInfo(false)} className="text-amber-700 hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer">✕ Close</button>
+                    </div>
+                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                      Verification & Gating Rules control how visitors interact with Sora during open house visits and online microsite tours.
+                    </p>
+                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
+                      <li><strong>Mandatory Sign-In:</strong> Forces attendees to complete lead check-in before Sora narrate room scripts.</li>
+                      <li><strong>No Gate:</strong> Direct instant access to tour narration without requiring check-in first.</li>
+                      <li><strong>70-Language Multilingual Support:</strong> Allows Sora to detect and speak 70+ client languages on the fly (Gated to Pro Plans).</li>
+                      <li><strong>Active Lender Handoff:</strong> Enables Sora to introduce your paired mortgage specialist when attendees ask financing questions or opt-in for rate information.</li>
+                    </ul>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-4 space-y-3">
                 <div className="space-y-1.5 font-sans">
@@ -2211,7 +2464,7 @@ export default function AiTours() {
                     <Label className="text-[10px] font-black uppercase text-slate-700 font-bold">Enabled Features</Label>
                   </div>
                   
-                  <div className="space-y-1 pt-0.5">
+                  <div className="space-y-1.5 pt-0.5">
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-600 opacity-80">
                       <input 
                         type="checkbox" 
@@ -2222,18 +2475,36 @@ export default function AiTours() {
                       Enable Sora voice synthetic audio (Always On)
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                    <label className={`flex items-center gap-2 text-xs font-semibold flex-wrap p-1.5 rounded-lg border transition-all ${!isPro ? "bg-slate-100/70 border-slate-200 opacity-60 grayscale cursor-not-allowed select-none" : "border-transparent cursor-pointer text-slate-700"}`}>
                       <input 
                         type="checkbox" 
-                        checked={multilingualEnabled} 
+                        checked={multilingualEnabled && isPro} 
+                        disabled={!isPro}
                         onChange={(e) => {
+                          if (!isPro) return;
                           const val = e.target.checked;
                           setMultilingualEnabled(val);
                           setUserHasEdited(true);
                         }}
-                        className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600"
+                        className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 accent-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       />
-                      Enable Multilingual Support (24 languages)
+                      <span className={!isPro ? "text-slate-500 font-medium line-through decoration-slate-400" : "text-slate-700 font-semibold"}>
+                        Enable Multilingual Support (70 languages)
+                      </span>
+                      {!isPro && (
+                        <span 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toast.error("Pro Plan Required", {
+                              description: "You must have the Pro Advanced Conversational AI plan in order to enable 70-language multilingual support."
+                            });
+                          }}
+                          className="text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded border border-amber-300 ml-1 cursor-pointer hover:bg-amber-200 flex items-center gap-1 shadow-2xs"
+                        >
+                          <Lock className="h-2.5 w-2.5 text-amber-800" /> Pro Plan Required
+                        </span>
+                      )}
                     </label>
 
                     <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 mt-0.5">
@@ -2249,25 +2520,6 @@ export default function AiTours() {
                       />
                       Active Lender Handoff
                     </label>
-                  </div>
-
-                  <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-1 mt-2 text-left">
-                    <Label className="text-[9px] font-black uppercase text-slate-700 font-bold">Sora Voice Narrator Profile</Label>
-                    <select 
-                      value={soraVoice}
-                      onChange={(e) => {
-                        const newVoice = e.target.value;
-                        setSoraVoice(newVoice);
-                        setUserHasEdited(true);
-                        initiateAutoSave(welcomeEn, welcomeFr, welcomeOtherScript, targetLang, rooms, qas, ctas, newVoice);
-                      }}
-                      className="bg-white border text-[10px] h-7 rounded-md w-full outline-none px-1.5 focus:ring-1 focus:ring-amber-500 mt-0.5 font-bold text-stone-750"
-                    >
-                      <option value="Kore">Kore (Universal Warm Neutral)</option>
-                      <option value="Kona">Kona (Professional Standard)</option>
-                      <option value="Sora">Sora (Classic Cinematic)</option>
-                      <option value="Alex">Alex (Executive Accent)</option>
-                    </select>
                   </div>
 
                   {lenderHandoff && (

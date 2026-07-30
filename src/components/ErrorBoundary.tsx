@@ -26,15 +26,32 @@ export default class ErrorBoundary extends Component<Props, State> {
       msg.includes("Unexpected state") || 
       msg.includes("b815") || 
       msg.includes("ca9") ||
-      msg.includes("WatchChangeAggregator")
+      msg.includes("WatchChangeAggregator") ||
+      msg.includes("resource-exhausted") ||
+      msg.includes("Quota limit exceeded") ||
+      msg.includes("Quota exceeded") ||
+      msg.includes("quota limits") ||
+      msg.includes("quota")
     ) {
-      console.warn("[ErrorBoundary] Intercepted and ignored internal Firestore SDK assertion failure:", msg);
+      console.warn("[ErrorBoundary] Intercepted and ignored internal Firestore SDK error:", msg);
       return { hasError: false, error: null };
     }
     return { hasError: true, error };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const msg = error?.message || String(error || "");
+    if (
+      msg.includes("resource-exhausted") ||
+      msg.includes("Quota limit exceeded") ||
+      msg.includes("Quota exceeded") ||
+      msg.includes("quota limits") ||
+      msg.includes("quota")
+    ) {
+      console.warn("[ErrorBoundary] Suppressed crash log for quota limit error:", msg);
+      return;
+    }
+
     console.error("Unhandled runtime crash caught by ErrorBoundary:", error, errorInfo);
     
     // Attempt to log the crash to Firestore system_logs
@@ -51,13 +68,14 @@ export default class ErrorBoundary extends Component<Props, State> {
           componentStack: errorInfo.componentStack || "",
           userAgent: navigator.userAgent,
           location: window.location.href,
+          userEmail: "system_error_boundary",
         },
         userEmail: "system_error_boundary",
       }).catch(err => {
-        console.error("Failed to write crash log to Firestore:", err);
+        console.warn("Failed to write crash log to Firestore:", err?.message || err);
       });
     } catch (err) {
-      console.error("Offline or inactive Firestore during crash capture:", err);
+      console.warn("Offline or inactive Firestore during crash capture:", err);
     }
   }
 

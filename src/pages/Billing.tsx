@@ -85,6 +85,7 @@ export default function Billing() {
       features: [
         "1 Active Listing",
         "Kiosk Sign-In Mode with PIN Lock",
+        "15 Gemini Mins/mo (3-min session max)",
         "Basic Sora AI Assistant (3-5 turns)",
         "English language only",
         "1 Linked Lender limit",
@@ -98,7 +99,8 @@ export default function Billing() {
       features: [
         "1 Active Listing",
         "CRM Syncing Integration (FUB, etc.)",
-        "Basic Sora AI Assistant (3-5 turns)",
+        "30 Gemini Mins/mo (5-min session max)",
+        "Basic Sora AI Assistant (5-10 turns)",
         "Solo data local captures",
         "Standard client profiles"
       ]
@@ -108,7 +110,8 @@ export default function Billing() {
       price: "$29/month",
       features: [
         "Up to 25 Active Listings",
-        "All 15 Multilingual AI Languages",
+        "300 Gemini Mins/mo (15-min session max)",
+        "All 70 Multilingual AI Languages",
         "Advanced Sora (unlimited Q&A + memory)",
         "Full Custom Branding & Media Manifest",
         "Automated Follow-Up and email drafts",
@@ -121,6 +124,7 @@ export default function Billing() {
       title: "Team Pro",
       price: "From $149/month",
       features: [
+        "1,500 Gemini Live API Voice Mins/mo (30-min session max)",
         "Team-level listings visibility & roster settings",
         "Enforce team lender block-policies globally",
         "Shared lead distribution & notifications",
@@ -131,6 +135,7 @@ export default function Billing() {
       title: "Brokerage Office",
       price: "From $399/month",
       features: [
+        "Unlimited Gemini Live API Voice Mins/mo",
         "Unlimited office-wide listing rules & logs",
         "Custom branded portal domain & overrides",
         "Multi-avatar & brokerage-wide template sync",
@@ -655,7 +660,7 @@ export default function Billing() {
               <div className="border-t border-slate-100 pt-3 space-y-2 text-xs text-slate-600">
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> 1 active property listing</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Unlimited basic sign-ins</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Basic English-only Sora assistant</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> <span className="font-extrabold text-black">15 Gemini Mins/mo (3-min session max)</span></div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Secure offline buffer with sync</div>
               </div>
             </div>
@@ -672,9 +677,9 @@ export default function Billing() {
               <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">Keep your database updated automatically. Syncs every captured lead directly to your Follow Up Boss or kvCORE CRM with zero manual effort.</p>
               <div className="border-t border-slate-100 pt-3 space-y-2 text-xs text-slate-600">
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Everything in Solo included</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> <span className="font-extrabold text-black">30 Gemini Mins/mo (5-min session max)</span></div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Automated CRM synchronization</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> FUB custom tag & field mapping</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Real-time contact status updates</div>
               </div>
             </div>
           </div>
@@ -691,9 +696,9 @@ export default function Billing() {
               <p className="text-xs text-slate-500 leading-relaxed min-h-[64px]">Turn listings into immersive interactive experiences. Engages buyers in 24 languages, guided by custom knowledge bases and advanced voice tours.</p>
               <div className="border-t border-slate-150 pt-3 space-y-2 text-xs text-slate-600">
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Everything in Starter included</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> <span className="font-extrabold text-blue-800">300 Gemini Mins/mo (15-min session max)</span></div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Full 24-language translation</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Interactive conversational Sora guide</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Detailed buyer intent scoring</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Advanced Conversational Sora</div>
               </div>
             </div>
           </div>
@@ -708,15 +713,19 @@ export default function Billing() {
               </div>
               <p className="text-xs text-slate-300 leading-relaxed min-h-[64px]">Empower your entire brokerage. Enforce brand templates, manage team-wide assignments, configure custom domains, and route shared listing leads.</p>
               <div className="border-t border-slate-800 pt-3 space-y-2 text-xs text-slate-300">
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Centralized team and admin controls</div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> <span className="font-extrabold text-white">Unlimited Gemini Mins</span></div>
+                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Centralized team & admin controls</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Brokerage-wide white-labeling</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Custom domain configuration</div>
-                <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Shared listing override rules</div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <p className="text-[10px] text-slate-400 mt-4 text-center">
+        * Pricing plans may change with 30 days notice via the website, email or SMS.
+      </p>
 
       <AnimatePresence>
         {activeModal === "upgrade" && (

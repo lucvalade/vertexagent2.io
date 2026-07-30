@@ -120,18 +120,29 @@ import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { db } from './lib/firebase.ts';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
-// Register global uncaught crash event listeners
-window.addEventListener("error", (event) => {
-  const msg = event.message || event.error?.message || String(event.error || "");
-  if (
+// Helper to check for suppressed errors (assertions, quota limits, offline states)
+const isQuotaOrAssertionError = (msg: string) => {
+  if (!msg) return false;
+  return (
     msg.includes("INTERNAL ASSERTION FAILED") || 
     msg.includes("Unexpected state") || 
     msg.includes("b815") || 
     msg.includes("ca9") ||
     msg.includes("WatchChangeAggregator") ||
-    msg.includes("TargetState")
-  ) {
-    console.warn("[Global Error Listener] Suppressed internal Firestore assertion error:", msg);
+    msg.includes("TargetState") ||
+    msg.includes("resource-exhausted") ||
+    msg.includes("Quota limit exceeded") ||
+    msg.includes("Quota exceeded") ||
+    msg.includes("quota limits") ||
+    msg.includes("quota")
+  );
+};
+
+// Register global uncaught crash event listeners
+window.addEventListener("error", (event) => {
+  const msg = event.message || event.error?.message || String(event.error || "");
+  if (isQuotaOrAssertionError(msg)) {
+    console.warn("[Global Error Listener] Suppressed internal Firestore error:", msg);
     event.preventDefault();
     event.stopImmediatePropagation();
     return;
@@ -152,23 +163,18 @@ window.addEventListener("error", (event) => {
         userAgent: navigator.userAgent
       },
       userEmail: "system_global_listener"
+    }).catch(err => {
+      console.warn("Failed to log uncaught error to Firestore:", err?.message || err);
     });
   } catch (err) {
-    console.error("Failed to log uncaught error to Firestore:", err);
+    console.warn("Failed to log uncaught error to Firestore:", err);
   }
 }, true);
 
 window.addEventListener("unhandledrejection", (event) => {
   const reasonStr = event.reason?.message || String(event.reason || "");
-  if (
-    reasonStr.includes("INTERNAL ASSERTION FAILED") || 
-    reasonStr.includes("Unexpected state") || 
-    reasonStr.includes("b815") || 
-    reasonStr.includes("ca9") ||
-    reasonStr.includes("WatchChangeAggregator") ||
-    reasonStr.includes("TargetState")
-  ) {
-    console.warn("[Global Unhandled Rejection] Suppressed internal Firestore assertion error:", reasonStr);
+  if (isQuotaOrAssertionError(reasonStr)) {
+    console.warn("[Global Unhandled Rejection] Suppressed internal Firestore error:", reasonStr);
     event.preventDefault();
     event.stopImmediatePropagation();
     return;
@@ -186,9 +192,11 @@ window.addEventListener("unhandledrejection", (event) => {
         userAgent: navigator.userAgent
       },
       userEmail: "system_unhandled_rejection"
+    }).catch(err => {
+      console.warn("Failed to log unhandled rejection to Firestore:", err?.message || err);
     });
   } catch (err) {
-    console.error("Failed to log unhandled rejection to Firestore:", err);
+    console.warn("Failed to log unhandled rejection to Firestore:", err);
   }
 });
 

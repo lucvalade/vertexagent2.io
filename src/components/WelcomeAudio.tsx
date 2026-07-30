@@ -88,6 +88,76 @@ const LANGUAGE_API_NAMES: Record<string, string> = {
   zu: "Zulu"
 };
 
+const normalizeStr = (str: string) => {
+  if (!str) return "";
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+};
+
+function levenshteinDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function matchesLanguageQuery(query: string, code: string, displayName: string, apiName: string): boolean {
+  const qNorm = normalizeStr(query);
+  if (!qNorm) return true;
+
+  const dNorm = normalizeStr(displayName);
+  const aNorm = normalizeStr(apiName);
+  const cNorm = normalizeStr(code);
+
+  if (dNorm.includes(qNorm) || aNorm.includes(qNorm) || cNorm.includes(qNorm)) {
+    return true;
+  }
+
+  if (qNorm === cNorm) return true;
+
+  const tokens = [displayName, apiName, code]
+    .flatMap(s => s.toLowerCase().split(/[\s()\-/_]+/))
+    .map(normalizeStr)
+    .filter(Boolean);
+
+  if (tokens.some(t => t.includes(qNorm) || qNorm.includes(t))) {
+    return true;
+  }
+
+  if (qNorm.length >= 3) {
+    const maxAllowedDistance = qNorm.length <= 4 ? 1 : qNorm.length <= 7 ? 2 : 3;
+    for (const token of tokens) {
+      const tokenSub = token.substring(0, Math.min(token.length, qNorm.length + 1));
+      if (levenshteinDistance(qNorm, tokenSub) <= maxAllowedDistance) {
+        return true;
+      }
+      if (Math.abs(token.length - qNorm.length) <= maxAllowedDistance + 1) {
+        if (levenshteinDistance(qNorm, token) <= maxAllowedDistance) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 const LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
   af: "Afrikaans",
   sq: "Shqip (Albanian)",
@@ -312,10 +382,10 @@ export default function WelcomeAudio({
   const filteredLanguages = Object.entries(LANGUAGE_DISPLAY_NAMES).map(([code, name]) => {
     const displayName = code === "en" ? getEnglishLabel(userRegion) : name;
     return [code, displayName] as [string, string];
-  }).filter(([code, name]) =>
-    name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  }).filter(([code, displayName]) => {
+    const apiName = LANGUAGE_API_NAMES[code] || "";
+    return matchesLanguageQuery(searchQuery, code, displayName, apiName);
+  });
 
   const generateAudioForLanguageWithParams = async (
     langCode: string,
@@ -520,8 +590,10 @@ export default function WelcomeAudio({
     const el = audioElementRef.current;
     if (el) {
       if (blobUrl) {
-        el.src = blobUrl;
-        el.load();
+        if (el.src !== blobUrl && !el.src.endsWith(blobUrl)) {
+          el.src = blobUrl;
+          el.load();
+        }
       } else {
         el.removeAttribute("src");
         el.load();
@@ -616,10 +688,10 @@ export default function WelcomeAudio({
 
   const getButtonLabel = () => {
     if (status === "generating") {
-      return "Generating audio…";
+      return "Processing audio…";
     }
     if (status === "ready") {
-      return PLAY_TRANSLATIONS[language] || "Play Audio";
+      return START_TRANSLATIONS[language] || "Start";
     }
     return START_TRANSLATIONS[language] || "Start";
   };

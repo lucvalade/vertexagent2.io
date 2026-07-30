@@ -34,10 +34,19 @@ function base64ToFloat32(base64: string): Float32Array {
   return float32Array;
 }
 
-export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall: (name: string, args: any) => any, voice: string = "Aoede") {
+export function useLiveVoice(
+  systemInstruction: string, 
+  tools: any[], 
+  onToolCall: (name: string, args: any) => any, 
+  voice: string = "Aoede",
+  options?: { maxSessionMinutes?: number }
+) {
+  const maxSessionMinutes = options?.maxSessionMinutes || 3; // Default 3 mins for Starter plan
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isLimitReached, setIsLimitReached] = useState(false);
   
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -46,6 +55,39 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
   
   const playbackContextRef = useRef<AudioContext | null>(null);
   const playbackTimeRef = useRef<number>(0);
+  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const timerRef = useRef<any>(null);
+
+  // Timer interval to enforce Gemini Live API session limit
+  useEffect(() => {
+    if (connected) {
+      setElapsedSeconds(0);
+      setIsLimitReached(false);
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => {
+          const next = prev + 1;
+          if (next >= maxSessionMinutes * 60) {
+            console.warn(`[Voice] Gemini Live API session minute limit reached (${maxSessionMinutes} min max for current plan).`);
+            setIsLimitReached(true);
+            setError(`⏱️ Live Voice Session Limit Reached (${maxSessionMinutes} min limit on current plan). Upgrade to Pro for extended voice tours.`);
+            stopSession();
+          }
+          return next;
+        });
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [connected, maxSessionMinutes]);
 
   const startSession = async () => {
     try {
@@ -78,22 +120,34 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
           const message = payload.data;
           
           // Handle audio playback
-          const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-          if (base64Audio) {
-             const audioData = base64ToFloat32(base64Audio);
-             const audioCtx = playbackContextRef.current;
-             if (audioCtx) {
-               const audioBuffer = audioCtx.createBuffer(1, audioData.length, 24000);
-               audioBuffer.copyToChannel(audioData, 0);
-               
-               const source = audioCtx.createBufferSource();
-               source.buffer = audioBuffer;
-               source.connect(audioCtx.destination);
-               
-               const startTime = Math.max(playbackTimeRef.current, audioCtx.currentTime);
-               source.start(startTime);
-               playbackTimeRef.current = startTime + audioBuffer.duration;
-             }
+          const parts = message.serverContent?.modelTurn?.parts || [];
+          for (const part of parts) {
+            if (part?.inlineData?.data) {
+              const base64Audio = part.inlineData.data;
+              const audioData = base64ToFloat32(base64Audio);
+              const audioCtx = playbackContextRef.current;
+              if (audioCtx) {
+                if (audioCtx.state === "suspended") {
+                  audioCtx.resume();
+                }
+                const audioBuffer = audioCtx.createBuffer(1, audioData.length, 24000);
+                audioBuffer.copyToChannel(audioData, 0);
+                
+                const source = audioCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioCtx.destination);
+                
+                activeSourcesRef.current.add(source);
+                source.onended = () => {
+                  activeSourcesRef.current.delete(source);
+                };
+
+                const now = audioCtx.currentTime;
+                const startTime = Math.max(playbackTimeRef.current, now + 0.02);
+                source.start(startTime);
+                playbackTimeRef.current = startTime + audioBuffer.duration;
+              }
+            }
           }
 
           // Handle tool calls
@@ -116,9 +170,11 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
 
           // Handle Interruption
           if (message.serverContent?.interrupted) {
+             activeSourcesRef.current.forEach((src) => {
+               try { src.stop(); } catch (e) {}
+             });
+             activeSourcesRef.current.clear();
              if (playbackContextRef.current) {
-               playbackContextRef.current.suspend();
-               playbackContextRef.current.resume();
                playbackTimeRef.current = playbackContextRef.current.currentTime;
              }
           }
@@ -204,6 +260,13 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
 
   const stopSession = () => {
     try {
+      activeSourcesRef.current.forEach((src) => {
+        try { src.stop(); } catch (e) {}
+      });
+      activeSourcesRef.current.clear();
+    } catch (e) {}
+
+    try {
       if (processorRef.current) {
         processorRef.current.disconnect();
         processorRef.current = null;
@@ -257,6 +320,9 @@ export function useLiveVoice(systemInstruction: string, tools: any[], onToolCall
     error,
     startSession,
     stopSession,
-    sendTextMessage
+    sendTextMessage,
+    elapsedSeconds,
+    maxSessionMinutes,
+    isLimitReached
   };
 }

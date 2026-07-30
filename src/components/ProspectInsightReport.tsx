@@ -353,6 +353,11 @@ Report synthesized securely by Sora® for AI Open House Connect.`;
       <tr><td style="padding: 4px 0; color: #475569; font-weight: 600;">Registered Co-Paired Lender:</td><td style="padding: 4px 0; font-weight: bold;">${isMortgageInterested ? (lead.customAnswers?.routedLender || "Gold Trust Lending Group") : "N/A - Locked"}</td></tr>
     </table>
   </div>
+  
+  <div style="margin-top: 20px; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <h4 style="margin: 0 0 10px 0; color: #1e293b; font-size: 14px;">🤖 AI Lead Qualification Summary</h4>
+    <p style="margin: 0; color: #334155; font-size: 13px; line-height: 1.5;">${(lead as any).aiSummary || "No AI summary available for this lead."}</p>
+  </div>
 
   <p style="font-size: 11px; color: #64748b; text-align: center; margin-top: 25px; font-weight: 600;">
     Report synthesized securely by Sora® for AI Open House Connect.

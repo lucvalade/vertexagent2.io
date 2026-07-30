@@ -256,7 +256,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
         if (audioBase64) {
           setVoiceConciergeStatus("speaking");
-          const audioSrc = `data:audio/mp3;base64,${audioBase64}`;
+          const mime = data.mimeType || "audio/wav";
+          const audioSrc = `data:${mime};base64,${audioBase64}`;
           const audio = new Audio(audioSrc);
           audioPlayerRef.current = audio;
 
@@ -314,7 +315,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
       if (audioBase64) {
         setVoiceConciergeStatus("speaking");
-        const audioSrc = `data:audio/mp3;base64,${audioBase64}`;
+        const mime = data.mimeType || "audio/wav";
+        const audioSrc = `data:${mime};base64,${audioBase64}`;
         const audio = new Audio(audioSrc);
         audioPlayerRef.current = audio;
 
@@ -468,7 +470,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
       if (!isTextMode && audioBase64) {
         setVoiceConciergeStatus("speaking");
-        const audioSrc = `data:audio/mp3;base64,${audioBase64}`;
+        const mime = data.mimeType || "audio/wav";
+        const audioSrc = `data:${mime};base64,${audioBase64}`;
         const audio = new Audio(audioSrc);
         audioPlayerRef.current = audio;
         audio.onended = () => {

@@ -2129,7 +2129,9 @@ SCRIPT TO TRANSLATE (in English):
           config: {
             temperature: 0.1,
           }
-        })
+        }),
+        2,
+        1000
       );
 
       let translatedText = result.text || "";
@@ -2191,6 +2193,53 @@ SCRIPT TO CONDENSE:
     } catch (err: any) {
       console.error("[Shorten Script] Error condensing script:", err);
       res.status(500).json({ error: err.message || "Failed to condense script" });
+    }
+  });
+
+  /**
+   * API Route for AI Luxury Rewrite
+   * Path: POST /api/luxury-rewrite
+   */
+  app.post("/api/luxury-rewrite", async (req, res) => {
+    const { text, type = "room" } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: "Text is required" });
+    }
+
+    try {
+      console.log(`[Luxury Rewrite] Rewriting ${type} script into luxury prose...`);
+      const ai = getAi();
+      const prompt = `You are an world-class luxury real estate copywriter for Sotheby's and Christie's International Real Estate.
+Rewrite the following text into polished, high-end, elegant English real estate narration.
+Keep it natural for spoken voice tours, inviting, sophisticated, and engaging without sounding overly wordy or fake.
+Return ONLY the polished English rewritten text with no quotes, explanations, markdown, or commentary.
+
+ORIGINAL TEXT:
+"${text}"`;
+
+      const result = await callAiWithRetry(() => 
+        ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: {
+            temperature: 0.3,
+          }
+        }),
+        2,
+        1000
+      );
+
+      let rewrittenText = result.text || "";
+      rewrittenText = rewrittenText.trim();
+      if (rewrittenText.startsWith("```")) {
+        rewrittenText = rewrittenText.replace(/^```[a-zA-Z]*\n/, "").replace(/\n```$/, "");
+      }
+      rewrittenText = rewrittenText.trim();
+
+      res.json({ success: true, rewrittenText });
+    } catch (err: any) {
+      console.error("[Luxury Rewrite] Error:", err);
+      res.status(500).json({ error: err.message || "Failed to generate luxury rewrite" });
     }
   });
 

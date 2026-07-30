@@ -541,20 +541,23 @@ Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sor
             }
           },
           onmessage: async (message: LiveServerMessage) => {
-            const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (base64Audio) {
-              const binary = atob(base64Audio);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-              const pcmData = new Int16Array(bytes.buffer);
-              
-              playbackQueueRef.current.push(pcmData);
-              processPlaybackQueue();
-            }
+            const parts = message.serverContent?.modelTurn?.parts || [];
+            for (const part of parts) {
+              if (part?.inlineData?.data) {
+                const base64Audio = part.inlineData.data;
+                const binary = atob(base64Audio);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const pcmData = new Int16Array(bytes.buffer);
+                
+                playbackQueueRef.current.push(pcmData);
+                processPlaybackQueue();
+              }
 
-            if (message.serverContent?.modelTurn?.parts?.[0]?.text) {
-              const text = message.serverContent.modelTurn.parts[0].text;
-              setTranscripts(prev => [...prev, { role: 'ai', text }]);
+              if (part?.text) {
+                const text = part.text;
+                setTranscripts(prev => [...prev, { role: 'ai', text }]);
+              }
             }
 
             if (message.serverContent?.interrupted) {
