@@ -36,6 +36,7 @@ export default function ProtectedLayout() {
   );
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [openSubMenus, setOpenSubMenus] = useState<Record<string, boolean>>({});
 
   const clientKnowledgeBase = [
     {
@@ -236,8 +237,6 @@ export default function ProtectedLayout() {
         { label: "Expired Listings", path: "/app/listings?tab=expired" }
       ]
     },
-    { label: "AI Tour", icon: Mic2, path: "/app/aitours" },
-    { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
     { 
       label: "Open Houses", 
       icon: Home, 
@@ -249,6 +248,8 @@ export default function ProtectedLayout() {
       ]
     },
     { label: "Marketing Flyers", icon: LayoutTemplate, path: "/app/flyers" },
+    { label: "AI Tour", icon: Mic2, path: "/app/aitours" },
+    { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
     { label: "Leads", icon: Users, path: "/app/leads" },
     { label: "Lenders", icon: Link2, path: "/app/lenders" },
     { label: "Teams", icon: Building2, path: "/app/team" },
@@ -334,25 +335,44 @@ export default function ProtectedLayout() {
               );
             }
 
+            const isSubOpen = Boolean(openSubMenus[link.label]);
+            const hasSubLinks = Boolean(link.subLinks && link.subLinks.length > 0);
+
             return (
               <div key={link.label} className="flex flex-col gap-1">
-                <Link
-                  to={link.path}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={viewMode === 'CLIENT'
-                    ? `flex items-center gap-3 rounded-lg px-3 py-2 transition-all font-bold ${
-                        active ? "bg-white/15 text-white font-extrabold shadow-sm border border-white/10" : "text-white/80 hover:bg-white/10 hover:text-white"
-                      }`
-                    : `flex items-center gap-3 rounded-lg px-3 py-2 transition-all font-bold ${
-                        active ? "bg-red-900/40 text-white font-extrabold shadow-sm border border-red-800/30" : "text-white/80 hover:bg-white/10 hover:text-white"
-                      }`
-                  }
-                >
-                  <link.icon className="h-4 w-4" />
-                  {link.label}
-                </Link>
-                {link.subLinks && (
-                  <div className="flex flex-col gap-1 pl-7 mt-1 border-l border-white/20 ml-5">
+                <div className="flex items-center justify-between">
+                  <Link
+                    to={link.path}
+                    onClick={() => {
+                      if (hasSubLinks) {
+                        setOpenSubMenus(prev => ({
+                          ...prev,
+                          [link.label]: !prev[link.label]
+                        }));
+                      } else {
+                        setMobileMenuOpen(false);
+                      }
+                    }}
+                    className={viewMode === 'CLIENT'
+                      ? `flex-1 flex items-center justify-between gap-3 rounded-lg px-3 py-2 transition-all font-bold ${
+                          active ? "bg-white/15 text-white font-extrabold shadow-sm border border-white/10" : "text-white/80 hover:bg-white/10 hover:text-white"
+                        }`
+                      : `flex-1 flex items-center justify-between gap-3 rounded-lg px-3 py-2 transition-all font-bold ${
+                          active ? "bg-red-900/40 text-white font-extrabold shadow-sm border border-red-800/30" : "text-white/80 hover:bg-white/10 hover:text-white"
+                        }`
+                    }
+                  >
+                    <div className="flex items-center gap-3">
+                      <link.icon className="h-4 w-4" />
+                      <span>{link.label}</span>
+                    </div>
+                    {hasSubLinks && (
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 opacity-80 ${isSubOpen ? 'rotate-180' : ''}`} />
+                    )}
+                  </Link>
+                </div>
+                {hasSubLinks && isSubOpen && (
+                  <div className="flex flex-col gap-1 pl-7 mt-1 border-l border-white/20 ml-5 animate-in fade-in slide-in-from-top-1 duration-150">
                     {link.subLinks.map((sub: any) => {
                       const searchTab = new URLSearchParams(location.search).get("tab");
                       const subActive = active && (
