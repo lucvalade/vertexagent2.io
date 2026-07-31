@@ -98,6 +98,8 @@ import AiTours from './pages/AiTours.tsx';
 import OpenHousesAgent from './pages/OpenHousesAgent.tsx';
 
 import Integrations from './pages/Integrations.tsx';
+import SupportTickets from './pages/SupportTickets.tsx';
+import ApiUsage from './pages/ApiUsage.tsx';
 import Register from './pages/Register.tsx';
 import Login from './pages/Login.tsx';
 import Contact from './pages/Contact.tsx';
@@ -253,6 +255,9 @@ createRoot(document.getElementById('root')!).render(
               <Route path="automations" element={<Automations />} />
               <Route path="crm" element={<Integrations />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="support" element={<SupportTickets />} />
+              <Route path="tickets" element={<SupportTickets />} />
+              <Route path="api-usage" element={<ApiUsage />} />
               <Route path="templates" element={<Templates />} />
               <Route path="templates/:templateId/edit" element={<EditTemplate />} />
               <Route path="templates/new" element={<EditTemplate />} />
@@ -268,6 +273,8 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="listings" element={<AdminListings />} />
                 <Route path="welcomes" element={<AdminWelcomeMessages />} />
                 <Route path="notifications" element={<AdminNotifications />} />
+                <Route path="tickets" element={<SupportTickets />} />
+                <Route path="api-usage" element={<ApiUsage />} />
                 <Route path="logs" element={<AdminLogs />} />
                 <Route path="emails" element={<AdminEmails />} />
                 <Route path="brokerage" element={<BrokerageSettings />} />

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BarChart3, TrendingUp, Users, Clock, Globe2, Calendar as CalendarIcon, Info, ArrowUpRight, Search } from "lucide-react";
+import { BarChart3, TrendingUp, Users, Clock, Globe2, Calendar as CalendarIcon, Info, ArrowUpRight, Search, Cpu } from "lucide-react";
+import { Link } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -70,7 +71,15 @@ export default function Analytics() {
           <p className="text-slate-500 mt-1">Dive into your performance data and track conversion rates.</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link to="/app/api-usage">
+            <Button className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer">
+              <Cpu className="h-4 w-4" />
+              <span>Track API Usage</span>
+            </Button>
+          </Link>
+          
+          <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-2">
             <Label htmlFor="from" className="text-xs font-bold uppercase text-slate-400">From</Label>
             <Input 
@@ -96,6 +105,7 @@ export default function Analytics() {
           </Button>
         </div>
       </div>
+    </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="hover:shadow-md transition-shadow border-slate-200">

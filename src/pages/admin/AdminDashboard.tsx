@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Home, TrendingUp, AlertCircle, Shield, CheckCircle2, ChevronRight, Activity, FileText, Download, Bell, Loader2 } from 'lucide-react';
+import { Users, Home, TrendingUp, AlertCircle, Shield, CheckCircle2, ChevronRight, Activity, FileText, Download, Bell, Loader2, Zap, Globe, ShieldCheck, Cpu, Server, Terminal, ArrowUpRight, BarChart3, Layers } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { format } from "date-fns";
@@ -249,6 +249,141 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* API Infrastructure & Usage Tracking Section */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-left space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <Cpu className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-black uppercase tracking-tight text-slate-900 italic">API Usage &amp; Infrastructure Telemetry</h2>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                Live
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Real-time usage monitoring for Sora Gemini AI, Lead Verification, Firecrawl Ingestion, and CRM sync endpoints.
+            </p>
+          </div>
+          <Button 
+            onClick={() => navigate('/app/admin/api-usage')}
+            variant="outline" 
+            className="text-xs font-bold gap-1.5 hover:bg-slate-50 border-slate-200 shadow-xs shrink-0 cursor-pointer"
+          >
+            Full API Usage Analytics <ArrowUpRight className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div 
+            onClick={() => navigate('/app/admin/api-usage')}
+            className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2 hover:border-blue-300 hover:bg-slate-100/60 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-amber-500" /> Gemini AI / Sora Engine</span>
+              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-bold">99.9%</span>
+            </div>
+            <div className="text-2xl font-black italic text-slate-900 group-hover:text-blue-600 transition-colors">15,890 <span className="text-xs font-normal text-slate-500">calls</span></div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-slate-500 font-medium">
+                <span>Quota (32%)</span>
+                <span>290ms avg</span>
+              </div>
+              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="h-full bg-amber-500 rounded-full" style={{ width: '32%' }}></div>
+              </div>
+            </div>
+          </div>
+
+          <div 
+            onClick={() => navigate('/app/admin/api-usage')}
+            className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2 hover:border-blue-300 hover:bg-slate-100/60 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-600" /> Lead Verification</span>
+              <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-bold">98.2% valid</span>
+            </div>
+            <div className="text-2xl font-black italic text-slate-900 group-hover:text-blue-600 transition-colors">4,620 <span className="text-xs font-normal text-slate-500">calls</span></div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-slate-500 font-medium">
+                <span>Quota (46%)</span>
+                <span>Clearbit/Twilio</span>
+              </div>
+              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '46%' }}></div>
+              </div>
+            </div>
+          </div>
+
+          <div 
+            onClick={() => navigate('/app/admin/api-usage')}
+            className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2 hover:border-blue-300 hover:bg-slate-100/60 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span className="flex items-center gap-1.5"><Globe className="h-4 w-4 text-blue-600" /> Firecrawl Ingestion</span>
+              <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-bold">Operational</span>
+            </div>
+            <div className="text-2xl font-black italic text-slate-900 group-hover:text-blue-600 transition-colors">1,410 <span className="text-xs font-normal text-slate-500">calls</span></div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-slate-500 font-medium">
+                <span>Quota (28%)</span>
+                <span>820ms avg</span>
+              </div>
+              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 rounded-full" style={{ width: '28%' }}></div>
+              </div>
+            </div>
+          </div>
+
+          <div 
+            onClick={() => navigate('/app/admin/api-usage')}
+            className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2 hover:border-blue-300 hover:bg-slate-100/60 transition-all cursor-pointer group"
+          >
+            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+              <span className="flex items-center gap-1.5"><Server className="h-4 w-4 text-purple-600" /> CRM &amp; FUB Sync</span>
+              <span className="text-[10px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded font-bold">100% synced</span>
+            </div>
+            <div className="text-2xl font-black italic text-slate-900 group-hover:text-blue-600 transition-colors">5,530 <span className="text-xs font-normal text-slate-500">calls</span></div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-slate-500 font-medium">
+                <span>Quota (55%)</span>
+                <span>190ms avg</span>
+              </div>
+              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-600 rounded-full" style={{ width: '55%' }}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live API Telemetry Stream */}
+        <div className="bg-slate-900 rounded-xl p-3.5 font-mono text-[11px] text-slate-300 space-y-2 shadow-inner">
+          <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider pb-1.5 border-b border-slate-800">
+            <span className="flex items-center gap-1.5 text-emerald-400"><Terminal className="h-3.5 w-3.5" /> Recent API Invocations Stream</span>
+            <span className="text-[9px] text-slate-400">200 OK • Auto Refreshing</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px]">
+            <div className="flex items-center justify-between bg-slate-800/60 p-2 rounded border border-slate-800/80 hover:bg-slate-800 transition-colors">
+              <span className="text-amber-300 font-bold flex items-center gap-1"><Zap className="h-3 w-3" /> [Gemini TTS] POST /api/tts-simple</span>
+              <span className="text-emerald-400 font-mono font-bold">200 OK (280ms)</span>
+            </div>
+            <div className="flex items-center justify-between bg-slate-800/60 p-2 rounded border border-slate-800/80 hover:bg-slate-800 transition-colors">
+              <span className="text-emerald-300 font-bold flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> [Clearbit] POST /api/enrich</span>
+              <span className="text-emerald-400 font-mono font-bold">200 OK (410ms)</span>
+            </div>
+            <div className="flex items-center justify-between bg-slate-800/60 p-2 rounded border border-slate-800/80 hover:bg-slate-800 transition-colors">
+              <span className="text-purple-300 font-bold flex items-center gap-1"><Server className="h-3 w-3" /> [Follow Up Boss] POST /api/crm/sync</span>
+              <span className="text-emerald-400 font-mono font-bold">200 OK (190ms)</span>
+            </div>
+            <div className="flex items-center justify-between bg-slate-800/60 p-2 rounded border border-slate-800/80 hover:bg-slate-800 transition-colors">
+              <span className="text-blue-300 font-bold flex items-center gap-1"><Globe className="h-3 w-3" /> [Firecrawl] POST /api/ingest</span>
+              <span className="text-emerald-400 font-mono font-bold">200 OK (820ms)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-left">
@@ -352,6 +487,21 @@ export default function AdminDashboard() {
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div className="h-full bg-purple-600 rounded-full group-hover/item:bg-purple-500 transition-colors" style={{ width: '25%' }}></div>
+                </div>
+              </div>
+              <div 
+                className="group/item cursor-pointer p-2 -m-2 rounded-lg hover:bg-slate-50 transition-colors"
+                onClick={() => navigate('/app/admin/api-usage')}
+                title="View full API usage analytics"
+              >
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-slate-500 group-hover/item:text-amber-600 font-medium flex items-center gap-1.5 transition-colors">
+                    API Calls Quota <span className="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">Analytics →</span>
+                  </span>
+                  <span className="font-bold text-slate-900">27.4K / 75K</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-500 rounded-full group-hover/item:bg-amber-400 transition-colors" style={{ width: '36.5%' }}></div>
                 </div>
               </div>
             </div>

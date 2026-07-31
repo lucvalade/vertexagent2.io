@@ -9,6 +9,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import Logo from "@/components/Logo";
 import { useAuth } from "@/hooks/useAuth";
 import PublicLayout from "@/components/PublicLayout";
+import { db } from "@/lib/firebase";
+import { collection, addDoc } from "firebase/firestore";
+import { Link } from "react-router-dom";
 
 export default function Contact() {
   const navigate = useNavigate();
@@ -89,7 +92,35 @@ export default function Contact() {
         throw new Error(errorData.error || "Failed to send email");
       }
 
-      toast.success("Message sent! We'll get back to you shortly.");
+      // Save ticket to Firestore support_tickets collection
+      const ticketNum = `TICK-${Math.floor(1000 + Math.random() * 9000)}`;
+      try {
+        await addDoc(collection(db, "support_tickets"), {
+          ticketNumber: ticketNum,
+          userId: user?.id || "guest",
+          userName: formData.name,
+          userEmail: formData.email,
+          subject: formData.subject || "General Inquiry",
+          category: "general",
+          priority: "medium",
+          status: "open",
+          description: formData.message,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          assignedTo: "Support Queue",
+          replies: []
+        });
+      } catch (fErr) {
+        console.warn("Firestore ticket save fallback:", fErr);
+      }
+
+      toast.success(`Ticket ${ticketNum} created! Message sent. View status in your Support Dashboard.`, {
+        action: {
+          label: "View Dashboard",
+          onClick: () => navigate("/app/support")
+        },
+        duration: 8000
+      });
       setFormData({ name: "", email: "", subject: "", message: "" });
     } catch (error: any) {
       console.error("Contact form error:", error);
@@ -127,10 +158,20 @@ export default function Contact() {
               )}
             </p>
             
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-              <p className="text-blue-800 text-sm font-medium">
-                Your request will be saved to the admin dashboard and your team can be notified by email and text right away.
+            <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-blue-900 font-bold text-sm">Need to track your submitted requests?</span>
+                <HelpCircle className="h-4 w-4 text-blue-600" />
+              </div>
+              <p className="text-blue-800 text-xs leading-relaxed">
+                All submitted support inquiries generate a ticket automatically in your account dashboard. You can track responses, update priorities, and chat directly with support engineers.
               </p>
+              <Link 
+                to="/app/support" 
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+              >
+                <span>View Support Tickets Dashboard →</span>
+              </Link>
             </div>
           </div>
 

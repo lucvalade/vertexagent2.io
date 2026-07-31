@@ -1584,7 +1584,17 @@ export default function AiTours() {
               <CardContent className="p-4 space-y-4">
                 <div className="space-y-1">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
-                    <Label className="text-[11px] font-black uppercase text-slate-700 font-bold">English Script (Welcome Prompt)</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-[11px] font-black uppercase text-slate-700 font-bold">English Script (Welcome Prompt)</Label>
+                      <button 
+                        type="button"
+                        onClick={() => setShowGreetingInfo(!showGreetingInfo)}
+                        className="p-1 rounded-full text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                        title="How this section and Save Script button work. Click for info."
+                      >
+                        <HelpCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                     <div className="flex flex-wrap items-center gap-1">
                       <Button 
                         onClick={() => handleShortenScript("en")}
@@ -1614,6 +1624,38 @@ export default function AiTours() {
                       )}
                     </div>
                   </div>
+
+                  {showGreetingInfo && (
+                    <div className="my-2 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-2 animate-in fade-in slide-in-from-top-1 text-left shadow-xs">
+                      <div className="flex items-center justify-between font-bold text-amber-900">
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <Info className="h-4 w-4 text-amber-600 shrink-0" /> How the Sora Welcome Script &amp; Save Script Button Work
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={() => setShowGreetingInfo(false)} 
+                          className="text-amber-700 hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer"
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                        This section controls the primary greeting narrative that home buyers hear instantly upon scanning your property QR code or initiating an AI Tour.
+                      </p>
+                      <ul className="text-[10px] text-amber-900 space-y-1.5 list-disc pl-4">
+                        <li><strong>Master English Source:</strong> Craft or edit your initial opening property script in English. Sora speaks this greeting aloud when the tour begins.</li>
+                        <li><strong>Live Neural Voice Preview:</strong> Click <em>"Speak English"</em> to hear Sora synthesize and pronounce your text in real time.</li>
+                        <li><strong>Script Shorten Tool:</strong> Click <em>"Shorten"</em> to automatically condense long greetings into snappy, high-converting opening statements.</li>
+                        <li><strong>Save Script Button Action:</strong> When you click the orange <strong>"Save Script"</strong> button below:
+                          <ol className="list-decimal pl-4 mt-1 space-y-0.5 font-medium text-slate-900">
+                            <li>Persists your updated master English welcome script to your Firestore property database.</li>
+                            <li>Triggers automated neural AI translation to keep French, Spanish, German, and 70+ multilingual tour scripts synchronized on the fly.</li>
+                            <li>Instantly updates all live QR code destinations and tablet kiosk loops.</li>
+                          </ol>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
                   <Textarea 
                     value={welcomeEn} 
                     onChange={(e) => { setWelcomeEn(e.target.value); setUserHasEdited(true); }} 

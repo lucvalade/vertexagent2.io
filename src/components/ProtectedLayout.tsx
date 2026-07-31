@@ -5,7 +5,7 @@ import Logo from "./Logo";
 import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import AgentVoiceControl from "./AgentVoiceControl";
-import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail, Search, HelpCircle } from "lucide-react";
+import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail, Search, HelpCircle, LifeBuoy, Cpu, Activity } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -252,6 +252,8 @@ export default function ProtectedLayout() {
     { label: "Leads", icon: Users, path: "/app/leads" },
     { label: "Lenders", icon: Link2, path: "/app/lenders" },
     { label: "Teams", icon: Building2, path: "/app/team" },
+    { label: "API Usage", icon: Cpu, path: "/app/api-usage" },
+    { label: "Support Tickets", icon: LifeBuoy, path: "/app/support" },
     { label: "Settings", icon: Settings, path: "/app/settings" },
   ];
 
@@ -260,6 +262,8 @@ export default function ProtectedLayout() {
     { label: "Dashboard", icon: Shield, path: "/app/admin" },
     { label: "Manage Agents", icon: Users, path: "/app/admin/users" },
     { label: "All Listings", icon: List, path: "/app/admin/listings" },
+    { label: "Support Tickets", icon: LifeBuoy, path: "/app/admin/tickets" },
+    { label: "API Usage Tracking", icon: Cpu, path: "/app/admin/api-usage" },
     { label: "Welcome Messages", icon: Volume2, path: "/app/admin/welcomes" },
     { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
     { label: "Onboarding Emails", icon: Mail, path: "/app/admin/emails" },

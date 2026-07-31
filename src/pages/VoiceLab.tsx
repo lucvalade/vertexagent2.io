@@ -282,9 +282,12 @@ Director's Notes: Maintain a deeply respectful, supportive, steady, trustworthy,
 Audio Profile: Warm, deeply refined, thoughtful, friendly, and reassuring female assistant handling post-visit real estate operations.
 Scene: Follow-up message engaging a home buyer after their open house visit.
 Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sora). Keep the cadence steady, rhythmic, and natural. Make the message feel personalized, professional, and accessible.`;
-      } else if (lowerName.includes('professional female')) {
+      } else if (lowerName.includes('professional female') || lowerName.includes('sora') || lowerName.includes('kore')) {
         voiceName = 'Kore';
-        styleInstruction = "Say smoothly, confidently, and professionally without sounding overly excited: ";
+        styleInstruction = `Configure Voice: Sora.
+Audio Profile: Polished, warm, smooth, stable, and premium female persona. Sounds trustworthy, elegant, and highly professional, fitting a luxury real estate brand.
+Scene: Greeting a guest or guiding an open house experience.
+Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora). Pacing must be calm, relaxed, and completely natural. Speak with absolute confidence and clarity. Use natural breathing pauses.`;
       } else if (lowerName.includes('executive british') || lowerName.includes('zephyr')) {
         voiceName = 'Zephyr';
         styleInstruction = "Deliver this slowly and deliberately using a refined, premium British accent with crisp, executive clarity: ";
@@ -813,8 +816,11 @@ Director's Notes: Maintain a deeply respectful, supportive, steady, trustworthy,
         styleInstruction = `Configure Voice: Sora.
 Audio Profile: Warm, deeply refined, thoughtful, friendly, and reassuring female assistant handling post-visit real estate operations.
 Director's Notes: Use an encouraging, welcoming, and reassuring female tone (Sora). Keep the cadence steady, rhythmic, and natural.`;
-      } else if (lowerName.includes('professional female')) {
+      } else if (lowerName.includes('professional female') || lowerName.includes('sora') || lowerName.includes('kore')) {
         voiceName = 'Kore';
+        styleInstruction = `Configure Voice: Sora.
+Audio Profile: Polished, warm, smooth, stable, and premium female persona. Sounds trustworthy, elegant, and highly professional, fitting a luxury real estate brand.
+Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora). Pacing must be calm, relaxed, and completely natural. Speak with absolute confidence and clarity. Use natural breathing pauses.`;
       } else if (lowerName.includes('executive british') || lowerName.includes('zephyr')) {
         voiceName = 'Zephyr';
       } else if (lowerName.includes('storyteller')) {

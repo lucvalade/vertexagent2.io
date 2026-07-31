@@ -2257,6 +2257,14 @@ ORIGINAL TEXT:
       console.log(`[TTS Simple] Synthesizing text with Gemini in ${lang} using voice "${requestedVoiceName || "default"}": "${text.substring(0, 40)}..."`);
       const ai = getAi();
       
+      // Clean stage directions like [slow] or [pause] so TTS does not speak brackets aloud
+      let cleanText = String(text)
+        .replace(/\[slow\]/gi, "")
+        .replace(/\[pause\]/gi, "...")
+        .replace(/\[fast\]/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
       // Dynamically map voiceName to corresponding prebuilt Gemini voice config
       let geminiVoice = "Kore"; // Default to Kore (Sora)
       if (requestedVoiceName) {
@@ -2278,10 +2286,23 @@ ORIGINAL TEXT:
         }
       }
 
+      // Inject Sora voice profile style instructions if not already present
+      let finalPrompt = cleanText;
+      if (!cleanText.toLowerCase().includes("configure voice") && !cleanText.toLowerCase().includes("director's notes")) {
+        if (geminiVoice === "Kore") {
+          finalPrompt = `Configure Voice: Sora.
+Audio Profile: Polished, warm, smooth, stable, and premium female persona. Sounds trustworthy, elegant, and highly professional, fitting a luxury real estate brand.
+Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora). Pacing must be calm, relaxed, and completely natural. Speak with absolute confidence and clarity in ${lang}.
+
+Deliver the following script with precise pacing:
+${cleanText}`;
+        }
+      }
+
       const response = await callAiWithRetry(() => 
         ai.models.generateContent({
           model: "gemini-3.1-flash-tts-preview",
-          contents: [{ parts: [{ text }] }],
+          contents: [{ parts: [{ text: finalPrompt }] }],
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
