@@ -81,6 +81,7 @@ interface AppUser {
   accountType?: "agent" | "team_admin" | "brokerage_admin" | "lender" | "compliance_admin" | "platform_admin";
   subscriptionStatus?: "active" | "past_due" | "canceled";
   subscriptionPlan?: "free" | "pro" | string;
+  integrations?: Record<string, any>;
 }
 
 interface AuthState {

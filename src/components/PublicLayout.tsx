@@ -832,29 +832,29 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
         className="fixed top-0 inset-x-0 w-full rounded-none lg:top-3 lg:inset-x-4 lg:rounded-[20px] max-w-7xl lg:mx-auto h-16 z-[100] border-b lg:border border-white/20 transition-all duration-300 backdrop-blur-md shadow-lg"
         style={{ backgroundColor: scrolled ? "rgba(80, 162, 255, 0.55)" : "rgba(80, 162, 255, 1)" }}
       >
-        <div className="max-w-7xl mx-auto h-full px-6 flex items-center justify-between">
-          <Link to="/" className="hover:opacity-90 transition-opacity">
-            <Logo variant="white" iconClassName="h-8.5 w-8.5" />
+        <div className="max-w-7xl mx-auto h-full px-3 sm:px-6 flex items-center justify-between gap-2">
+          <Link to="/" className="hover:opacity-90 transition-opacity shrink-0">
+            <Logo variant="white" iconClassName="h-8 w-8 sm:h-8.5 sm:w-8.5" />
           </Link>
           
-          <nav className="hidden lg:flex items-center gap-6 text-sm font-bold text-white h-full">
+          <nav className="hidden md:flex items-center gap-2 lg:gap-3.5 xl:gap-5 text-[11px] lg:text-xs xl:text-sm font-bold text-white h-full">
             {navLinks.map((link) => {
               const active = isLinkActive(link);
               return (
                 <div key={link.label} className="relative group flex items-center h-full">
                   <Link 
                     to={link.href} 
-                    className={`hover:text-white/80 transition-colors py-5 flex items-center gap-0.5 tracking-tight font-bold ${
+                    className={`hover:text-white/80 transition-colors py-5 flex items-center gap-0.5 tracking-tight font-bold whitespace-nowrap ${
                       active ? "text-yellow-300 font-black" : "text-white"
                     } ${
-                      link.label === "How It Works" && isFlashing ? "animate-flash-black-blue" : ""
+                      (link.label === "How it Works" || link.label === "How It Works") && isFlashing ? "animate-flash-black-blue" : ""
                     }`}
                   >
                     {link.label}
-                    {link.items && <span className="text-[8px] opacity-40 ml-1">▼</span>}
+                    {link.items && <span className="text-[8px] opacity-40 ml-0.5">▼</span>}
                   </Link>
                   {link.items && (
-                    <div className="absolute top-16 left-1/2 -translate-x-1/2 hidden group-hover:grid grid-cols-2 gap-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-2xl min-w-[500px] z-50 text-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute top-16 left-1/2 -translate-x-1/2 hidden group-hover:grid grid-cols-2 gap-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-2xl min-w-[480px] z-50 text-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="col-span-2 border-b pb-2 text-[10px] font-black tracking-widest text-slate-400 uppercase">
                         {link.label === "Products" ? "Product" : link.label} Solutions
                       </div>
@@ -887,7 +887,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             <div className="relative group flex items-center h-full">
               <button 
                 id="im-an-dropdown-trigger"
-                className={`hover:text-white/80 transition-colors py-5 flex items-center gap-1 tracking-tight font-bold cursor-pointer bg-transparent border-none outline-none ${
+                className={`hover:text-white/80 transition-colors py-5 flex items-center gap-1 tracking-tight font-bold cursor-pointer bg-transparent border-none outline-none whitespace-nowrap ${
                   location.pathname.startsWith("/guides") ? "text-yellow-300 font-black" : "text-white"
                 }`}
               >
@@ -926,7 +926,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             </div>
           </nav>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-3.5">
             {/* Search Icon */}
             <button
               onClick={() => setSearchOpen(true)}
@@ -937,23 +937,23 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
               <Search className="h-5 w-5" />
             </button>
 
-            <div className="hidden sm:flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-2 lg:gap-3">
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-white" />
               ) : user ? (
-                <div className="flex items-center gap-3">
-                  <Button variant="ghost" className="font-extrabold text-xs text-white hover:text-white hover:bg-white/10" onClick={() => navigate("/app")}>Dashboard</Button>
-                  <Button variant="outline" className="font-extrabold text-xs bg-transparent hover:bg-white/10 text-white hover:text-white border border-white/20 transition-colors duration-200" onClick={async () => { await logout(); navigate("/"); }}>Logout</Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" className="font-extrabold text-xs text-white hover:text-white hover:bg-white/10 px-2.5 py-1" onClick={() => navigate("/app")}>Dashboard</Button>
+                  <Button variant="outline" className="font-extrabold text-xs bg-transparent hover:bg-white/10 text-white hover:text-white border border-white/20 transition-colors duration-200 px-2.5 py-1" onClick={async () => { await logout(); navigate("/"); }}>Logout</Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
-                  <Button variant="ghost" className="font-extrabold text-xs text-white hover:text-white hover:bg-white/10" onClick={() => navigate("/login")}>Login</Button>
-                  <Button onClick={() => navigate("/register")} className="bg-white hover:bg-white/90 text-[#162556] font-extrabold text-xs">Get Started</Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" className="font-extrabold text-xs text-white hover:text-white hover:bg-white/10 px-2.5 py-1" onClick={() => navigate("/login")}>Login</Button>
+                  <Button onClick={() => navigate("/register")} className="bg-white hover:bg-white/90 text-[#162556] font-extrabold text-xs px-3 py-1">Get Started</Button>
                 </div>
               )}
             </div>
 
-            <div className="lg:hidden flex items-center gap-2.5">
+            <div className="md:hidden flex items-center gap-2">
               {/* To the left of the hamburger menu, create a link called Start Free */}
               <Link 
                 to="/register" 
@@ -988,7 +988,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
           setMobileMenuOpen(false);
           menuToggleRef.current?.focus();
         }}
-        className={`nav-backdrop lg:hidden ${mobileMenuOpen ? "is-open" : ""}`}
+        className={`nav-backdrop md:hidden ${mobileMenuOpen ? "is-open" : ""}`}
         aria-hidden="true"
       />
 
@@ -996,7 +996,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <nav 
         id="nav-drawer"
         ref={navDrawerRef}
-        className={`nav-drawer lg:hidden flex flex-col ${mobileMenuOpen ? "is-open" : ""}`}
+        className={`nav-drawer md:hidden flex flex-col ${mobileMenuOpen ? "is-open" : ""}`}
         aria-hidden={!mobileMenuOpen}
       >
         <div className="flex flex-col h-full">

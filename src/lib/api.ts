@@ -184,6 +184,11 @@ export interface Lead {
   detectedCity?: string;
   geoProvider?: string;
   jurisdictionRulesApplied?: string;
+  crmSynced?: boolean;
+  crmSyncedAt?: number;
+  crmName?: string;
+  crmSyncStatus?: "synced" | "pending" | "failed";
+  lastPushed?: number | null;
 }
 
 export async function generateLeadSummary(params: {
@@ -773,6 +778,113 @@ export async function routeLeadToCRM(listing: Listing, lead: Lead) {
   }
 }
 
+// Canadian Area Codes lookup set
+const CANADIAN_AREA_CODES = new Set([
+  "416", "647", "437", "905", "289", "365", "519", "226", "548", "613", "343", "705", "249", "807", // ON
+  "604", "778", "250", "236", "672", // BC
+  "403", "780", "587", "825", // AB
+  "306", "639", // SK
+  "204", "431", // MB
+  "514", "438", "450", "579", "819", "873", "418", "581", // QC
+  "902", // NS / PEI
+  "506", // NB
+  "709", // NL
+  "867"  // YT / NT / NU
+]);
+
+const CANADIAN_PROVINCES = [
+  { code: "ON", name: "Ontario" },
+  { code: "BC", name: "British Columbia" },
+  { code: "AB", name: "Alberta" },
+  { code: "QC", name: "Quebec" },
+  { code: "MB", name: "Manitoba" },
+  { code: "SK", name: "Saskatchewan" },
+  { code: "NS", name: "Nova Scotia" },
+  { code: "NB", name: "New Brunswick" },
+  { code: "NL", name: "Newfoundland" },
+  { code: "PE", name: "Prince Edward Island" },
+  { code: "NT", name: "Northwest Territories" },
+  { code: "YT", name: "Yukon" },
+  { code: "NU", name: "Nunavut" }
+];
+
+export function detectLeadJurisdiction(listing: Listing | null, leadPhone?: string, leadPostal?: string) {
+  let country = "Canada"; // Default to Canada for Canadian listings
+  let region = "Ontario";
+  let method = "Property Listing Address Context";
+
+  const addressText = (listing?.address || "").toUpperCase();
+  const descriptionText = (listing?.description || "").toUpperCase();
+  const fullContext = `${addressText} ${descriptionText}`;
+
+  // 1. Check property address for Canadian provinces vs US states
+  let foundProv = CANADIAN_PROVINCES.find(
+    p => fullContext.includes(p.name.toUpperCase()) || fullContext.includes(`, ${p.code}`) || fullContext.includes(` ${p.code} `)
+  );
+
+  if (foundProv) {
+    country = "Canada";
+    region = foundProv.name;
+    method = `Property Address (${foundProv.name}, Canada)`;
+  } else if (fullContext.includes("USA") || fullContext.includes("UNITED STATES") || fullContext.includes("CALIFORNIA") || fullContext.includes("FLORIDA") || fullContext.includes("TEXAS") || fullContext.includes("NEW YORK")) {
+    country = "USA";
+    region = fullContext.includes("FLORIDA") ? "Florida" : fullContext.includes("TEXAS") ? "Texas" : fullContext.includes("NEW YORK") ? "New York" : "California";
+    method = "Property Address (USA)";
+  } else if (fullContext.includes("TORONTO") || fullContext.includes("VANCOUVER") || fullContext.includes("CALGARY") || fullContext.includes("MONTREAL") || fullContext.includes("OTTAWA")) {
+    country = "Canada";
+    region = "Ontario";
+    method = "Property Address Location Context";
+  }
+
+  // 2. Parse Phone Area Code
+  if (leadPhone) {
+    const digits = leadPhone.replace(/\D/g, "");
+    let areaCode = "";
+    if (digits.length === 10) {
+      areaCode = digits.substring(0, 3);
+    } else if (digits.length === 11 && digits.startsWith("1")) {
+      areaCode = digits.substring(1, 4);
+    }
+
+    if (areaCode) {
+      if (CANADIAN_AREA_CODES.has(areaCode)) {
+        country = "Canada";
+        method += ` + Phone Area Code (${areaCode})`;
+      } else if (digits.length >= 10 && country !== "Canada") {
+        method += ` + Phone Area Code (${areaCode})`;
+      }
+    }
+  }
+
+  // 3. Parse Postal / Zip Code Format if provided
+  if (leadPostal) {
+    const cleanPostal = leadPostal.trim().toUpperCase();
+    const isCanadianPostal = /^[A-Z]\d[A-Z] ?\d[A-Z]\d$/.test(cleanPostal);
+    const isUsZip = /^\d{5}(-\d{4})?$/.test(cleanPostal);
+
+    if (isCanadianPostal) {
+      country = "Canada";
+      method += ` + Canadian Postal Code (${cleanPostal})`;
+    } else if (isUsZip) {
+      country = "USA";
+      method += ` + US Zip Code (${cleanPostal})`;
+    }
+  }
+
+  const complianceFramework = country === "Canada"
+    ? "CASL / PIPEDA (Canada Co-Marketing & Express Consent)"
+    : "TCPA / RESPA (USA Co-Marketing & RESPA Section 8)";
+
+  return {
+    detectedCountry: country,
+    detectedRegion: region,
+    detectedCity: listing?.city || (country === "Canada" ? "Toronto" : "Los Angeles"),
+    geoProvider: "Property Listing Context & Phone Area Code Parsing",
+    jurisdictionRulesApplied: complianceFramework,
+    detectionMethod: method
+  };
+}
+
 export async function createLead(listingId: string, lead: Lead) {
   try {
     // Save to local storage buffer first as guaranteed fallback
@@ -790,6 +902,18 @@ export async function createLead(listingId: string, lead: Lead) {
           listingData = listingDoc.data() as Listing;
           lead.agentId = listingData.ownerId;
           lead.listingAddress = listingData.address;
+
+          // Perform automatic jurisdiction & compliance framework detection via Property Context + Area Code Parsing
+          const geoInfo = detectLeadJurisdiction(
+            listingData,
+            lead.phone,
+            lead.customAnswers?.postalCode || lead.customAnswers?.zipCode
+          );
+          lead.detectedCountry = lead.detectedCountry || geoInfo.detectedCountry;
+          lead.detectedRegion = lead.detectedRegion || geoInfo.detectedRegion;
+          lead.detectedCity = lead.detectedCity || geoInfo.detectedCity;
+          lead.geoProvider = geoInfo.geoProvider;
+          lead.jurisdictionRulesApplied = geoInfo.jurisdictionRulesApplied;
           
           // Auto-generate AI lead summary on creation
           try {

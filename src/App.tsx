@@ -46,7 +46,7 @@ export default function App() {
     window.location.hostname.includes("webcontainer") ||
     window.location.hostname.includes("stackblitz");
 
-  const effectiveUnlocked = isUnlocked || isTourPage || !!user;
+  const effectiveUnlocked = isUnlocked || isTourPage || !!user || isDevOrStudio;
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();

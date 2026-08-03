@@ -254,6 +254,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="voicelab" element={<VoiceLab />} />
               <Route path="automations" element={<Automations />} />
               <Route path="crm" element={<Integrations />} />
+              <Route path="crm/logs" element={<Navigate to="/app/crm?tab=logs" replace />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="support" element={<SupportTickets />} />
               <Route path="tickets" element={<SupportTickets />} />
@@ -273,6 +274,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="listings" element={<AdminListings />} />
                 <Route path="welcomes" element={<AdminWelcomeMessages />} />
                 <Route path="notifications" element={<AdminNotifications />} />
+                <Route path="analytics" element={<Analytics />} />
                 <Route path="tickets" element={<SupportTickets />} />
                 <Route path="api-usage" element={<ApiUsage />} />
                 <Route path="logs" element={<AdminLogs />} />

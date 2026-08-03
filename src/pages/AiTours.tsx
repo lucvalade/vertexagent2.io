@@ -1436,7 +1436,7 @@ export default function AiTours() {
           <p className="text-slate-500 mt-1">Design, edit, and publish guided AI Tours featuring your brand and a voice-ready narrator.</p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
           <Label className="text-xs font-extrabold uppercase tracking-wider text-black whitespace-nowrap">Configure Property:</Label>
           <select 
             className="bg-white border border-stone-300 rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-500 text-stone-800"
@@ -1556,6 +1556,14 @@ export default function AiTours() {
                   <div className="space-y-0.5">
                     <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-900">
                       <Sparkles className="h-4 w-4 text-amber-500 fill-amber-300 animate-spin-slow" /> Sora Welcome Script
+                      <button 
+                        type="button"
+                        onClick={() => setShowGreetingInfo(!showGreetingInfo)}
+                        className="p-1 rounded-full text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                        title="How this section and Save Script button work. Click for info."
+                      >
+                        <HelpCircle className="h-3.5 w-3.5" />
+                      </button>
                     </CardTitle>
                     <CardDescription className="text-[10px] text-slate-500 font-medium">Configure the narrative script that playing tourists will hear instantly upon scanning.</CardDescription>
                   </div>
@@ -1586,14 +1594,6 @@ export default function AiTours() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5">
                       <Label className="text-[11px] font-black uppercase text-slate-700 font-bold">English Script (Welcome Prompt)</Label>
-                      <button 
-                        type="button"
-                        onClick={() => setShowGreetingInfo(!showGreetingInfo)}
-                        className="p-1 rounded-full text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
-                        title="How this section and Save Script button work. Click for info."
-                      >
-                        <HelpCircle className="h-3.5 w-3.5" />
-                      </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
                       <Button 
@@ -1833,20 +1833,23 @@ export default function AiTours() {
                 <CardDescription className="text-[10px] text-slate-500 font-medium">Define high-fidelity scripts in English to narrate key areas of the home. Use <strong>Generate Rewritten Luxury Text</strong> to upgrade prose. On Pro plans, Sora auto-converts this on the fly to 70+ languages during live client tours.</CardDescription>
 
                 {showRoomWalkthroughInfo && (
-                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1.5 animate-in fade-in slide-in-from-top-1 text-left">
-                    <div className="flex items-center justify-between font-bold text-amber-900">
-                      <span className="flex items-center gap-1.5"><Info className="h-3.5 w-3.5 text-amber-600" /> What is Room-by-Room Walkthrough?</span>
-                      <button onClick={() => setShowRoomWalkthroughInfo(false)} className="text-amber-700 hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer">✕ Close</button>
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-black space-y-1.5 animate-in fade-in slide-in-from-top-1 text-left">
+                    <div className="flex items-center justify-between font-bold text-black">
+                      <span className="flex items-center gap-1.5">
+                        <Info className="h-3.5 w-3.5 text-amber-600" />
+                        <strong className="font-extrabold text-black">What is Room-by-Room Walkthrough?</strong>
+                      </span>
+                      <button onClick={() => setShowRoomWalkthroughInfo(false)} className="text-black hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer">✕ Close</button>
                     </div>
-                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                    <p className="text-[11px] text-black font-medium leading-relaxed">
                       This section defines custom voice scripts for individual rooms or areas of the property (e.g. Master Suite, Chef's Kitchen, Covered Patio).
                     </p>
-                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
-                      <li><strong>Interactive Guided Tour:</strong> Sora reads these exact room descriptions aloud when visitors take an interactive guided tour or tap on specific rooms.</li>
-                      <li><strong>Custom Editing:</strong> You can edit room names, re-sequence the tour order, or update the script content anytime.</li>
-                      <li><strong>Individual Save Entry Buttons:</strong> Click the <strong>Save Entry</strong> button on each room card below to immediately commit changes for that specific room.</li>
-                      <li><strong>Luxury AI Rewriter:</strong> Click <em>"Generate Rewritten Luxury Text"</em> to rewrite prose using high-end real estate descriptors.</li>
-                      <li><strong>Multilingual Support:</strong> On Pro plans, these English scripts automatically translate into 70+ languages on the fly during live tours.</li>
+                    <ul className="text-[10px] text-black space-y-1 list-disc pl-4 font-medium">
+                      <li><strong className="font-extrabold text-black">Interactive Guided Tour:</strong> Sora reads these exact room descriptions aloud when visitors take an interactive guided tour or tap on specific rooms.</li>
+                      <li><strong className="font-extrabold text-black">Custom Editing:</strong> You can edit room names, re-sequence the tour order, or update the script content anytime.</li>
+                      <li><strong className="font-extrabold text-black">Individual Save Entry Buttons:</strong> Click the <strong className="font-extrabold text-black">Save Entry</strong> button on each room card below to immediately commit changes for that specific room.</li>
+                      <li><strong className="font-extrabold text-black">Luxury AI Rewriter:</strong> Click <em>"Generate Rewritten Luxury Text"</em> to rewrite prose using high-end real estate descriptors.</li>
+                      <li><strong className="font-extrabold text-black">Multilingual Support:</strong> On Pro plans, these English scripts automatically translate into 70+ languages on the fly during live tours.</li>
                     </ul>
                   </div>
                 )}
@@ -2105,19 +2108,22 @@ export default function AiTours() {
                 <CardDescription className="text-[10px] text-stone-500 font-medium">Teach Sora listing facts in English. Use <strong>Generate Rewritten Luxury Text</strong> to polish answers. On Pro plans, Sora auto-converts responses on the fly to 70+ client languages.</CardDescription>
 
                 {showQaInfo && (
-                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1.5 animate-in fade-in slide-in-from-top-1 text-left">
-                    <div className="flex items-center justify-between font-bold text-amber-900">
-                      <span className="flex items-center gap-1.5"><Info className="h-3.5 w-3.5 text-amber-600" /> What is Sora's Knowledge Base (Buyer Q&A)?</span>
-                      <button onClick={() => setShowQaInfo(false)} className="text-amber-700 hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer">✕ Close</button>
+                  <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-black space-y-1.5 animate-in fade-in slide-in-from-top-1 text-left">
+                    <div className="flex items-center justify-between font-bold text-black">
+                      <span className="flex items-center gap-1.5">
+                        <Info className="h-3.5 w-3.5 text-amber-600" />
+                        <strong className="font-extrabold text-black">What is Sora's Knowledge Base (Buyer Q&A)?</strong>
+                      </span>
+                      <button onClick={() => setShowQaInfo(false)} className="text-black hover:text-amber-950 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-amber-100 cursor-pointer">✕ Close</button>
                     </div>
-                    <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                    <p className="text-[11px] text-black font-medium leading-relaxed">
                       Sora's Knowledge Base contains vetted property facts that Sora uses to answer prospective buyer questions accurately during open house visits and online voice tours.
                     </p>
-                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
-                      <li><strong>Grounding & Accuracy:</strong> Guarantees Sora answers with facts you provide (e.g. HOA dues, roof/HVAC age, school zones, inclusions, recent updates) and avoids AI hallucination.</li>
-                      <li><strong>Individual Save Entry Buttons:</strong> Click <strong>Save Entry</strong> on any fact card below to instantly save edits for that specific Q&A topic.</li>
-                      <li><strong>Add Custom Facts:</strong> Add new listing topics and custom answers using the console at the bottom of the card.</li>
-                      <li><strong>Multilingual Answers:</strong> On Pro plans, Sora auto-converts these answers on the fly to match the client's language during live voice chat.</li>
+                    <ul className="text-[10px] text-black space-y-1 list-disc pl-4 font-medium">
+                      <li><strong className="font-extrabold text-black">Grounding & Accuracy:</strong> Guarantees Sora answers with facts you provide (e.g. HOA dues, roof/HVAC age, school zones, inclusions, recent updates) and avoids AI hallucination.</li>
+                      <li><strong className="font-extrabold text-black">Individual Save Entry Buttons:</strong> Click <strong className="font-extrabold text-black">Save Entry</strong> on any fact card below to instantly save edits for that specific Q&A topic.</li>
+                      <li><strong className="font-extrabold text-black">Add Custom Facts:</strong> Add new listing topics and custom answers using the console at the bottom of the card.</li>
+                      <li><strong className="font-extrabold text-black">Multilingual Answers:</strong> On Pro plans, Sora auto-converts these answers on the fly to match the client's language during live voice chat.</li>
                     </ul>
                   </div>
                 )}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { getListing, getAgent, createLead, Listing, sendEmail } from "@/lib/api";
+import { getListing, getAgent, createLead, detectLeadJurisdiction, Listing, sendEmail } from "@/lib/api";
 import { Type } from "@google/genai";
 import { trackEvent } from "@/lib/analytics";
 import { db } from "@/lib/firebase";
@@ -858,6 +858,7 @@ ${pairedLender && listing?.lenderHandoff !== false ? `- Active Financing Partner
     setSubmitting(true);
 
     const leadId = "L_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+    const geoJurisdiction = detectLeadJurisdiction(listing, formPhone);
     const leadData: any = {
       id: leadId,
       name: formName,
@@ -873,11 +874,11 @@ ${pairedLender && listing?.lenderHandoff !== false ? `- Active Financing Partner
       occupation: "Property Prospect",
       leadOwnershipRule: "host_retained",
       ipAddress: geoipData?.ip || "127.0.0.1",
-      detectedCountry: currentCountry,
-      detectedRegion: geoipData?.region || "California",
-      detectedCity: geoipData?.city || "Los Angeles",
-      geoProvider: "IP-Heuristics (Cloudflare / MaxMind)",
-      jurisdictionRulesApplied: isUS ? "USA RESPA Strict" : "Canada Co-Marketing Flexible"
+      detectedCountry: geoJurisdiction.detectedCountry,
+      detectedRegion: geoJurisdiction.detectedRegion,
+      detectedCity: geoJurisdiction.detectedCity,
+      geoProvider: geoJurisdiction.geoProvider,
+      jurisdictionRulesApplied: geoJurisdiction.jurisdictionRulesApplied
     };
 
     localStorage.setItem("visitor_email", formEmail);

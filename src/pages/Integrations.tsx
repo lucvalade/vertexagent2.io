@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { Plug, Zap, CheckCircle2, ArrowRight, Loader2, Key, Settings, HelpCircle, ShieldAlert } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Plug, Zap, CheckCircle2, ArrowRight, Loader2, Key, Settings, HelpCircle, ShieldAlert, Activity, FileText, Search, ExternalLink, Database, Sparkles, Check, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
@@ -8,11 +8,73 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import CrmSyncLogs from "@/components/CrmSyncLogs";
+
+export interface CrmItem {
+  id: string;
+  name: string;
+  url: string;
+}
+
+export const SUPPORTED_CRMS_47: CrmItem[] = [
+  { id: "followupboss", name: "Follow Up Boss", url: "https://www.followupboss.com" },
+  { id: "hubspot", name: "HubSpot CRM", url: "https://www.hubspot.com" },
+  { id: "kvcore", name: "kvCORE / Inside Real Estate", url: "https://www.insiderealestate.com/kvcore" },
+  { id: "lofty", name: "Lofty (formerly Chime)", url: "https://lofty.com" },
+  { id: "cinc", name: "CINC (Commissions Inc)", url: "https://www.cincpro.com" },
+  { id: "liondesk", name: "LionDesk", url: "https://www.liondesk.com" },
+  { id: "wiseagent", name: "Wise Agent", url: "https://wiseagent.com" },
+  { id: "topproducer", name: "Top Producer", url: "https://www.topproducer.com" },
+  { id: "boomtown", name: "BoomTown", url: "https://boomtownroi.com" },
+  { id: "brivity", name: "Brivity", url: "https://www.brivity.com" },
+  { id: "realgeeks", name: "Real Geeks", url: "https://www.realgeeks.com" },
+  { id: "salesforce", name: "Salesforce / Real Force", url: "https://www.salesforce.com" },
+  { id: "zoho", name: "Zoho CRM", url: "https://www.zoho.com/crm" },
+  { id: "activecampaign", name: "ActiveCampaign", url: "https://www.activecampaign.com" },
+  { id: "ixact", name: "IXACT Contact", url: "https://www.ixactcontact.com" },
+  { id: "marketleader", name: "Market Leader", url: "https://www.marketleader.com" },
+  { id: "propertybase", name: "Propertybase", url: "https://www.propertybase.com" },
+  { id: "rew", name: "Real Estate Webmasters (REW)", url: "https://www.realestatewebmasters.com" },
+  { id: "reonomy", name: "Reonomy", url: "https://www.reonomy.com" },
+  { id: "sierra", name: "Sierra Interactive", url: "https://www.sierrainteractive.com" },
+  { id: "contactually", name: "Contactually", url: "https://www.contactually.com" },
+  { id: "zapier", name: "Zapier Webhooks", url: "https://zapier.com" },
+  { id: "make", name: "Make.com (Integromat)", url: "https://www.make.com" },
+  { id: "pipedrive", name: "Pipedrive", url: "https://www.pipedrive.com" },
+  { id: "totalexpert", name: "Total Expert", url: "https://totalexpert.com" },
+  { id: "floify", name: "Floify", url: "https://floify.com" },
+  { id: "encompass", name: "Encompass (ICE Mortgage Tech)", url: "https://icemortgagetechnology.com" },
+  { id: "realvolve", name: "Realvolve", url: "https://www.realvolve.com" },
+  { id: "realtyjuggler", name: "RealtyJuggler", url: "https://www.realtyjuggler.com" },
+  { id: "leadpro", name: "LeadPro", url: "https://www.leadpro.com" },
+  { id: "kunversion", name: "Kunversion", url: "https://www.kunversion.com" },
+  { id: "rechat", name: "Rechat", url: "https://rechat.com" },
+  { id: "firepoint", name: "Firepoint", url: "https://www.firepoint.net" },
+  { id: "moxiworks", name: "MoxiWorks", url: "https://moxiworks.com" },
+  { id: "cloze", name: "Cloze CRM", url: "https://www.cloze.com" },
+  { id: "agentlead", name: "AgentLead", url: "https://www.agentlead.com" },
+  { id: "propertyware", name: "Propertyware", url: "https://www.propertyware.com" },
+  { id: "placester", name: "Placester", url: "https://placester.com" },
+  { id: "ylopo", name: "Ylopo", url: "https://www.ylopo.com" },
+  { id: "insiderealestate", name: "Inside Real Estate", url: "https://www.insiderealestate.com" },
+  { id: "freshsales", name: "Freshsales / Freshworks", url: "https://www.freshworks.com/crm" },
+  { id: "agile", name: "Agile CRM", url: "https://www.agilecrm.com" },
+  { id: "keap", name: "Keap / Infusionsoft", url: "https://keap.com" },
+  { id: "copper", name: "Copper CRM", url: "https://www.copper.com" },
+  { id: "sugarcrm", name: "SugarCRM", url: "https://www.sugarcrm.com" },
+  { id: "insightly", name: "Insightly", url: "https://www.insightly.com" },
+  { id: "custom_webhook", name: "Custom Webhook / API Endpoint", url: "https://aiopenhouseconnect.com/api/v1/webhook" }
+];
 
 export default function Integrations() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "logs" ? "logs" : "integrations";
+
   const [integrations, setIntegrations] = useState<any>({});
   const [loading, setLoading] = useState(true);
+  const [crmSearchQuery, setCrmSearchQuery] = useState("");
+  const [showAllDirectory, setShowAllDirectory] = useState(false);
   
   // Follow Up Boss Specific config states
   const [apiKey, setApiKey] = useState("");
@@ -47,18 +109,26 @@ export default function Integrations() {
     return () => unsub();
   }, [user?.id]);
 
-  const toggleIntegration = async (key: string) => {
+  const toggleIntegration = async (key: string, name?: string) => {
     if (!user?.id) return;
     const newValue = !integrations[key];
+    const crmDisplayName = name || key.toUpperCase();
     try {
       await updateDoc(doc(db, "users", user.id), {
-        [`integrations.${key}`]: newValue
+        [`integrations.${key}`]: newValue,
+        "integrations.lastUpdated": Date.now(),
+        ...(newValue ? { "integrations.activeCrm": crmDisplayName } : {})
       });
-      toast.success(newValue ? `${key.toUpperCase()} integration turned on!` : `${key.toUpperCase()} integration turned off.`);
+      toast.success(newValue ? `✨ ${crmDisplayName} CRM linked successfully!` : `${crmDisplayName} CRM unlinked.`);
     } catch (e) {
       toast.error("Failed to update integration state.");
     }
   };
+
+  const filteredCrms = SUPPORTED_CRMS_47.filter(crm =>
+    crm.name.toLowerCase().includes(crmSearchQuery.toLowerCase()) ||
+    crm.url.toLowerCase().includes(crmSearchQuery.toLowerCase())
+  );
 
   const saveFubConfig = async () => {
     if (!user?.id) return;
@@ -87,15 +157,178 @@ export default function Integrations() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <div className="flex justify-between items-center">
+      {/* Header and Sub-Page Navigation Tabs */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-800">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">CRM & Integrations</h1>
-          <p className="text-slate-400 mt-1">Connect your existing tools to automate lead flow.</p>
+          <p className="text-slate-400 mt-1 text-sm">
+            Configure direct CRM connections, custom field mappings, and audit live lead sync events.
+          </p>
+        </div>
+
+        {/* Sub-Page Navigation Tabs */}
+        <div className="flex items-center bg-slate-950 p-1 border border-slate-800 rounded-xl shrink-0">
+          <button
+            onClick={() => setSearchParams({ tab: "integrations" })}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+              activeTab === "integrations"
+                ? "bg-blue-600 text-white shadow-md"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+            }`}
+          >
+            <Plug className="h-4 w-4" />
+            Connected Integrations
+          </button>
+          <button
+            onClick={() => setSearchParams({ tab: "logs" })}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+              activeTab === "logs"
+                ? "bg-blue-600 text-white shadow-md"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+            }`}
+          >
+            <Activity className="h-4 w-4 text-emerald-400" />
+            CRM Sync Logs
+          </button>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* HubSpot Integration */}
+      {/* 47 CRMs Search Bar placed directly below header text */}
+      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="relative flex-grow">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-400" />
+            <input
+              type="text"
+              value={crmSearchQuery}
+              onChange={(e) => setCrmSearchQuery(e.target.value)}
+              placeholder="Search 47 Supported CRMs (e.g. Follow Up Boss, kvCORE, Lofty, CINC, Top Producer)..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium shadow-inner"
+            />
+            {crmSearchQuery && (
+              <button
+                onClick={() => setCrmSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs font-bold bg-slate-800 hover:bg-slate-700 h-5 w-5 rounded-full flex items-center justify-center cursor-pointer transition-colors"
+                title="Clear search"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center justify-between sm:justify-start gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-300 bg-slate-950 px-3.5 py-2.5 rounded-xl border border-slate-800">
+              <Database className="h-3.5 w-3.5 text-blue-400" />
+              <span>{filteredCrms.length} / 47 CRMs</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAllDirectory(!showAllDirectory)}
+              className={`text-xs font-bold px-3 py-2.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap ${
+                showAllDirectory || crmSearchQuery
+                  ? "bg-blue-600 text-white border-blue-500 shadow-xs"
+                  : "bg-slate-950 text-slate-400 hover:text-white border-slate-800 hover:border-slate-700"
+              }`}
+            >
+              {showAllDirectory ? "Hide Directory" : crmSearchQuery ? "Filtered Results" : "Browse All 47 CRMs"}
+            </button>
+          </div>
+        </div>
+
+        {/* Search Results / Directory Expansion */}
+        {(crmSearchQuery.trim() !== "" || showAllDirectory) && (
+          <div className="pt-3 border-t border-slate-800/80 space-y-3">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+              <span className="uppercase tracking-wider flex items-center gap-1.5 text-blue-400">
+                <Sparkles className="h-3.5 w-3.5" />
+                {crmSearchQuery ? `Search Results for "${crmSearchQuery}"` : "Complete 47 CRM Directory"}
+              </span>
+              <span>Column A: Name • Column B: Official URL</span>
+            </div>
+
+            {filteredCrms.length === 0 ? (
+              <div className="p-6 text-center text-slate-400 text-xs bg-slate-950 rounded-xl border border-slate-800">
+                No CRM matching <span className="text-white font-bold">"{crmSearchQuery}"</span> was found.
+                <p className="mt-1 text-slate-500 text-[11px]">
+                  You can still connect any unlisted platform using our <strong className="text-slate-300">Custom Webhook / API Endpoint</strong>.
+                </p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1">
+                {filteredCrms.map((crm) => {
+                  const isLinked = Boolean(integrations[crm.id] || integrations[crm.name.toLowerCase().replace(/[^a-z0-9]/g, '')]);
+                  return (
+                    <div
+                      key={crm.id}
+                      className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                        isLinked
+                          ? "bg-blue-950/40 border-blue-500/60 ring-1 ring-blue-500/30 text-white shadow-md"
+                          : "bg-slate-950 border-slate-800/80 hover:border-slate-700 text-slate-200 hover:bg-slate-900/60"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1 min-w-0">
+                          <span className="font-bold text-xs text-white block truncate" title={crm.name}>
+                            {crm.name}
+                          </span>
+                          <a
+                            href={crm.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium hover:underline truncate"
+                            title={crm.url}
+                          >
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            {crm.url.replace(/^https?:\/\/(www\.)?/, '')}
+                          </a>
+                        </div>
+                        {isLinked ? (
+                          <span className="bg-emerald-500/20 text-emerald-300 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-500/40 shrink-0">
+                            Linked
+                          </span>
+                        ) : (
+                          <span className="bg-slate-800/80 text-slate-400 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0">
+                            Available
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleIntegration(crm.id, crm.name)}
+                          className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                            isLinked
+                              ? "bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50"
+                              : "bg-blue-600 hover:bg-blue-500 text-white shadow-xs"
+                          }`}
+                        >
+                          {isLinked ? (
+                            <>
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Disconnect CRM
+                            </>
+                          ) : (
+                            <>
+                              <Plug className="h-3.5 w-3.5" /> Link {crm.name.split(' ')[0]}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Render Active Sub-Page */}
+      {activeTab === "logs" ? (
+        <CrmSyncLogs />
+      ) : (
+        <div className="space-y-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* HubSpot Integration */}
         <div className={`bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm flex flex-col transition-all duration-300 ${integrations.hubspot ? 'ring-2 ring-blue-500 border-blue-200 shadow-blue-100 shadow-xl' : ''}`}>
           <div className="p-6 flex-grow">
             <div className="flex justify-between items-start mb-4">
@@ -294,6 +527,8 @@ export default function Integrations() {
               Verify & Save Configuration
             </Button>
           </div>
+        </div>
+      )}
         </div>
       )}
     </div>

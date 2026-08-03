@@ -1164,6 +1164,12 @@ export default function Tour() {
 
   const getManifestKeyForQuestion = (question: string): string => {
     const q = question.toLowerCase();
+    if (q.includes("front") || q.includes("exterior") || q.includes("facade") || q.includes("façade") || q.includes("house")) {
+      if ((q.includes("garage") || q.includes("driveway") || q.includes("parking")) && !q.includes("front") && !q.includes("house") && !q.includes("exterior")) {
+        return "driveway";
+      }
+      return "exterior_front";
+    }
     if (q.includes("bedroom") || q.includes("bathroom") || q.includes("chambre") || q.includes("bain")) {
       return "primary_bed";
     }
@@ -1179,7 +1185,7 @@ export default function Tour() {
     if (q.includes("basement") || q.includes("sous-sol")) {
       return "basement";
     }
-    if (q.includes("parking") || q.includes("garage") || q.includes("stationnement")) {
+    if (q.includes("parking") || q.includes("garage") || q.includes("stationnement") || q.includes("driveway")) {
       return "driveway";
     }
     if (q.includes("school") || q.includes("transit") || q.includes("highway") || q.includes("transport") || q.includes("autoroute") || q.includes("écoles") || q.includes("épiceries") || q.includes("parks") || q.includes("amenities") || q.includes("commodités")) {
@@ -1591,6 +1597,7 @@ export default function Tour() {
         // 4. Room keyword mapping
         if (idx === undefined) {
           const roomKeywords: Record<string, string[]> = {
+            exterior_front: ["front", "exterior", "facade", "porch", "house", "curb", "front_of_house"],
             kitchen: ["kitchen", "cuisine", "counter", "pantry", "appliance"],
             primary_bed: ["bed", "chambre", "master", "primary", "bedroom"],
             bathroom: ["bath", "bain", "ensuite", "washroom", "toilet", "shower"],
@@ -1619,10 +1626,9 @@ export default function Tour() {
         }
       }
 
-      // 5. Ultimate Fallback: if idx is still undefined OR idx equals the current photo index,
-      // advance to the next image so the photo ALWAYS visually changes!
-      if (idx === undefined || idx === activeImageIndex) {
-        idx = (activeImageIndex + 1) % total;
+      // 5. Fallback: if idx is still undefined, keep current image index
+      if (idx === undefined) {
+        idx = activeImageIndex;
       }
 
       setActiveImageIndex(idx);
@@ -1872,8 +1878,8 @@ answer content, said naturally.
 
 ASK ME ABOUT — MATCHING RULES (apply first, before Knowledge Base):
 1. If the buyer taps an Ask Me About item or speaks its question:
-   - For the FIRST item clicked or asked in the session, always thank the visitor warmly (e.g. "Thank you for asking!"), then answer using a very short response (under 25 words).
-   - In the same session, if the client clicks or asks another question, answer directly using a very short response (under 20 words).
+   - For the FIRST item clicked or asked in the session, you MUST start your response by saying "Thanks for asking, " (or in French "Merci de demander, "), then give the concise answer (under 25 words).
+   - If the same user clicks or asks a second or subsequent item in Ask Me About, give them the answer directly without saying "Thanks for asking" or introducing yourself (under 20 words).
 2. If the buyer asks ANY free-form variation — including a single
    bare topic word with no full sentence, e.g. just "kitchen?" or
    "what about the kitchen" — match it to the closest ## Category
@@ -2754,20 +2760,20 @@ Global rules
                     const isFirstClick = topicClickCount === 0;
                     setTopicClickCount(prev => prev + 1);
 
-                    const isFrench = language.toLowerCase() === "fr" || language.toLowerCase() === "french";
+                    const isFrench = language.toLowerCase() === "fr" || language.toLowerCase() === "french" || language.toLowerCase() === "français";
 
                     let formattedMessage = "";
                     if (isFrench) {
                       if (isFirstClick) {
-                        formattedMessage = `Veuillez commencer votre réponse en vous présentant : "Bonjour, je suis Sora, votre assistante virtuelle IA." puis répondre brièvement à la question suivante : "${question}".`;
+                        formattedMessage = `C'est le premier élément 'Ask Me About' sélectionné. Vous DEVEZ commencer votre réponse par "Merci de demander, " puis donner la réponse à "${question}".`;
                       } else {
-                        formattedMessage = `Veuillez répondre très brièvement à "${question}".`;
+                        formattedMessage = `C'est un élément subséquent 'Ask Me About'. Donnez directement la réponse à "${question}" sans dire "Merci de demander" ni vous présenter.`;
                       }
                     } else {
                       if (isFirstClick) {
-                        formattedMessage = `Please start your response by introducing yourself: "Hi, I'm Sora, your virtual AI Assistant." and then answer "${question}" using a concise response.`;
+                        formattedMessage = `This is the first Ask Me About item clicked. You MUST start your response by saying "Thanks for asking, " then provide the answer to "${question}".`;
                       } else {
-                        formattedMessage = `Please answer "${question}" using a concise response.`;
+                        formattedMessage = `This is a subsequent Ask Me About item clicked. Provide the direct answer to "${question}" immediately, without saying "Thanks for asking" or introducing yourself.`;
                       }
                     }
 

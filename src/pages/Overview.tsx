@@ -782,14 +782,21 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                   <CardTitle className="text-base font-bold text-stone-900">Past Open House Events & Results</CardTitle>
                   <CardDescription className="text-xs text-stone-500">Track registration analytics, QR check-ins, and guest tour performance metrics.</CardDescription>
                 </div>
-                <div className="p-1.5 bg-stone-100 text-stone-600 rounded-lg border border-stone-200 text-[10px] font-black font-mono">
-                  HISTORICAL RECORDS
+                <div className="flex items-center gap-2">
+                  {pastEvents.length > 2 && (
+                    <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                      Scroll for all {pastEvents.length} events
+                    </span>
+                  )}
+                  <div className="p-1.5 bg-stone-100 text-stone-600 rounded-lg border border-stone-200 text-[10px] font-black font-mono">
+                    HISTORICAL RECORDS
+                  </div>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="p-5">
               {pastEvents.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1.5 scrollbar-thin">
                   {pastEvents.map((evt) => {
                     const eventLeads = recentLeads.filter(lead => 
                       lead.openHouseId === evt.id || 
@@ -855,7 +862,7 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                             <Activity className="h-3.5 w-3.5" /> View Event Analytics Report
                           </span>
                           <span className="group-hover:underline flex items-center gap-1">
-                            View in Past Exhibitions & Results &rarr;
+                            View in Past Exhibitions &amp; Results &rarr;
                           </span>
                         </div>
                       </div>
@@ -866,169 +873,6 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                 <div className="text-center py-6 border border-dashed border-stone-200 rounded-xl">
                   <p className="text-xs text-stone-500 italic">No past open house events found in history log database.</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Active Listings section (listings with details) */}
-          <Card className="border-stone-200 shadow-sm rounded-2xl bg-white overflow-hidden">
-            <CardHeader className="pb-3 border-b border-light-divider">
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="text-base font-bold text-stone-900">Active Listings</CardTitle>
-                  <CardDescription className="text-xs">Manage properties and inspect sora tour status.</CardDescription>
-                </div>
-                <Button 
-                  onClick={() => navigate("/app/listings")} 
-                  variant="ghost" 
-                  className="text-xs text-amber-700 hover:text-amber-800 hover:bg-stone-50 h-8 gap-0.5 font-bold"
-                >
-                  View All <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-5">
-              {activeListings.length > 0 ? (
-                <div className="grid sm:grid-cols-3 gap-4">
-                  {activeListings.map((listing) => (
-                    <div 
-                      key={listing.id} 
-                      onClick={() => navigate(`/app/listings/${listing.id}?from=overview`, { state: { from: "overview" } })}
-                      className="border border-stone-200/90 rounded-xl bg-white overflow-hidden cursor-pointer hover:shadow-md transition-all flex flex-col justify-between hover-blue-pulse"
-                    >
-                      {(() => {
-                        const imageVal = listing.images && listing.images.length > 0 
-                          ? (typeof listing.images[0] === 'string' ? listing.images[0] : (listing.images[0] as any).url)
-                          : null;
-                        return imageVal ? (
-                          <img 
-                            referrerPolicy="no-referrer"
-                            src={imageVal} 
-                            alt={listing.address} 
-                            className="h-28 w-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-28 bg-stone-100 flex items-center justify-center text-stone-400">
-                            <Home className="h-8 w-8 text-stone-300" />
-                          </div>
-                        );
-                      })()}
-                      <div className="p-3 text-left space-y-1">
-                        <p className="text-[10px] font-black tracking-wider uppercase text-amber-700">MLS Active</p>
-                        <h4 className="text-[11px] font-bold text-stone-900 truncate">{listing.address}</h4>
-                        <p className="text-[9px] text-stone-500 font-medium">{listing.city}, {listing.province}</p>
-                      </div>
-                      <div className="p-2 bg-stone-50 border-t flex justify-between items-center text-[10px] font-bold text-stone-600">
-                        <span>{listing.beds} Beds · {listing.baths} Baths</span>
-                        <ArrowUpRight className="h-3.5 w-3.5 text-stone-400" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-stone-400 italic">No listings synced yet. Use URL Import above to begin in seconds.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* New Leads log */}
-          <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white overflow-hidden">
-            <CardHeader className="pb-3 border-b border-white/10 bg-[#50a2ff]">
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="text-base font-bold text-white">Recently Captured Visitors</CardTitle>
-                  <CardDescription className="text-xs text-blue-50">Checked-in open house attendees and QR scan leads.</CardDescription>
-                </div>
-                <Button 
-                  onClick={() => navigate("/app/leads")} 
-                  className="bg-white hover:bg-stone-100 text-black font-extrabold text-xs h-8 gap-0.5 shadow-sm rounded-lg border-0"
-                >
-                  Manage Leads <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-5">
-              {recentLeads.length > 0 ? (
-                <>
-                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                    {recentLeads.slice((recentLeadsPage - 1) * recentLeadsPerPage, recentLeadsPage * recentLeadsPerPage).map((ld) => (
-                      <div key={ld.id} className="p-3 border rounded-xl border-white/20 bg-white/15 flex items-center justify-between text-xs font-sans">
-                        <div className="space-y-0.5 text-left">
-                          <p className="font-extrabold text-white flex items-center gap-1.5 flex-wrap">
-                            {ld.name}
-                            {ld.mortgageInterest && (
-                              <span className="text-[8px] font-black uppercase bg-white text-black px-1 py-0.5 rounded border border-white/40">
-                                Lender Consent
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-[10px] text-blue-50">{ld.email || 'No email provided'} · {ld.phone || 'No phone provided'}</p>
-                        </div>
-                        <div className="text-[10px] text-right font-medium text-white space-y-1">
-                          <span className="block italic text-[9px] text-black font-bold bg-white border border-white px-1.5 py-0.5 rounded uppercase">
-                            Source: {ld.source || ld.isOffline ? "Kiosk (Offline)" : "Sora Walkthrough"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {recentLeads.length > recentLeadsPerPage && (
-                    <div className="mt-4 pt-4 border-t border-white/20 flex flex-col items-center gap-2.5 font-sans">
-                      <div className="text-[10px] font-bold text-white border border-white/20 px-2.5 py-0.5 rounded-full bg-white/10">
-                        {Math.min(recentLeadsPage * recentLeadsPerPage, recentLeads.length)} OF {recentLeads.length} Captured
-                      </div>
-                      
-                      {/* Numbered Pagination Control Panel */}
-                      <div className="flex items-center justify-center gap-1.5 w-full mt-1">
-                        <Button
-                          size="sm"
-                          disabled={recentLeadsPage === 1}
-                          className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
-                          onClick={() => setRecentLeadsPage(prev => Math.max(prev - 1, 1))}
-                        >
-                          <ChevronLeft className="h-3 w-3" /> Prev
-                        </Button>
-
-                        {/* Page Numbers */}
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: Math.ceil(recentLeads.length / recentLeadsPerPage) }).map((_, index) => {
-                            const pageNumber = index + 1;
-                            const isActive = pageNumber === recentLeadsPage;
-                            return (
-                              <button
-                                key={pageNumber}
-                                onClick={() => setRecentLeadsPage(pageNumber)}
-                                className={`h-6 min-w-6 px-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center border ${
-                                  isActive
-                                    ? "bg-white border-white text-black font-extrabold scale-110 shadow-sm"
-                                    : "bg-white/20 border-white/20 text-white hover:bg-white/30"
-                                }`}
-                              >
-                                {pageNumber}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <Button
-                          size="sm"
-                          disabled={recentLeadsPage === Math.ceil(recentLeads.length / recentLeadsPerPage)}
-                          className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
-                          onClick={() => setRecentLeadsPage(prev => Math.min(prev + 1, Math.ceil(recentLeads.length / recentLeadsPerPage)))}
-                        >
-                          Next <ChevronRight className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      
-                      <p className="text-[9.5px] text-white/95 font-bold uppercase tracking-widest">
-                        Page {recentLeadsPage} of {Math.ceil(recentLeads.length / recentLeadsPerPage)}
-                      </p>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-blue-50 italic py-2">No guest registrations captured yet. Complete onboarding steps to capture leads.</p>
               )}
             </CardContent>
           </Card>
@@ -1148,12 +992,12 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                   className="w-full p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer pr-7"
                 >
                   <Calendar className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
-                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Deploy Show Kiosk</p>
+                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Launch Open House</p>
                 </button>
                 <div className="absolute top-2 right-2 z-10">
                   <HelpTooltip 
-                    title="Deploy Show Kiosk"
-                    content="Launch full-screen kiosk sign-in mode on tablet or mobile devices at open house events to collect attendee leads with PIN security and offline buffering."
+                    title="Launch Open House"
+                    content="Set up tablet kiosk lock mode, generate guest QR code check-ins, and configure paired lender routing rules for upcoming open house events."
                     iconClassName="h-3.5 w-3.5 text-stone-400 group-hover/qa:text-stone-600 hover:text-blue-600 cursor-pointer transition-colors"
                     align="right"
                   />
@@ -1165,13 +1009,13 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
                   onClick={() => navigate("/app/flyers")} 
                   className="w-full p-3 bg-[#faf9f6]/90 hover:bg-blue-600 hover:border-blue-600 border border-stone-200/80 rounded-xl text-left font-bold space-y-1 transition-all group duration-200 cursor-pointer pr-7"
                 >
-                  <FileText className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
-                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Create Luxury Promo</p>
+                  <QrCode className="h-4 w-4 text-amber-600 group-hover:text-white group-hover:scale-105 transition-all" />
+                  <p className="text-[10px] text-stone-800 group-hover:text-white leading-tight">Create QR Flyer</p>
                 </button>
                 <div className="absolute top-2 right-2 z-10">
                   <HelpTooltip 
-                    title="Create Luxury Promo"
-                    content="Design and export branded print or digital promotional flyers equipped with dynamic QR codes linking directly to your Sora AI Tour."
+                    title="Create QR Flyer"
+                    content="Generate high-resolution marketing flyers featuring embedded QR codes linked to Sora voice tours and digital open house check-in pages."
                     iconClassName="h-3.5 w-3.5 text-stone-400 group-hover/qa:text-stone-600 hover:text-blue-600 cursor-pointer transition-colors"
                     align="right"
                   />
@@ -1181,6 +1025,173 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           </Card>
 
         </div>
+      </div>
+
+      {/* Full Width Operational Cards Section: Active Listings & Recently Captured Visitors */}
+      <div className="space-y-6 mt-8 text-left w-full">
+
+        {/* Active Listings section (Expanded to Full Width) */}
+        <Card className="border-stone-200 shadow-sm rounded-2xl bg-white overflow-hidden w-full">
+          <CardHeader className="pb-3 border-b border-light-divider">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="text-base font-bold text-stone-900">Active Listings</CardTitle>
+                <CardDescription className="text-xs">Manage properties and inspect sora tour status.</CardDescription>
+              </div>
+              <Button 
+                onClick={() => navigate("/app/listings")} 
+                variant="ghost" 
+                className="text-xs text-amber-700 hover:text-amber-800 hover:bg-stone-50 h-8 gap-0.5 font-bold"
+              >
+                View All <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5">
+            {activeListings.length > 0 ? (
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {activeListings.map((listing) => (
+                  <div 
+                    key={listing.id} 
+                    onClick={() => navigate(`/app/listings/${listing.id}?from=overview`, { state: { from: "overview" } })}
+                    className="border border-stone-200/90 rounded-xl bg-white overflow-hidden cursor-pointer hover:shadow-md transition-all flex flex-col justify-between hover-blue-pulse"
+                  >
+                    {(() => {
+                      const imageVal = listing.images && listing.images.length > 0 
+                        ? (typeof listing.images[0] === 'string' ? listing.images[0] : (listing.images[0] as any).url)
+                        : null;
+                      return imageVal ? (
+                        <img 
+                          referrerPolicy="no-referrer"
+                          src={imageVal} 
+                          alt={listing.address} 
+                          className="h-28 w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-28 bg-stone-100 flex items-center justify-center text-stone-400">
+                          <Home className="h-8 w-8 text-stone-300" />
+                        </div>
+                      );
+                    })()}
+                    <div className="p-3 text-left space-y-1">
+                      <p className="text-[10px] font-black tracking-wider uppercase text-amber-700">MLS Active</p>
+                      <h4 className="text-[11px] font-bold text-stone-900 truncate">{listing.address}</h4>
+                      <p className="text-[9px] text-stone-500 font-medium">{listing.city}, {listing.province}</p>
+                    </div>
+                    <div className="p-2 bg-stone-50 border-t flex justify-between items-center text-[10px] font-bold text-stone-600">
+                      <span>{listing.beds} Beds · {listing.baths} Baths</span>
+                      <ArrowUpRight className="h-3.5 w-3.5 text-stone-400" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-400 italic">No listings synced yet. Use URL Import above to begin in seconds.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recently Captured Visitors log (Expanded to Full Width) */}
+        <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white overflow-hidden w-full">
+          <CardHeader className="pb-3 border-b border-white/10 bg-[#50a2ff]">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="text-base font-bold text-white">Recently Captured Visitors</CardTitle>
+                <CardDescription className="text-xs text-blue-50">Checked-in open house attendees and QR scan leads.</CardDescription>
+              </div>
+              <Button 
+                onClick={() => navigate("/app/leads")} 
+                className="bg-white hover:bg-stone-100 text-black font-extrabold text-xs h-8 gap-0.5 shadow-sm rounded-lg border-0 cursor-pointer"
+              >
+                Manage Leads <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5">
+            {recentLeads.length > 0 ? (
+              <>
+                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                  {recentLeads.slice((recentLeadsPage - 1) * recentLeadsPerPage, recentLeadsPage * recentLeadsPerPage).map((ld) => (
+                    <div key={ld.id} className="p-3 border rounded-xl border-white/20 bg-white/15 flex items-center justify-between text-xs font-sans">
+                      <div className="space-y-0.5 text-left">
+                        <p className="font-extrabold text-white flex items-center gap-1.5 flex-wrap">
+                          {ld.name}
+                          {ld.mortgageInterest && (
+                            <span className="text-[8px] font-black uppercase bg-white text-black px-1 py-0.5 rounded border border-white/40">
+                              Lender Consent
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-blue-50">{ld.email || 'No email provided'} · {ld.phone || 'No phone provided'}</p>
+                      </div>
+                      <div className="text-[10px] text-right font-medium text-white space-y-1">
+                        <span className="block italic text-[9px] text-black font-bold bg-white border border-white px-1.5 py-0.5 rounded uppercase">
+                          Source: {ld.source || ld.isOffline ? "Kiosk (Offline)" : "Sora Walkthrough"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {recentLeads.length > recentLeadsPerPage && (
+                  <div className="mt-4 pt-4 border-t border-white/20 flex flex-col items-center gap-2.5 font-sans">
+                    <div className="text-[10px] font-bold text-white border border-white/20 px-2.5 py-0.5 rounded-full bg-white/10">
+                      {Math.min(recentLeadsPage * recentLeadsPerPage, recentLeads.length)} OF {recentLeads.length} Captured
+                    </div>
+                    
+                    {/* Numbered Pagination Control Panel */}
+                    <div className="flex items-center justify-center gap-1.5 w-full mt-1">
+                      <Button
+                        size="sm"
+                        disabled={recentLeadsPage === 1}
+                        className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
+                        onClick={() => setRecentLeadsPage(prev => Math.max(prev - 1, 1))}
+                      >
+                        <ChevronLeft className="h-3 w-3" /> Prev
+                      </Button>
+
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.ceil(recentLeads.length / recentLeadsPerPage) }).map((_, index) => {
+                          const pageNumber = index + 1;
+                          const isActive = pageNumber === recentLeadsPage;
+                          return (
+                            <button
+                              key={pageNumber}
+                              onClick={() => setRecentLeadsPage(pageNumber)}
+                              className={`h-6 min-w-6 px-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center border ${
+                                isActive
+                                  ? "bg-white border-white text-black font-extrabold scale-110 shadow-sm"
+                                  : "bg-white/20 border-white/20 text-white hover:bg-white/30"
+                              }`}
+                            >
+                              {pageNumber}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <Button
+                        size="sm"
+                        disabled={recentLeadsPage === Math.ceil(recentLeads.length / recentLeadsPerPage)}
+                        className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
+                        onClick={() => setRecentLeadsPage(prev => Math.min(prev + 1, Math.ceil(recentLeads.length / recentLeadsPerPage)))}
+                      >
+                        Next <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    
+                    <p className="text-[9.5px] text-white/95 font-bold uppercase tracking-widest">
+                      Page {recentLeadsPage} of {Math.ceil(recentLeads.length / recentLeadsPerPage)}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-blue-50 italic py-2">No guest registrations captured yet. Complete onboarding steps to capture leads.</p>
+            )}
+          </CardContent>
+        </Card>
 
       </div>
 

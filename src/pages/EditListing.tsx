@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { createListing, getListing, updateListing, Listing, deleteListingOp, ListingImage, getOpenHouseSessions, createOpenHouseSession, deleteOpenHouseSession, OpenHouseSession, parseDateTimeToUTC, getTourConfig, saveTourConfig, DEFAULT_WELCOME_TEXTS } from "@/lib/api";
-import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv, ChevronDown, Check } from "lucide-react";
+import { Loader2, Plus, X, Trash2, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, MoreHorizontal, Pencil, Save, Image as ImageIcon, Sparkles, CheckCircle2, Mic2, Download, Play, Square, Upload, Volume2, Search, ExternalLink, Share2, Share, HelpCircle, Copy, Calendar, Clock, Tv, ChevronDown, Check, GripVertical, RotateCcw, RefreshCw } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -324,6 +324,8 @@ export default function EditListing() {
   const [editFormAutoMatched, setEditFormAutoMatched] = useState(false);
   const [isAskMeAboutInfoOpen, setIsAskMeAboutInfoOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string; mediaKey: string } | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const prevStepRef = useRef(currentStep);
   useEffect(() => {
@@ -1331,17 +1333,8 @@ export default function EditListing() {
           const sorted = [...loadedAskMeAbout].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
           setAskMeAbout(sorted);
         } else {
-          const seeded = PRESET_ASK_ME_ABOUT_TEMPLATES.map((p, idx) => ({
-            id: `preset_${idx}_${Date.now()}`,
-            category: p.category,
-            sampleQuestion: p.sampleQuestion,
-            answer: "",
-            mediaKey: "",
-            isPreset: true,
-            active: false,
-            sortOrder: idx
-          }));
-          setAskMeAbout(seeded);
+          const synced = syncAskMeAboutWithMediaAndPhotos({ forceResetAll: true, targetAskMeAbout: [] });
+          setAskMeAbout(synced);
         }
         
         const loadedDate = data.openHouseDate || "";
@@ -2185,12 +2178,118 @@ export default function EditListing() {
     // Reassign sortOrder sequentially
     const updated = sorted.map((item, idx) => ({ ...item, sortOrder: idx }));
     await handleSaveAskMeAboutChange(updated);
+    toast.success("Question order updated and autosaved!", { duration: 1500 });
+  };
+
+  const handleDragReorder = async (fromId: string, toId: string) => {
+    if (!fromId || !toId || fromId === toId) return;
+    const sorted = [...askMeAbout].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const fromIndex = sorted.findIndex(item => item.id === fromId);
+    const toIndex = sorted.findIndex(item => item.id === toId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const [movedItem] = sorted.splice(fromIndex, 1);
+    sorted.splice(toIndex, 0, movedItem);
+
+    const updated = sorted.map((item, idx) => ({ ...item, sortOrder: idx }));
+    await handleSaveAskMeAboutChange(updated);
+    toast.success("Question order updated and autosaved!", { duration: 1500 });
   };
 
   const handleSortAlphabetically = async () => {
     const sorted = sortAskMeAboutAlphabetically(askMeAbout);
     await handleSaveAskMeAboutChange(sorted);
     toast.success("Custom Q&A questions sorted alphabetically!");
+  };
+
+  const syncAskMeAboutWithMediaAndPhotos = (opts?: { forceResetAll?: boolean; targetAskMeAbout?: any[] }) => {
+    const currentList = opts?.targetAskMeAbout !== undefined ? opts.targetAskMeAbout : askMeAbout;
+    const availableOptions = getAvailableMediaOptions();
+
+    let baseList: any[] = [];
+    if (opts?.forceResetAll || !currentList || currentList.length === 0) {
+      baseList = PRESET_ASK_ME_ABOUT_TEMPLATES.map((p, idx) => ({
+        id: `preset_${idx}_${Date.now()}`,
+        category: p.category,
+        sampleQuestion: p.sampleQuestion,
+        answer: generateSoraSpokenAnswer(p.category, p.sampleQuestion),
+        mediaKey: "",
+        isPreset: true,
+        active: true,
+        sortOrder: idx
+      }));
+    } else {
+      baseList = currentList.map(item => ({ ...item }));
+    }
+
+    const matchedPhotoKeys = new Set<string>();
+
+    const updatedList = baseList.map((item, idx) => {
+      const matchedKey = findBestMatchingMediaKey(item.category, availableOptions);
+      let newMediaKey = item.mediaKey;
+      let newAnswer = item.answer || "";
+      let newActive = item.active;
+
+      if (matchedKey) {
+        newMediaKey = matchedKey;
+        matchedPhotoKeys.add(matchedKey);
+        newActive = true;
+
+        if (opts?.forceResetAll || !newAnswer || !newAnswer.trim()) {
+          newAnswer = generateSoraSpokenAnswer(item.category, item.sampleQuestion);
+        }
+      } else {
+        if (opts?.forceResetAll || !newAnswer || !newAnswer.trim()) {
+          newAnswer = generateSoraSpokenAnswer(item.category, item.sampleQuestion);
+        }
+      }
+
+      return {
+        ...item,
+        mediaKey: newMediaKey,
+        answer: newAnswer,
+        active: newActive,
+        sortOrder: item.sortOrder ?? idx
+      };
+    });
+
+    availableOptions.forEach(opt => {
+      if (!matchedPhotoKeys.has(opt.key)) {
+        const existing = updatedList.find(e => e.mediaKey === opt.key);
+        if (!existing) {
+          const photoName = opt.label;
+          const soraAns = generateSoraSpokenAnswer(photoName, photoName);
+          const newQ = {
+            id: `custom_photo_${opt.key}_${Date.now()}`,
+            category: photoName,
+            sampleQuestion: `Can you tell me about the ${photoName.toLowerCase()}?`,
+            answer: soraAns,
+            mediaKey: opt.key,
+            isPreset: false,
+            active: true,
+            sortOrder: updatedList.length
+          };
+          updatedList.push(newQ);
+          matchedPhotoKeys.add(opt.key);
+        }
+      }
+    });
+
+    return updatedList.map((item, idx) => ({ ...item, sortOrder: idx }));
+  };
+
+  const handleResetAndSyncWithPhotos = async () => {
+    const tid = toast.loading("Resetting and matching Ask Me About Q&As with Property Photos...");
+    try {
+      const synced = syncAskMeAboutWithMediaAndPhotos({ forceResetAll: true });
+      setAskMeAbout(synced);
+      await handleSaveAskMeAboutChange(synced);
+      toast.dismiss(tid);
+      toast.success("Ask Me About Q&A successfully reset and matched with Property Photos!");
+    } catch (err) {
+      toast.dismiss(tid);
+      toast.error("Failed to reset and sync Ask Me About Q&As.");
+    }
   };
 
   const handleOpenEdit = (entry: any) => {
@@ -2297,15 +2396,17 @@ export default function EditListing() {
   const handleSaveAskMeAboutChange = async (newAskMeAbout: any[]) => {
     const listWithOrder = newAskMeAbout.map((item, idx) => ({
       ...item,
-      sortOrder: item.sortOrder ?? idx
+      sortOrder: idx
     }));
     setAskMeAbout(listWithOrder);
     const targetListingId = isEdit ? listingId! : activeListingId;
-    try {
-      await updateListing(targetListingId, { askMeAbout: listWithOrder });
-    } catch (err) {
-      console.error("Failed to autosave Ask Me About changes:", err);
-      toast.error("Failed to autosave changes");
+    if (targetListingId) {
+      try {
+        await updateListing(targetListingId, { askMeAbout: listWithOrder });
+      } catch (err) {
+        console.error("Failed to autosave Ask Me About changes:", err);
+        toast.error("Failed to autosave changes");
+      }
     }
   };
 
@@ -2314,9 +2415,14 @@ export default function EditListing() {
       if (newImage) {
         const url = new URL(newImage);
         const fileName = url.pathname.split('/').pop()?.split('?')[0] || "property-image.jpg";
-        setImages([...images, { url: newImage, name: fileName }]);
+        const newImgs = [...images, { url: newImage, name: fileName }];
+        setImages(newImgs);
         setNewImage("");
-        toast.success("Image added");
+
+        const syncedAsk = syncAskMeAboutWithMediaAndPhotos({ targetAskMeAbout: askMeAbout });
+        setAskMeAbout(syncedAsk);
+
+        toast.success("Image added & synced with Ask Me About Q&A Builder");
       }
     } catch (e) {
       toast.error("Invalid image URL");
@@ -2355,15 +2461,19 @@ export default function EditListing() {
       const newComputed = getComputedDescriptorsFromImages(updated);
       setTourDescriptors(newComputed);
 
+      const syncedAsk = syncAskMeAboutWithMediaAndPhotos({ targetAskMeAbout: askMeAbout });
+      setAskMeAbout(syncedAsk);
+
       if (isEdit && listingId) {
         try {
           await updateListing(listingId, { 
             images: updated,
-            tourDescriptors: newComputed.filter(d => d.trim() !== "")
+            tourDescriptors: newComputed.filter(d => d.trim() !== ""),
+            askMeAbout: syncedAsk
           });
-          toast.success("Image renamed and synced to assets");
+          toast.success("Image renamed and synced to Ask Me About Q&A!");
         } catch (err) {
-          toast.error("Renamed locally but failed to sync to assets");
+          toast.error("Renamed locally but failed to sync to server");
         }
       } else {
         toast.success("Image renamed");
@@ -2413,7 +2523,9 @@ export default function EditListing() {
       }
     }
     setTourDescriptors(updated);
-    toast.success("Descriptors auto-filled from photo labels!");
+    const syncedAsk = syncAskMeAboutWithMediaAndPhotos();
+    setAskMeAbout(syncedAsk);
+    toast.success("Descriptors auto-filled & synced with Ask Me About Q&A Builder!");
   };
 
   const moveImageInListing = async (index: number, direction: 'left' | 'right' | 'up' | 'down') => {
@@ -3314,7 +3426,7 @@ export default function EditListing() {
                   <Input value={brokerageName} onChange={e => setBrokerageName(e.target.value)} placeholder="Century 21, Sotheby's, etc." />
                 </div>
                 <div className="space-y-2">
-                  <Label>Agent Attribution Name <span className="text-slate-400 font-normal">(Optional)</span></Label>
+                  <Label>Agent Name <span className="text-slate-400 font-normal">(Optional)</span></Label>
                   <Input value={agentName} onChange={e => setAgentName(e.target.value)} placeholder="Jane Doe" />
                 </div>
               </div>
@@ -3665,7 +3777,7 @@ export default function EditListing() {
                     </button>
                   </div>
                   <CardDescription>
-                    Configure up to 24 active questions that Sora can speak answers for. When selected, the tour photo will automatically swap to the designated room. These preset will be synced with the AI Tour, Ask Me About section.
+                    Configure up to 24 active questions that Sora can speak answers for. Drag and drop cards or use the up/down arrows to reorder questions. These presets sync directly with the AI Tour Ask Me About section.
                   </CardDescription>
 
                   {/* Search Area for Ask Me About Q&A Builder */}
@@ -3705,6 +3817,16 @@ export default function EditListing() {
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetAndSyncWithPhotos}
+                    className="gap-1.5 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold shadow-xs cursor-pointer text-xs h-10 w-full sm:w-auto"
+                    title="Reset and match all Ask Me About questions, photos, and descriptions with Property Photos & Media Manager"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 text-amber-700" />
+                    Reset & Sync Photos
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -3769,14 +3891,56 @@ export default function EditListing() {
                       return (
                         <div 
                           key={entry.id || `entry-${index}`}
-                          className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all gap-4 ${
-                            isCardActive 
+                          draggable={true}
+                          onDragStart={(e) => {
+                            setDraggedId(entry.id);
+                            e.dataTransfer.setData("text/plain", entry.id);
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            if (dragOverId !== entry.id) {
+                              setDragOverId(entry.id);
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverId === entry.id) {
+                              setDragOverId(null);
+                            }
+                          }}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            setDragOverId(null);
+                            if (draggedId && draggedId !== entry.id) {
+                              await handleDragReorder(draggedId, entry.id);
+                              setDraggedId(null);
+                            }
+                          }}
+                          onDragEnd={() => {
+                            setDraggedId(null);
+                            setDragOverId(null);
+                          }}
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all gap-4 select-none ${
+                            draggedId === entry.id
+                              ? "opacity-40 border-dashed border-blue-500 bg-blue-50/20 scale-[0.99]"
+                              : dragOverId === entry.id
+                              ? "border-2 border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/40 scale-[1.01] shadow-md"
+                              : isCardActive 
                               ? "border-blue-500 bg-blue-50/5 shadow-xs" 
                               : "border-slate-200 bg-white hover:border-slate-300"
                           }`}
                         >
                           {/* Left Checkbox & Info */}
-                          <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                            {/* Drag Handle */}
+                            <div 
+                              className="pt-0.5 text-slate-400 hover:text-blue-600 cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                              title="Drag and drop card to reorder"
+                            >
+                              <GripVertical className="h-5 w-5" />
+                            </div>
+
                             <div className="pt-0.5">
                               <input 
                                 type="checkbox"

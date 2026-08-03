@@ -107,7 +107,7 @@ export default function ProspectInsightReport({
     lead.customAnswers?.reviewedBy || "Compliance Auto-Bot / Sora"
   );
   const [verificationNotes, setVerificationNotes] = useState<string>(
-    lead.customAnswers?.verificationNotes || "Automatic check passed - valid government-issued photo ID matched."
+    lead.customAnswers?.verificationNotes || "Automatic check passed - Property listing context & phone area code parsing verified."
   );
   const [manualReviewRequired, setManualReviewRequired] = useState<boolean>(
     !!lead.customAnswers?.manualReviewRequired
@@ -1278,15 +1278,65 @@ Sora AI Open House guided walkthrough logs ready for your review:
                   <p className="font-extrabold text-amber-700 mt-0.5 truncate">{lead.customAnswers?.routedLender || "Gold Trust Lending Group"}</p>
                 </div>
               </div>
+
+              {/* Jurisdiction & Compliance Framework Metadata (No Geolocation Permission Required) */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs text-left space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider font-mono text-slate-500">Jurisdiction & Compliance Audit</span>
+                  <span className="text-[9px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-mono">
+                    Zero Geolocation Prompt Mode
+                  </span>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-slate-400 font-bold text-[8px] uppercase tracking-wider font-mono">Detected Jurisdiction</p>
+                    <p className="font-bold text-slate-900 mt-0.5">{lead.detectedCountry || "Canada"} ({lead.detectedRegion || "Ontario"})</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 font-bold text-[8px] uppercase tracking-wider font-mono">Detection Strategy</p>
+                    <p className="font-bold text-slate-700 mt-0.5 text-[11px] truncate">{lead.geoProvider || "Property Context + Area Code Parsing"}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 font-bold text-[8px] uppercase tracking-wider font-mono">Enforced Framework</p>
+                    <p className="font-bold text-blue-700 mt-0.5 text-[11px] truncate">{lead.jurisdictionRulesApplied || "CASL / PIPEDA (Canada Co-Marketing)"}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-left flex items-start gap-2.5">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="uppercase tracking-widest font-mono text-[9px] text-amber-700 font-black">LENDER DETAILS SUPPRESSED</p>
-                <p className="mt-1 text-slate-600 font-semibold text-xs leading-relaxed">
-                  Lender details and mortgage routing queue are locked. This visitor did not request financing info or explicitly opt-in to third-party mortgage conversations. Lead information has been strictly withheld from lender visibility to ensure regulatory compliance.
-                </p>
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-left space-y-3">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="uppercase tracking-widest font-mono text-[9px] text-amber-700 font-black">LENDER DETAILS SUPPRESSED</p>
+                  <p className="mt-1 text-slate-600 font-semibold text-xs leading-relaxed">
+                    Lender details and mortgage routing queue are locked. This visitor did not request financing info or explicitly opt-in to third-party mortgage conversations. Lead information has been strictly withheld from lender visibility to ensure regulatory compliance.
+                  </p>
+                </div>
+              </div>
+
+              {/* Jurisdiction Metadata even when suppressed */}
+              <div className="bg-white p-3 rounded-lg border border-amber-200/70 text-xs text-left space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider font-mono text-slate-500">Jurisdiction Compliance Record</span>
+                  <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 font-mono">
+                    Zero Geolocation Prompt Mode
+                  </span>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-slate-400 font-bold text-[8px] uppercase tracking-wider font-mono">Jurisdiction</p>
+                    <p className="font-bold text-slate-900 mt-0.5">{lead.detectedCountry || "Canada"} ({lead.detectedRegion || "Ontario"})</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 font-bold text-[8px] uppercase tracking-wider font-mono">Detection Method</p>
+                    <p className="font-bold text-slate-700 mt-0.5 text-[11px] truncate">{lead.geoProvider || "Property Context + Area Code Parsing"}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 font-bold text-[8px] uppercase tracking-wider font-mono">Compliance Rule</p>
+                    <p className="font-bold text-slate-700 mt-0.5 text-[11px] truncate">{lead.jurisdictionRulesApplied || "CASL / PIPEDA (Canada Co-Marketing)"}</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

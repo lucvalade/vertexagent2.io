@@ -386,6 +386,38 @@ export default function AdminDashboard() {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+          {/* Recharts Lead Conversion & Attendance Teaser Banner */}
+          <div 
+            onClick={() => navigate('/app/admin/analytics')}
+            className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white border border-indigo-900 shadow-md hover:border-indigo-500 transition-all cursor-pointer group text-left"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <BarChart3 className="h-5 w-5 text-emerald-400" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
+                    Recharts Analytics Active
+                  </span>
+                </div>
+                <h3 className="text-xl font-black italic tracking-tight text-white group-hover:text-emerald-300 transition-colors">
+                  Lead Conversion &amp; Open House Attendance Telemetry
+                </h3>
+                <p className="text-xs text-slate-300 mt-1">
+                  Track weekly visitor growth, lead capture conversion rates (10.6%), and open house check-in trends over time.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 self-start sm:self-center">
+                <div className="text-right hidden sm:block">
+                  <div className="text-lg font-black text-emerald-400">10.6%</div>
+                  <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Avg Conv. Rate</div>
+                </div>
+                <div className="p-3 bg-emerald-500 text-slate-950 rounded-xl group-hover:bg-emerald-400 transition-colors shadow-lg">
+                  <ArrowUpRight className="h-5 w-5" />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden text-left">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <div className="flex items-center gap-2">
