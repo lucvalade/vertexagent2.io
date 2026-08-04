@@ -3420,7 +3420,7 @@ export default function EditListing() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Brokerage Name *</Label>
                   <Input value={brokerageName} onChange={e => setBrokerageName(e.target.value)} placeholder="Century 21, Sotheby's, etc." />
@@ -3472,7 +3472,18 @@ export default function EditListing() {
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label>Expired Listing Date <span className="text-slate-400 font-normal">(Optional)</span></Label>
+                      <Label 
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                          const parent = e.currentTarget.parentElement;
+                          const inputEl = parent?.querySelector('input[type="date"]') as HTMLInputElement;
+                          if (inputEl) {
+                            try { inputEl.showPicker(); } catch {}
+                          }
+                        }}
+                      >
+                        Expired Listing Date <span className="text-slate-400 font-normal">(Optional)</span>
+                      </Label>
                       <div 
                         className="relative cursor-pointer"
                         onClick={(e) => {
@@ -3500,6 +3511,11 @@ export default function EditListing() {
                             }
                           }} 
                           onClick={(e) => {
+                            try {
+                              (e.currentTarget as HTMLInputElement).showPicker();
+                            } catch {}
+                          }}
+                          onFocus={(e) => {
                             try {
                               (e.currentTarget as HTMLInputElement).showPicker();
                             } catch {}

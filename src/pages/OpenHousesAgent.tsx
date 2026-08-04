@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { getAllListings, getUserListings, createLead, Listing, Lead, enrichLeadData, sendEmail, getOpenHouseSessions, createOpenHouseSession, parseDateTimeToUTC } from "@/lib/api";
+import { getAllListings, getUserListings, createLead, Listing, Lead, enrichLeadData, sendEmail, getOpenHouseSessions, createOpenHouseSession, parseDateTimeToUTC, normalizeToYYYYMMDD } from "@/lib/api";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, query, where, doc, setDoc, onSnapshot } from "firebase/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -499,15 +499,18 @@ AI Open House Connect Team`
   const [filterMonthStr, setFilterMonthStr] = useState("all");
 
   const filteredEvents = events.filter((evt) => {
-    // 1. Specific Date Filter (YYYY-MM-DD from date picker)
+    // 1. Specific Date Filter (YYYY-MM-DD from date picker or any format)
     if (filterDateStr && filterDateStr.trim().length > 0) {
-      if (evt.eventDate !== filterDateStr) {
+      const normalizedEvtDate = normalizeToYYYYMMDD(evt.eventDate);
+      const normalizedFilterDate = normalizeToYYYYMMDD(filterDateStr);
+      if (normalizedEvtDate !== normalizedFilterDate) {
         return false;
       }
     }
     // 2. Aggregate by Month Filter
     if (filterMonthStr && filterMonthStr !== "all") {
-      const parts = evt.eventDate.split("-");
+      const normalizedEvtDate = normalizeToYYYYMMDD(evt.eventDate);
+      const parts = normalizedEvtDate.split("-");
       if (parts.length >= 2) {
         const evtMonth = parts[1]; // "01", "02" etc.
         if (evtMonth !== filterMonthStr) {
@@ -560,6 +563,7 @@ AI Open House Connect Team`
   const [showPlannerHelp, setShowPlannerHelp] = useState(false);
   const [showEventModeHelp, setShowEventModeHelp] = useState(false);
   const [showSoraInsightsHelp, setShowSoraInsightsHelp] = useState(false);
+  const [showControlsHelp, setShowControlsHelp] = useState(false);
 
   useEffect(() => {
     setShowPlannerHelp(false);
@@ -867,12 +871,74 @@ AI Open House Connect Team`
         setEmailLogs(JSON.parse(savedLogs));
       }
 
+      // Ensure listing 624f7c64-8977-4b36-91d4-de118724885d is present in mergedListings for Hamilton pilot
+      const pilotListingId = "624f7c64-8977-4b36-91d4-de118724885d";
+      let pilotListing = mergedListings.find(l => l.id === pilotListingId);
+      if (!pilotListing) {
+        pilotListing = {
+          id: pilotListingId,
+          address: "4 Clifton Downs Rd, Hamilton, ON",
+          price: "$899,900",
+          openHouseDate: "2026-08-15",
+          openHouseTime: "01:00 PM - 04:00 PM",
+          ownerId: user?.id || "agent"
+        };
+        mergedListings.push(pilotListing);
+        setListings([...mergedListings]);
+      } else if (!pilotListing.openHouseDate) {
+        pilotListing.openHouseDate = "2026-08-15";
+        pilotListing.openHouseTime = "01:00 PM - 04:00 PM";
+      }
+
       // Load Open House Sessions and convert them dynamically to OpenHouseEvent objects
       let loadedEvents: OpenHouseEvent[] = [];
       try {
         const allSessions = await getOpenHouseSessions();
         const listingIds = mergedListings.map(l => l.id);
-        const userSessions = allSessions.filter(s => listingIds.includes(s.listing_id));
+        
+        const sessToDateStr = (dateIsoStr: string) => {
+          const d = new Date(dateIsoStr);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          return `${y}-${m}-${day}`;
+        };
+
+        // Sync listings with sessions if date is missing or out of sync
+        let sessionCreatedOrUpdated = false;
+        for (const l of mergedListings) {
+          if (!l.openHouseDate) continue;
+          const targetNormalized = normalizeToYYYYMMDD(l.openHouseDate);
+          const existingSession = allSessions.find(s => s.listing_id === l.id);
+          
+          let needsSync = false;
+          if (!existingSession) {
+            needsSync = true;
+          } else {
+            const sessDate = normalizeToYYYYMMDD(sessToDateStr(existingSession.start_datetime));
+            if (sessDate !== targetNormalized) {
+              needsSync = true;
+            }
+          }
+
+          if (needsSync) {
+            const parsed = parseDateTimeToUTC(l.openHouseDate, l.openHouseTime || "01:00 PM - 04:00 PM");
+            const sessionId = existingSession ? existingSession.session_id : `session_${l.id}_migrated_${Date.now()}`;
+            await createOpenHouseSession({
+              session_id: sessionId,
+              listing_id: l.id,
+              start_datetime: parsed.start,
+              end_datetime: parsed.end,
+              created_by: user?.id || "agent",
+              created_at: Date.now(),
+              updated_at: Date.now()
+            });
+            sessionCreatedOrUpdated = true;
+          }
+        }
+
+        const currentSessions = sessionCreatedOrUpdated ? await getOpenHouseSessions() : allSessions;
+        const userSessions = currentSessions.filter(s => listingIds.includes(s.listing_id));
         
         loadedEvents = userSessions.map(sess => {
           const targetListing = mergedListings.find(l => l.id === sess.listing_id);
@@ -911,64 +977,6 @@ AI Open House Connect Team`
             createdAt: sess.created_at
           } as any;
         });
-
-        // Check if any listings need to be migrated on-the-fly (have openHouseDate but 0 sessions)
-        const toMigrate = mergedListings.filter(l => l.openHouseDate && !allSessions.some(s => s.listing_id === l.id));
-        if (toMigrate.length > 0) {
-          console.log("Migrating listings on-the-fly:", toMigrate.map(l => l.id));
-          for (const l of toMigrate) {
-            const parsed = parseDateTimeToUTC(l.openHouseDate, l.openHouseTime || "");
-            const sessionId = `session_${l.id}_migrated_${Date.now()}`;
-            await createOpenHouseSession({
-              session_id: sessionId,
-              listing_id: l.id,
-              start_datetime: parsed.start,
-              end_datetime: parsed.end,
-              created_by: user?.id || "agent",
-              created_at: Date.now(),
-              updated_at: Date.now()
-            });
-          }
-          // Re-fetch mapped events
-          const reloadedSessions = await getOpenHouseSessions();
-          const reloadedUserSessions = reloadedSessions.filter(s => listingIds.includes(s.listing_id));
-          loadedEvents = reloadedUserSessions.map(sess => {
-            const targetListing = mergedListings.find(l => l.id === sess.listing_id);
-            const startDate = new Date(sess.start_datetime);
-            const endDate = new Date(sess.end_datetime);
-            const year = startDate.getFullYear();
-            const month = String(startDate.getMonth() + 1).padStart(2, "0");
-            const day = String(startDate.getDate()).padStart(2, "0");
-            const eventDateStr = `${year}-${month}-${day}`;
-            
-            const formatTimeLocal = (d: Date) => {
-              let h = d.getHours();
-              const m = String(d.getMinutes()).padStart(2, "0");
-              const ampm = h >= 12 ? "pm" : "am";
-              h = h % 12;
-              h = h ? h : 12;
-              return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
-            };
-            
-            return {
-              id: sess.session_id,
-              listingId: sess.listing_id,
-              eventName: `Open House: ${targetListing?.address || "Real Estate Property"}`,
-              listingAddress: targetListing?.address || "Unknown Address",
-              eventDate: eventDateStr,
-              startTime: formatTimeLocal(startDate),
-              endTime: formatTimeLocal(endDate),
-              eventMode: "Hybrid",
-              gateToggle: true,
-              aiTourLinked: true,
-              lenderShown: true,
-              mortgageQuestion: true,
-              agentNotes: "Enjoy your guided tour with Sora!",
-              status: (endDate.getTime() < Date.now()) ? "completed" : sess.status,
-              createdAt: sess.created_at
-            } as any;
-          });
-        }
       } catch (err) {
         console.error("Failed to load or migrate open house sessions: ", err);
       }
@@ -1069,7 +1077,7 @@ AI Open House Connect Team`
       eventName: finalEventName,
       listingId: selectedListingId,
       listingAddress: targetListing?.address || "Address Reference",
-      eventDate: convertToMMDDYYYY(eventDate),
+      eventDate: normalizeToYYYYMMDD(eventDate),
       startTime,
       endTime,
       hostAgent,
@@ -1608,22 +1616,52 @@ Thanks,
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-black tracking-widest block">
+                <label 
+                  className="text-[10px] font-black uppercase text-black tracking-widest block cursor-pointer"
+                  onClick={(e) => {
+                    const parent = e.currentTarget.parentElement;
+                    const inputEl = parent?.querySelector('input[type="date"]') as HTMLInputElement;
+                    if (inputEl) {
+                      try { inputEl.showPicker(); } catch {}
+                    }
+                  }}
+                >
                   Specific Event Date
                 </label>
-                <div className="relative">
+                <div 
+                  className="relative cursor-pointer"
+                  onClick={(e) => {
+                    const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                    if (inputEl) {
+                      try { inputEl.showPicker(); } catch {}
+                    }
+                  }}
+                >
                   <input
                     type="date"
                     value={filterDateStr}
                     onChange={(e) => {
                       setFilterDateStr(e.target.value);
                     }}
+                    onClick={(e) => {
+                      try {
+                        (e.currentTarget as HTMLInputElement).showPicker();
+                      } catch {}
+                    }}
+                    onFocus={(e) => {
+                      try {
+                        (e.currentTarget as HTMLInputElement).showPicker();
+                      } catch {}
+                    }}
                     className="w-full text-xs font-black text-black border-2 border-black rounded-lg p-2.5 bg-white uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-black cursor-pointer h-[42px]"
                   />
                   {filterDateStr && (
                     <button
                       type="button"
-                      onClick={() => setFilterDateStr("")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFilterDateStr("");
+                      }}
                       className="absolute right-8 top-1/2 -translate-y-1/2 text-black hover:text-red-600 font-black text-sm cursor-pointer z-10"
                     >
                       ✕
@@ -2117,32 +2155,60 @@ Thanks,
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="oh-date" className="text-xs font-bold uppercase text-black">Event Date</Label>
-                <Input 
-                  id="oh-date"
-                  type="date" 
-                  min={getTodayString()}
-                  value={eventDate}
-                  onChange={(e) => {
-                    setEventDate(e.target.value);
-                    setEventDateError(""); // clear error while actively choosing
-                  }}
-                  onBlur={() => {
-                    if (!eventDate) {
-                      setEventDateError("Event date is required.");
-                    } else {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const selected = new Date(eventDate + "T00:00:00");
-                      if (selected < today) {
-                        setEventDateError("Event date cannot be in the past.");
-                      } else {
-                        setEventDateError("");
-                      }
+                <Label 
+                  htmlFor="oh-date" 
+                  className="text-xs font-bold uppercase text-black cursor-pointer"
+                  onClick={(e) => {
+                    const parent = e.currentTarget.parentElement;
+                    const inputEl = parent?.querySelector('input[type="date"]') as HTMLInputElement;
+                    if (inputEl) {
+                      try { inputEl.showPicker(); } catch {}
                     }
                   }}
-                  className={`h-9 text-xs ${eventDateError ? "border-red-500 bg-red-50/20" : ""}`} 
-                />
+                >
+                  Event Date
+                </Label>
+                <div
+                  className="relative cursor-pointer"
+                  onClick={(e) => {
+                    const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                    if (inputEl) {
+                      try { inputEl.showPicker(); } catch {}
+                    }
+                  }}
+                >
+                  <Input 
+                    id="oh-date"
+                    type="date" 
+                    min={getTodayString()}
+                    value={eventDate}
+                    onChange={(e) => {
+                      setEventDate(e.target.value);
+                      setEventDateError(""); // clear error while actively choosing
+                    }}
+                    onClick={(e) => {
+                      try { (e.currentTarget as HTMLInputElement).showPicker(); } catch {}
+                    }}
+                    onFocus={(e) => {
+                      try { (e.currentTarget as HTMLInputElement).showPicker(); } catch {}
+                    }}
+                    onBlur={() => {
+                      if (!eventDate) {
+                        setEventDateError("Event date is required.");
+                      } else {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const selected = new Date(eventDate + "T00:00:00");
+                        if (selected < today) {
+                          setEventDateError("Event date cannot be in the past.");
+                        } else {
+                          setEventDateError("");
+                        }
+                      }
+                    }}
+                    className={`h-9 text-xs cursor-pointer ${eventDateError ? "border-red-500 bg-red-50/20" : ""}`} 
+                  />
+                </div>
                 {eventDateError && (
                   <p className="text-red-500 text-[10px] font-semibold mt-1">
                     ⚠️ {eventDateError}
@@ -3077,7 +3143,46 @@ Thanks,
 
           {/* RIGHT: Agent Live Monitor Controls (Matches Live Event Mode features) */}
           <div className="space-y-4">
-            <h2 className="text-xs font-black uppercase text-blue-700 tracking-wider">Host/Agent Live Controls</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xs font-black uppercase text-blue-700 tracking-wider">Host/Agent Live Controls</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowControlsHelp(!showControlsHelp)}
+                  className="text-blue-600 hover:text-blue-800 p-0.5 rounded-full hover:bg-blue-50 transition-colors cursor-pointer"
+                  title="Learn about Pause Sign-In & Restart Flow"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {showControlsHelp && (
+              <div className="bg-blue-50/95 border-2 border-blue-200 rounded-xl p-3.5 space-y-2 text-xs text-stone-800 animate-in fade-in duration-200 shadow-md">
+                <div className="flex items-center justify-between border-b border-blue-200 pb-1.5">
+                  <span className="font-extrabold text-blue-900 flex items-center gap-1 text-[11px] uppercase tracking-wider">
+                    <HelpCircle className="h-3.5 w-3.5 text-blue-600" /> Host Controls Guide
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={() => setShowControlsHelp(false)}
+                    className="text-stone-400 hover:text-stone-700 font-bold text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-2 text-[11px] leading-relaxed">
+                  <div>
+                    <strong className="text-blue-900 block font-bold">• Pause Sign-In / Resume Sheets:</strong>
+                    Temporarily freezes guest registrations on the active tablet terminal. Use this during host speeches, private presentations, or active tours so new arrivals wait until the host resumes sign-ins.
+                  </div>
+                  <div>
+                    <strong className="text-blue-900 block font-bold">• Restart Flow:</strong>
+                    Instantly refreshes the guest terminal back to the clean welcome screen, clearing partially filled inputs and resetting Sora's AI audio tour for the next visitor.
+                  </div>
+                </div>
+              </div>
+            )}
             
             <Card className="blue-pulsating-border bg-white shadow-sm p-5 space-y-4">
               <div className="flex items-center justify-between border-b pb-3">

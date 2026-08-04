@@ -620,6 +620,34 @@ export interface OpenHouseSession {
   updated_at: number;
 }
 
+export function normalizeToYYYYMMDD(dateStr: string): string {
+  if (!dateStr) return "";
+  const trimmed = dateStr.trim();
+  // YYYY-MM-DD or YYYY/MM/DD
+  let match = trimmed.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  if (match) {
+    const [_, y, m, d] = match;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // MM-DD-YYYY or MM/DD/YYYY or M/D/YYYY
+  match = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if (match) {
+    const [_, m, d, y] = match;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // Standard JS Date fallback
+  try {
+    const dObj = new Date(trimmed);
+    if (!isNaN(dObj.getTime())) {
+      const y = dObj.getFullYear();
+      const m = String(dObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  } catch (e) {}
+  return trimmed;
+}
+
 export function parseDateTimeToUTC(dateStr: string, timeRangeStr: string): { start: string; end: string } {
   if (!dateStr) {
     const defaultStart = new Date().toISOString();
@@ -627,6 +655,7 @@ export function parseDateTimeToUTC(dateStr: string, timeRangeStr: string): { sta
     return { start: defaultStart, end: defaultEnd };
   }
   
+  const cleanDateStr = normalizeToYYYYMMDD(dateStr);
   let startTime = "09:00";
   let endTime = "12:00";
   if (timeRangeStr) {
@@ -641,8 +670,8 @@ export function parseDateTimeToUTC(dateStr: string, timeRangeStr: string): { sta
     }
   }
   
-  const startObj = new Date(`${dateStr}T${startTime}:00`);
-  const endObj = new Date(`${dateStr}T${endTime}:00`);
+  const startObj = new Date(`${cleanDateStr}T${startTime}:00`);
+  const endObj = new Date(`${cleanDateStr}T${endTime}:00`);
   
   return {
     start: isNaN(startObj.getTime()) ? new Date().toISOString() : startObj.toISOString(),
