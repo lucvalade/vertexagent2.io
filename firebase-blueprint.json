@@ -383,6 +383,9 @@
     },
     "platform_content_defaults/{localeId}": {
       "description": "Translated welcome message standards and settings"
+    },
+    "support_tickets/{ticketId}": {
+      "description": "Customer support tickets and reply threads"
     }
   }
 }

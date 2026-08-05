@@ -386,6 +386,66 @@ export default function AdminDashboard() {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+          {/* Brokerage Quota */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-left">
+            <h3 className="font-bold text-slate-900 mb-4 text-sm uppercase tracking-wider flex items-center justify-between">
+              <span>Brokerage Quota</span>
+              <span className="text-[10px] font-bold text-slate-400 normal-case bg-slate-100 px-2 py-0.5 rounded-full">System Limits</span>
+            </h3>
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div 
+                className="group/item cursor-pointer p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors border border-slate-100"
+                onClick={() => navigate('/app/admin/users')}
+                title="Manage active agent seats"
+              >
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-slate-600 group-hover/item:text-blue-600 font-bold flex items-center gap-1 transition-colors">
+                    Agent Seats
+                  </span>
+                  <span className="font-extrabold text-slate-900">24 / 50</span>
+                </div>
+                <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden mb-1">
+                  <div className="h-full bg-blue-600 rounded-full group-hover/item:bg-blue-500 transition-colors" style={{ width: '48%' }}></div>
+                </div>
+                <span className="text-[9px] text-blue-600 font-black uppercase tracking-wider">Manage →</span>
+              </div>
+
+              <div 
+                className="group/item cursor-pointer p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors border border-slate-100"
+                onClick={() => navigate('/app/assets')}
+                title="View dynamic asset storage"
+              >
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-slate-600 group-hover/item:text-purple-600 font-bold flex items-center gap-1 transition-colors">
+                    Total Storage
+                  </span>
+                  <span className="font-extrabold text-slate-900">12.4GB / 50GB</span>
+                </div>
+                <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden mb-1">
+                  <div className="h-full bg-purple-600 rounded-full group-hover/item:bg-purple-500 transition-colors" style={{ width: '25%' }}></div>
+                </div>
+                <span className="text-[9px] text-purple-600 font-black uppercase tracking-wider">Manage →</span>
+              </div>
+
+              <div 
+                className="group/item cursor-pointer p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors border border-slate-100"
+                onClick={() => navigate('/app/admin/api-usage')}
+                title="View full API usage analytics"
+              >
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-slate-600 group-hover/item:text-amber-600 font-bold flex items-center gap-1 transition-colors">
+                    API Calls Quota
+                  </span>
+                  <span className="font-extrabold text-slate-900">27.4K / 75K</span>
+                </div>
+                <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden mb-1">
+                  <div className="h-full bg-amber-500 rounded-full group-hover/item:bg-amber-400 transition-colors" style={{ width: '36.5%' }}></div>
+                </div>
+                <span className="text-[9px] text-amber-600 font-black uppercase tracking-wider">Analytics →</span>
+              </div>
+            </div>
+          </div>
+
           {/* Recharts Lead Conversion & Attendance Teaser Banner */}
           <div 
             onClick={() => navigate('/app/admin/analytics')}
@@ -486,57 +546,6 @@ export default function AdminDashboard() {
                 'Run Security Audit'
               )}
             </button>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-            <h3 className="font-bold text-slate-900 mb-4">Brokerage Quota</h3>
-            <div className="space-y-4">
-              <div 
-                className="group/item cursor-pointer p-2 -m-2 rounded-lg hover:bg-slate-50 transition-colors"
-                onClick={() => navigate('/app/admin/users')}
-                title="Manage active agent seats"
-              >
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-500 group-hover/item:text-blue-600 font-medium flex items-center gap-1.5 transition-colors">
-                    Agent Seats <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">Manage →</span>
-                  </span>
-                  <span className="font-bold text-slate-900">24 / 50</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-600 rounded-full group-hover/item:bg-blue-500 transition-colors" style={{ width: '48%' }}></div>
-                </div>
-              </div>
-              <div 
-                className="group/item cursor-pointer p-2 -m-2 rounded-lg hover:bg-slate-50 transition-colors"
-                onClick={() => navigate('/app/assets')}
-                title="View dynamic asset storage"
-              >
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-500 group-hover/item:text-purple-600 font-medium flex items-center gap-1.5 transition-colors">
-                    Total Storage <span className="text-[9px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">Manage →</span>
-                  </span>
-                  <span className="font-bold text-slate-900">12.4GB / 50GB</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-600 rounded-full group-hover/item:bg-purple-500 transition-colors" style={{ width: '25%' }}></div>
-                </div>
-              </div>
-              <div 
-                className="group/item cursor-pointer p-2 -m-2 rounded-lg hover:bg-slate-50 transition-colors"
-                onClick={() => navigate('/app/admin/api-usage')}
-                title="View full API usage analytics"
-              >
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-slate-500 group-hover/item:text-amber-600 font-medium flex items-center gap-1.5 transition-colors">
-                    API Calls Quota <span className="text-[9px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">Analytics →</span>
-                  </span>
-                  <span className="font-bold text-slate-900">27.4K / 75K</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-500 rounded-full group-hover/item:bg-amber-400 transition-colors" style={{ width: '36.5%' }}></div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

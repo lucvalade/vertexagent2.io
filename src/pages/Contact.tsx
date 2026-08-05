@@ -69,7 +69,7 @@ export default function Contact() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: "sales@aiopenhouseconnect.com", // Default sales email
+          to: "sales@aiopenhouseconnect.com, richardvalade6156@gmail.com", // Send to sales and testing recipient
           subject: `AI Open House Connect Contact: ${formData.subject}`,
           text: `Name: ${formData.name}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`,
           html: `

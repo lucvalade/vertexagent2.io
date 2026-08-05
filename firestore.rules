@@ -277,6 +277,24 @@ service cloud.firestore {
     match /emailTemplates/{step} {
       allow read, write: if isSignedIn();
     }
+
+    match /support_tickets/{ticketId} {
+      allow read, create: if true;
+      allow update, delete: if isSignedIn();
+    }
+
+    match /crm_sync_logs/{logId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /interactions/{interactionId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /openHouseEvents/{eventId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
   }
 }
 

@@ -1615,28 +1615,29 @@ Thanks,
               📅 Date-Based Event Filtering
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-              <div className="space-y-1">
-                <label 
-                  className="text-[10px] font-black uppercase text-black tracking-widest block cursor-pointer"
-                  onClick={(e) => {
-                    const parent = e.currentTarget.parentElement;
-                    const inputEl = parent?.querySelector('input[type="date"]') as HTMLInputElement;
-                    if (inputEl) {
-                      try { inputEl.showPicker(); } catch {}
+              <div 
+                className="space-y-1 cursor-pointer select-none"
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('button')) return;
+                  const container = e.currentTarget;
+                  const inputEl = container.querySelector('input[type="date"]') as HTMLInputElement;
+                  if (inputEl) {
+                    try {
+                      if ('showPicker' in inputEl) {
+                        inputEl.showPicker();
+                      } else {
+                        inputEl.focus();
+                      }
+                    } catch (err) {
+                      inputEl.focus();
                     }
-                  }}
-                >
+                  }
+                }}
+              >
+                <label className="text-[10px] font-black uppercase text-black tracking-widest block cursor-pointer">
                   Specific Event Date
                 </label>
-                <div 
-                  className="relative cursor-pointer"
-                  onClick={(e) => {
-                    const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
-                    if (inputEl) {
-                      try { inputEl.showPicker(); } catch {}
-                    }
-                  }}
-                >
+                <div className="relative cursor-pointer">
                   <input
                     type="date"
                     value={filterDateStr}

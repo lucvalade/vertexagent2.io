@@ -232,7 +232,7 @@ export default function AdminUsers() {
             <div style="background-color: #ffffff; padding: 40px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
               <div style="text-align: center; margin-bottom: 30px;">
                 <span style="font-size: 48px;">🚀</span>
-                <h1 style="color: #0f172a; font-size: 28px; font-weight: 800; margin: 15px 0 5px; tracking-tight: -0.025em; text-transform: uppercase; font-style: italic;">Welcome to AI Open House Connect</h1>
+                <h1 style="color: #0f172a; font-size: 28px; font-weight: 800; margin: 15px 0 5px; tracking-tight: -0.025em; text-transform: uppercase; font-style: italic;">Welcome to <span style="font-weight: 900; color: #000000;">AI Open House Connect</span></h1>
                 <p style="color: #64748b; font-size: 14px; font-weight: 500; margin: 0;">Try Free for 14 Days (No Credit Card Required)</p>
               </div>
 
@@ -241,7 +241,7 @@ export default function AdminUsers() {
               </p>
 
               <p style="font-size: 15px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
-                We are thrilled to welcome you to AI Open House Connect. Your account has been provisioned on our <strong>14-Day Free Trial</strong> tier. This gives you complete access to generate high-fidelity AI-powered talking open houses and remote digital tours!
+                Welcome to <strong style="font-weight: 800; color: #000000;">AI Open House Connect</strong>. Your 14-Day Free Trial is now active, unlocking AI-powered talking open houses, remote digital tours, and instant access to every active property’s interactive Touchless Sign-In form and AI Walkthrough Voice Tour, with dynamic codes you can print or scan right away
               </p>
 
               <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 16px; padding: 20px; margin-bottom: 30px;">
@@ -793,11 +793,11 @@ export default function AdminUsers() {
                 {previewType === "welcome" ? (
                   <div className="bg-white p-6 rounded-2xl border border-slate-200 max-w-lg mx-auto text-slate-700 text-xs shadow-sm">
                     <p className="text-center text-4xl mb-2">🚀</p>
-                    <h2 className="text-center text-lg font-black tracking-tight text-slate-900 uppercase italic mb-1">Welcome to AI Open House Connect</h2>
+                    <h2 className="text-center text-lg font-black tracking-tight text-slate-900 uppercase italic mb-1">Welcome to <span className="font-black text-black">AI Open House Connect</span></h2>
                     <p className="text-center text-[10px] font-bold text-slate-500 mb-6">Experience Mode: 14-Day Free Trial (No Credit Card)</p>
 
                     <p className="mb-3 font-medium">Hello <strong>{selectedTrialUser ? selectedTrialUser.firstName : 'Jane'}</strong>,</p>
-                    <p className="mb-4 leading-medium">We are thrilled to welcome you to AI Open House Connect. Your account has been provisioned on our <strong>14-Day Free Trial</strong> tier. This gives you complete access to generate high-fidelity AI-powered talking open houses and remote digital tours!</p>
+                    <p className="mb-4 leading-relaxed font-medium text-slate-700">Welcome to <strong className="font-black text-black">AI Open House Connect</strong>. Your 14-Day Free Trial is now active, unlocking AI-powered talking open houses, remote digital tours, and instant access to every active property’s interactive Touchless Sign-In form and AI Walkthrough Voice Tour, with dynamic codes you can print or scan right away</p>
 
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-3.5 mb-5 space-y-1.5 font-semibold text-blue-900">
                       <p className="text-[10px] font-black uppercase text-blue-700 tracking-wider">Trial Details</p>
@@ -823,7 +823,7 @@ export default function AdminUsers() {
                     <p className="text-center text-[10px] font-bold text-slate-500 mb-6 font-medium">AI Open House Connect Subscription Expiry Heads-Up</p>
 
                     <p className="mb-3 font-medium">Hello <strong>{selectedTrialUser ? selectedTrialUser.firstName : 'Jane'}</strong>,</p>
-                    <p className="mb-4 leading-medium">Your 14-day free trial on AI Open House Connect is halfway through! You have **7 days remaining** before your AI voice open house agents and buyer lead flows pause on <strong>{selectedTrialUser ? selectedTrialUser.expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Next Week'}</strong>.</p>
+                    <p className="mb-4 leading-medium">Your 14-day free trial on <strong className="font-black text-black">AI Open House Connect</strong> is halfway through! You have **7 days remaining** before your AI voice open house agents and buyer lead flows pause on <strong>{selectedTrialUser ? selectedTrialUser.expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Next Week'}</strong>.</p>
 
                     <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 mb-5 space-y-1 text-amber-900 font-semibold">
                       <p className="text-[10px] font-black uppercase text-amber-700 tracking-wider">Plan Expiry Details</p>

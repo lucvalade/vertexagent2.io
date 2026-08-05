@@ -3471,30 +3471,28 @@ export default function EditListing() {
                         <option value="Inactive">Inactive / Suspended</option>
                       </select>
                     </div>
-                    <div className="space-y-2">
-                      <Label 
-                        className="cursor-pointer"
-                        onClick={(e) => {
-                          const parent = e.currentTarget.parentElement;
-                          const inputEl = parent?.querySelector('input[type="date"]') as HTMLInputElement;
-                          if (inputEl) {
-                            try { inputEl.showPicker(); } catch {}
+                    <div 
+                      className="space-y-2 cursor-pointer select-none"
+                      onClick={(e) => {
+                        const container = e.currentTarget;
+                        const inputEl = container.querySelector('input[type="date"]') as HTMLInputElement;
+                        if (inputEl) {
+                          try {
+                            if ('showPicker' in inputEl) {
+                              inputEl.showPicker();
+                            } else {
+                              inputEl.focus();
+                            }
+                          } catch (err) {
+                            inputEl.focus();
                           }
-                        }}
-                      >
+                        }
+                      }}
+                    >
+                      <Label className="cursor-pointer block">
                         Expired Listing Date <span className="text-slate-400 font-normal">(Optional)</span>
                       </Label>
-                      <div 
-                        className="relative cursor-pointer"
-                        onClick={(e) => {
-                          const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
-                          if (inputEl) {
-                            try {
-                              inputEl.showPicker();
-                            } catch {}
-                          }
-                        }}
-                      >
+                      <div className="relative cursor-pointer">
                         <Input 
                           type="date" 
                           value={expiredListingDate} 
@@ -3512,12 +3510,16 @@ export default function EditListing() {
                           }} 
                           onClick={(e) => {
                             try {
-                              (e.currentTarget as HTMLInputElement).showPicker();
+                              if ('showPicker' in e.currentTarget) {
+                                e.currentTarget.showPicker();
+                              }
                             } catch {}
                           }}
                           onFocus={(e) => {
                             try {
-                              (e.currentTarget as HTMLInputElement).showPicker();
+                              if ('showPicker' in e.currentTarget) {
+                                e.currentTarget.showPicker();
+                              }
                             } catch {}
                           }}
                           className="cursor-pointer w-full font-medium"

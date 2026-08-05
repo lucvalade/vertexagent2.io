@@ -311,6 +311,35 @@ export default function SupportTickets() {
     try {
       const docRef = await addDoc(collection(db, "support_tickets"), ticketObj);
       toast.success(`Ticket ${newNum} created successfully! Our team will respond shortly.`);
+
+      // Send email copy to testing recipient
+      try {
+        await fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: "richardvalade6156@gmail.com",
+            subject: `[Support Ticket ${newNum}] ${newSubject.trim()}`,
+            text: `New Support Ticket Created:\nTicket #: ${newNum}\nUser: ${ticketObj.userName} (${ticketObj.userEmail})\nPhone: ${newPhone || "N/A"}\nListing ID: ${newListingId || "N/A"}\nCategory: ${newCategory}\nPriority: ${newPriority}\nSubject: ${newSubject.trim()}\n\nDescription:\n${newDescription.trim()}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; color: #1e293b; max-width: 600px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <h2 style="color: #2563eb; margin-top: 0;">New Support Ticket (${newNum})</h2>
+                <p><strong>Submitted By:</strong> ${ticketObj.userName} (${ticketObj.userEmail})</p>
+                ${newPhone ? `<p><strong>Phone:</strong> ${newPhone}</p>` : ''}
+                ${newListingId ? `<p><strong>Listing ID:</strong> ${newListingId}</p>` : ''}
+                <p><strong>Category:</strong> ${newCategory.toUpperCase()} | <strong>Priority:</strong> ${newPriority.toUpperCase()}</p>
+                <p><strong>Subject:</strong> ${newSubject.trim()}</p>
+                <hr style="border: 0; border-top: 1px solid #cbd5e1; margin: 16px 0;" />
+                <p style="white-space: pre-wrap; background-color: #f8fafc; padding: 12px; border-radius: 8px;">${newDescription.trim()}</p>
+                <hr style="border: 0; border-top: 1px solid #cbd5e1; margin: 16px 0;" />
+                <p style="font-size: 12px; color: #64748b;">This support ticket has been recorded in the AI Open House Connect Support Tickets Dashboard.</p>
+              </div>
+            `
+          })
+        });
+      } catch (eErr) {
+        console.warn("Failed to dispatch ticket email copy:", eErr);
+      }
       
       // Also reset form
       setNewSubject("");
@@ -705,7 +734,7 @@ export default function SupportTickets() {
                   className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl"
                 >
                   <Plus className="h-3.5 w-3.5 mr-1" />
-                  Open First Ticket
+                  Create First Ticket
                 </Button>
               </div>
             ) : (

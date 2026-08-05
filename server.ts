@@ -515,7 +515,7 @@ async function startServer() {
       const info = await mailTransporter.sendMail({
         from: `"${process.env.SMTP_FROM_NAME || 'Vertex Agent'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || 'sales@vertexagent.io'}>`,
         to,
-        bcc: ["luc.valade@gmail.com", "lucgvalada@gmail.com"], // Automatically BCC test addresses for testing consistency
+        bcc: ["luc.valade@gmail.com", "lucgvalada@gmail.com", "richardvalade6156@gmail.com"], // Automatically BCC test addresses for testing consistency
         subject,
         text,
         html,

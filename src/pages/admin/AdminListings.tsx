@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
+import { isListingExpired } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,13 +126,19 @@ export default function AdminListings() {
     }
   };
 
-  const toggleListingStatus = async (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'Active' ? 'Draft' : 'Active';
+  const toggleListingStatus = async (id: string, currentStatus: string, expiredListingDate?: string) => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const isCurrentlyExpired = currentStatus === 'Expired' || currentStatus === 'Draft' || (expiredListingDate && expiredListingDate <= todayStr);
+    const newStatus = isCurrentlyExpired ? 'Active' : 'Expired';
     try {
-      await updateDoc(doc(db, "listings", id), {
+      const updateData: any = {
         status: newStatus,
         updatedAt: Date.now()
-      });
+      };
+      if (newStatus === 'Active' && expiredListingDate && expiredListingDate <= todayStr) {
+        updateData.expiredListingDate = "";
+      }
+      await updateDoc(doc(db, "listings", id), updateData);
       toast.success(`Listing status set to ${newStatus}`);
     } catch (err) {
       toast.error("Failed to toggle listing status");
@@ -391,23 +398,31 @@ export default function AdminListings() {
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleListingStatus(listing.id, listing.status)}
-                        className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        style={{ backgroundColor: listing.status === 'Active' ? '#22c55e' : '#ef4444' }}
-                        title="Click to toggle listing status between Active (ON) and Draft (OFF)"
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            listing.status === 'Active' ? 'translate-x-5' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                      <span className={`text-[10px] font-black uppercase tracking-wider ${
-                        listing.status === 'Active' ? 'text-green-600' : 'text-red-500'
-                      }`}>
-                        {listing.status === 'Active' ? 'ACTIVE' : `DRAFT`}
-                      </span>
+                      {(() => {
+                        const expired = isListingExpired(listing);
+                        const isActive = listing.status === 'Active' && !expired;
+                        return (
+                          <>
+                            <button
+                              onClick={() => toggleListingStatus(listing.id, listing.status, listing.expiredListingDate)}
+                              className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                              style={{ backgroundColor: isActive ? '#22c55e' : '#ef4444' }}
+                              title="Click to toggle listing status between Active (ON) and Expired (OFF)"
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  isActive ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-[10px] font-black uppercase tracking-wider ${
+                              isActive ? 'text-green-600' : 'text-red-500'
+                            }`}>
+                              {isActive ? 'ACTIVE' : 'EXPIRED'}
+                            </span>
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
                   <td className="px-6 py-5">
@@ -482,23 +497,31 @@ export default function AdminListings() {
               </div>
               <div className="flex flex-wrap gap-3 items-center text-[10px] bg-slate-50 p-2.5 rounded-xl border border-slate-100 w-full justify-between">
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleListingStatus(listing.id, listing.status)}
-                    className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                    style={{ backgroundColor: listing.status === 'Active' ? '#22c55e' : '#ef4444' }}
-                    title="Toggle Listing Status"
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        listing.status === 'Active' ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                  <span className={`text-[9px] font-black uppercase tracking-wider ${
-                    listing.status === 'Active' ? 'text-green-600' : 'text-red-500'
-                  }`}>
-                    {listing.status === 'Active' ? 'ACTIVE' : `DRAFT`}
-                  </span>
+                  {(() => {
+                    const expired = isListingExpired(listing);
+                    const isActive = listing.status === 'Active' && !expired;
+                    return (
+                      <>
+                        <button
+                          onClick={() => toggleListingStatus(listing.id, listing.status, listing.expiredListingDate)}
+                          className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                          style={{ backgroundColor: isActive ? '#22c55e' : '#ef4444' }}
+                          title="Toggle Listing Status"
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              isActive ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className={`text-[9px] font-black uppercase tracking-wider ${
+                          isActive ? 'text-green-600' : 'text-red-500'
+                        }`}>
+                          {isActive ? 'ACTIVE' : 'EXPIRED'}
+                        </span>
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-700 font-bold">
                   {typeof listing.price === 'number' ? `$${listing.price.toLocaleString()}` : (listing.price || "N/A")}
@@ -544,7 +567,7 @@ export default function AdminListings() {
                 className="w-full h-10 border rounded-lg px-3 text-sm font-bold bg-white"
               >
                 <option value="Active">Active</option>
-                <option value="Draft">Draft</option>
+                <option value="Expired">Expired</option>
                 <option value="Sold">Sold</option>
                 <option value="Off-Market">Off-Market</option>
               </select>

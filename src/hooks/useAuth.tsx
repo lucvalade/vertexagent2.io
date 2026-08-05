@@ -189,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     <div style="background-color: #ffffff; padding: 40px; border-radius: 24px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); border: 1px solid #e2e8f0;">
                       <div style="text-align: center; margin-bottom: 30px;">
                         <span style="font-size: 48px;">🚀</span>
-                        <h1 style="color: #0f172a; font-size: 28px; font-weight: 800; margin: 15px 0 5px; tracking-tight: -0.025em; text-transform: uppercase; font-style: italic;">Welcome to AI Open House Connect</h1>
+                        <h1 style="color: #0f172a; font-size: 28px; font-weight: 800; margin: 15px 0 5px; tracking-tight: -0.025em; text-transform: uppercase; font-style: italic;">Welcome to <span style="font-weight: 900; color: #000000;">AI Open House Connect</span></h1>
                         <p style="color: #64748b; font-size: 14px; font-weight: 500; margin: 0;">Try Free for 14 Days (No Credit Card Required)</p>
                       </div>
 
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       </p>
 
                       <p style="font-size: 15px; line-height: 1.6; color: #475569; margin-bottom: 25px;">
-                        We are thrilled to welcome you to aiopenhouseconnect.com. Your account has been provisioned on our <strong>14-Day Free Trial</strong> tier. This gives you complete access to generate high-fidelity AI-powered talking open houses and remote digital tours!
+                        Welcome to <strong style="font-weight: 800; color: #000000;">AI Open House Connect</strong>. Your 14-Day Free Trial is now active, unlocking AI-powered talking open houses, remote digital tours, and instant access to every active property’s interactive Touchless Sign-In form and AI Walkthrough Voice Tour, with dynamic codes you can print or scan right away
                       </p>
 
                       <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 16px; padding: 20px; margin-bottom: 30px;">
