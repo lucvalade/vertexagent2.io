@@ -97,6 +97,7 @@ import Lenders from './pages/Lenders.tsx';
 import AiTours from './pages/AiTours.tsx';
 import OpenHousesAgent from './pages/OpenHousesAgent.tsx';
 
+import EmailMarketing from './pages/EmailMarketing.tsx';
 import Integrations from './pages/Integrations.tsx';
 import SupportTickets from './pages/SupportTickets.tsx';
 import ApiUsage from './pages/ApiUsage.tsx';
@@ -245,6 +246,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="leads" element={<Leads />} />
               <Route path="leads/:leadId" element={<LeadDetails />} />
               <Route path="flyers" element={<Flyers />} />
+              <Route path="email-marketing" element={<Navigate to="/app/admin/email-marketing" replace />} />
               <Route path="lenders" element={<Lenders />} />
               <Route path="aitours" element={<AiTours />} />
               <Route path="openhouses" element={<OpenHousesAgent />} />
@@ -279,6 +281,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="api-usage" element={<ApiUsage />} />
                 <Route path="logs" element={<AdminLogs />} />
                 <Route path="emails" element={<AdminEmails />} />
+                <Route path="email-marketing" element={<EmailMarketing />} />
                 <Route path="brokerage" element={<BrokerageSettings />} />
                 <Route path="settings" element={<Settings />} />
               </Route>

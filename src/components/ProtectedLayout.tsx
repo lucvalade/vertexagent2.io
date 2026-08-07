@@ -342,11 +342,11 @@ export default function ProtectedLayout() {
     { label: "Manage Agents", icon: Users, path: "/app/admin/users" },
     { label: "All Listings", icon: List, path: "/app/admin/listings" },
     { label: "Analytics & Telemetry", icon: BarChart2, path: "/app/admin/analytics" },
+    { label: "Email Marketing Studio", icon: Mail, path: "/app/admin/email-marketing" },
     { label: "Support Tickets", icon: LifeBuoy, path: "/app/admin/tickets" },
     { label: "API Usage Tracking", icon: Cpu, path: "/app/admin/api-usage" },
     { label: "Welcome Messages", icon: Volume2, path: "/app/admin/welcomes" },
     { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
-    { label: "Onboarding Emails", icon: Mail, path: "/app/admin/emails" },
     { label: "Launch Notifications FREE Plan", icon: Bell, path: "/app/admin/notifications" },
     { label: "System Logs", icon: FileBox, path: "/app/admin/logs" },
     { label: "Settings", icon: Settings, path: "/app/admin/settings" },
@@ -375,7 +375,7 @@ export default function ProtectedLayout() {
                   : 'bg-white/20 text-white border-white/30'
               }`}>
                 <Shield className="h-2 w-2" />
-                {viewMode === 'ADMIN' ? 'Admin Mode' : 'Client Mode'}
+                {viewMode === 'ADMIN' ? 'Admin Mode' : 'Agent View'}
                 <ChevronDown className="h-2 w-2 ml-1 opacity-50" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-40">
@@ -387,7 +387,7 @@ export default function ProtectedLayout() {
               )}
               <DropdownMenuItem onClick={() => { setViewMode('CLIENT'); navigate("/app/overview"); }} className="cursor-pointer">
                 <Home className="h-3.5 w-3.5 mr-2 text-blue-600" />
-                <span className="text-xs font-bold uppercase tracking-wider">Client Mode</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Agent View</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -644,7 +644,7 @@ export default function ProtectedLayout() {
                   onClick={() => { setViewMode('CLIENT'); navigate('/app/overview'); }}
                   className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${viewMode === 'CLIENT' ? 'bg-blue-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'}`}
                 >
-                  Client View
+                  Agent View
                 </button>
                 <button
                   onClick={() => { setViewMode('ADMIN'); navigate('/app/admin'); }}

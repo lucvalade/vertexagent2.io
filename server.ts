@@ -322,6 +322,71 @@ async function startServer() {
     }
   });
 
+  // Email Campaign AI Generator Endpoint
+  app.post("/api/generate-email-campaign", async (req: any, res: any) => {
+    try {
+      const { prompt, brandProfile, userEmail } = req.body || {};
+      if (!prompt) {
+        return res.status(400).json({ error: "Missing required prompt parameter" });
+      }
+
+      const businessName = brandProfile?.businessName || "AI Open House Connect Practice";
+      const senderName = brandProfile?.senderName || "Real Estate Team";
+
+      const systemInstruction = `
+        You are Sora, the AI email marketing architect for real estate platforms.
+        Generate a high-converting, professional, compliant email campaign.
+        Format your response as a valid JSON object matching this schema exactly:
+        {
+          "subjectLines": ["Subject 1", "Subject 2", "Subject 3"],
+          "previewText": "Short snippet text",
+          "recommendedAudience": "Target segment name",
+          "suggestedTiming": "Best day and time to send",
+          "emailBodyHtml": "<p>Branded HTML email body</p>",
+          "ctaButtonText": "Call to action label",
+          "ctaButtonUrl": "https://aiopenhouseconnect.com"
+        }
+      `;
+
+      if (process.env.GEMINI_API_KEY) {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const model = ai.getGenerativeModel({
+          model: "gemini-2.5-flash",
+          systemInstruction,
+          generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const result = await model.generateContent(
+          `Campaign Goal: ${prompt}\nBusiness Name: ${businessName}\nSender Name: ${senderName}`
+        );
+        const responseText = result.response.text();
+        const parsed = JSON.parse(responseText);
+        return res.json(parsed);
+      } else {
+        // Fallback structured campaign
+        return res.json({
+          subjectLines: [
+            `Exclusive Property Update from ${senderName}`,
+            `Thank You for Visiting! Private Showing & AI Walkthrough Details`,
+            `Your Personalized Real Estate & Financing Guide`
+          ],
+          previewText: "Review your recent open house visit recap and schedule a private secondary showing.",
+          recommendedAudience: "Open House Sign-Ins & High-Intent Leads",
+          suggestedTiming: "Tuesday at 9:30 AM (Highest open rate window)",
+          emailBodyHtml: `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b;"><p>Hello,</p><p>Thank you for connecting with <strong>${businessName}</strong>. We are delighted to assist you with your property journey.</p><p>You can access our interactive digital listing tour and Sora's 24/7 AI voice walkthrough at any time.</p><p>Best regards,<br/><strong>${senderName}</strong></p></div>`,
+          ctaButtonText: "Schedule Private Second Walkthrough",
+          ctaButtonUrl: "https://aiopenhouseconnect.com"
+        });
+      }
+    } catch (err: any) {
+      console.error("[Email Campaign AI Error]:", err);
+      return res.status(500).json({
+        error: "Failed to generate campaign",
+        details: err.message
+      });
+    }
+  });
+
   // Audio upload API endpoint
   app.post("/api/upload-audio", upload.single("file"), (req: any, res: any) => {
     try {
