@@ -20,6 +20,10 @@ export interface ListingImage {
 export interface Listing {
   id: string;
   ownerId: string;
+  assigned_agent_id?: string;
+  co_listing_agent_id?: string;
+  team_id?: string;
+  brokerage_id?: string;
   address: string;
   city?: string;
   province?: string;
@@ -137,9 +141,14 @@ export function isListingExpired(listing: Partial<Listing>): boolean {
 
 export interface Lead {
   id: string;
+  contact_id?: string;
   listingId: string;
   listingAddress: string;
   agentId: string;
+  assigned_agent_id?: string;
+  team_id?: string;
+  brokerage_id?: string;
+  lifecycle_stage?: "Lead" | "Active Client" | "Past Client";
   name: string;
   phone?: string;
   email?: string;
@@ -932,6 +941,13 @@ export async function createLead(listingId: string, lead: Lead) {
           lead.agentId = listingData.ownerId;
           lead.listingAddress = listingData.address;
 
+          // Populate new relational fields from listing
+          lead.assigned_agent_id = listingData.assigned_agent_id || listingData.ownerId;
+          lead.team_id = listingData.team_id;
+          lead.brokerage_id = listingData.brokerage_id;
+          lead.lifecycle_stage = lead.lifecycle_stage || "Lead";
+          lead.contact_id = lead.contact_id || lead.id;
+
           // Perform automatic jurisdiction & compliance framework detection via Property Context + Area Code Parsing
           const geoInfo = detectLeadJurisdiction(
             listingData,
@@ -1206,6 +1222,73 @@ export async function finishTourAndGetNotes(params: {
     throw new Error(err.error || "Failed to finish tour & compile notes");
   }
   return await response.json();
+}
+
+export interface Agent {
+  agent_id: string; // PK
+  broker_id?: string; // FK
+  team_id?: string; // FK
+  brokerage_id?: string; // FK
+  name: string;
+  email: string;
+}
+
+export interface Team {
+  team_id: string; // PK
+  brokerage_id: string; // FK
+  name: string;
+}
+
+export interface Brokerage {
+  brokerage_id: string; // PK
+  name: string;
+}
+
+export interface TourInteraction {
+  interaction_id: string; // PK
+  tour_id: string; // FK
+  property_id: string; // FK
+  contact_id: string; // FK
+  agent_id: string; // FK
+  ai_tour_duration_seconds: number;
+  rooms_viewed_count: number;
+  ai_questions_asked: string[]; // JSON/Array
+  open_house_signin_timestamp: number;
+  lead_source: "AI_Tour" | "Open_House_QR" | "Walk_In";
+  created_at: number;
+}
+
+export interface EmailInteraction {
+  email_id: string; // PK
+  contact_id: string; // FK
+  property_id?: string; // FK
+  agent_id: string; // FK
+  interaction_status: "delivered" | "opened" | "clicked" | "bounced" | "unsubscribed";
+  last_interaction_at: number;
+  created_at: number;
+}
+
+export interface SupportTicket {
+  ticket_id: string; // PK
+  requester_id: string; // FK (Agent or Contact)
+  assigned_support_id?: string; // FK
+  brokerage_id: string; // FK
+  related_entity_type: "property" | "tour" | "email" | "other";
+  related_entity_id: string; // Polymorphic FK
+  status: "open" | "in_progress" | "resolved" | "closed";
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ActivityLog {
+  activity_id: string; // PK
+  contact_id: string; // FK
+  agent_id: string; // FK
+  property_id: string; // FK
+  source_channel: "AI_Tour_QR" | "Email_Campaign" | "Website";
+  event_type: "Tour_Completed" | "Question_Asked" | "Offer_Intent_Clicked";
+  session_id: string;
+  created_at: number;
 }
 
 

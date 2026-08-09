@@ -116,6 +116,10 @@ export default function ProspectInsightReport({
     lead.customAnswers?.verifiedOn || lead.createdAt
   );
 
+  // State for Outside Identity Verification Guide modal & SMS Preview modal
+  const [isVerificationGuideOpen, setIsVerificationGuideOpen] = useState(false);
+  const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
+
   // AI rewriting loader states
   const [rewritingSms, setRewritingSms] = useState(false);
   const [rewritingEmail, setRewritingEmail] = useState(false);
@@ -383,19 +387,31 @@ Sora AI Open House guided walkthrough logs ready for your review:
 7. LENDER AUDIT: Opt-In: ${isMortgageInterested ? "YES (Unlocked)" : "NO (Suppressed)"} | Active Pair: ${isMortgageInterested ? (lead.customAnswers?.routedLender || "Gold Trust Lending Group") : "Locked"}`;
   };
 
-  const handleSendSmsToAgent = async () => {
-    const toastId = toast.loading(`Dispatching Prospect Insight SMS brief to registered agent...`);
+  const targetAgentPhone = lead.customAnswers?.agentPhone || agentPhone || "(555) 019-2831";
+  const agentEmail = lead.customAnswers?.agentEmail || auth.currentUser?.email || "agent@aiopenhouseconnect.com";
+
+  // Short SMS notification message informing the agent that the report was emailed
+  const getSmsNotificationMessage = () => {
+    return `AI OPEN HOUSE CONNECT: Prospect Insight Report for lead ${lead.name} (${lead.status || "New"} Lead - ${lead.listingAddress}) has been compiled and sent to your email (${agentEmail}). Check your inbox for full details.`;
+  };
+
+  const handleSendSmsToAgent = () => {
+    setIsSmsModalOpen(true);
+  };
+
+  const handleDispatchSmsNotification = async () => {
+    const toastId = toast.loading(`Dispatching SMS notification to registered agent...`);
     try {
-      const smsBody = getSmsReport();
-      // SMS simulation and logging
-      console.log(`[SMS DISPATCH] To Agent Phone: ${agentPhone}\nBody:\n${smsBody}`);
+      const smsMessage = getSmsNotificationMessage();
+      console.log(`[SMS DISPATCH] To Phone: ${targetAgentPhone}\nMessage:\n${smsMessage}`);
       
       setTimeout(() => {
-        toast.success("Saved successfully", { 
+        toast.success("SMS Notification Dispatched!", { 
           id: toastId, 
-          description: `✨ SMS containing complete 7-part Prospect Insight Brief dispatched to registered agent: ${agentPhone}` 
+          description: `📱 Sent SMS to ${targetAgentPhone}: "${smsMessage}"` 
         });
-      }, 800);
+        setIsSmsModalOpen(false);
+      }, 700);
     } catch (err: any) {
       console.error(err);
       toast.error(`SMS dispatch failed: ${err.message || "Twilio Queue busy"}`);
@@ -689,7 +705,7 @@ Sora AI Open House guided walkthrough logs ready for your review:
       {/* Dynamic Status Pills Ribbon */}
       <div className="bg-slate-50/50 border-b border-slate-100 px-6 py-2.5 flex items-center gap-4 text-xs font-mono shrink-0 overflow-x-auto">
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-slate-400 text-[9.5px] uppercase font-black tracking-widest font-sans">Lead Temperature:</span>
+          <span className="text-black font-extrabold text-[9.5px] uppercase tracking-widest font-sans">Lead Temperature:</span>
           <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
             leadTemperature === "Hot" ? "bg-red-50 text-red-600 border border-red-200" : 
             leadTemperature === "Warm" ? "bg-sky-50 text-sky-650 border border-sky-200" : 
@@ -700,14 +716,14 @@ Sora AI Open House guided walkthrough logs ready for your review:
         </div>
         <span className="text-slate-200 font-light">|</span>
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-slate-400 text-[9.5px] uppercase font-black tracking-widest font-sans">Prospect Type:</span>
+          <span className="text-black font-extrabold text-[9.5px] uppercase tracking-widest font-sans">Prospect Type:</span>
           <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black uppercase">
             {prospectType}
           </span>
         </div>
         <span className="text-slate-200 font-light">|</span>
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-slate-400 text-[9.5px] uppercase font-black tracking-widest font-sans">Follow-Up Priority:</span>
+          <span className="text-black font-extrabold text-[9.5px] uppercase tracking-widest font-sans">Follow-Up Priority:</span>
           <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
             followUpPriority === "High" ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-slate-100 text-slate-500 border border-slate-200"
           }`}>
@@ -796,10 +812,20 @@ Sora AI Open House guided walkthrough logs ready for your review:
 
         {/* 2.5 Outside Identity Verification Hub (PRD Component) */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-1.5 font-mono">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" /> Outside Identity Verification Hub
-            </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-1.5 gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-1.5 font-mono">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Outside Identity Verification Hub
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsVerificationGuideOpen(true)}
+                className="text-[10px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                title="Learn how Verification Methods & Provider SDKs work"
+              >
+                <Info className="h-3 w-3 text-emerald-600" /> How Method & SDK Work
+              </button>
+            </div>
             <span className="text-[9.5px] text-slate-400 italic">Government-grade identity checks & compliance flags.</span>
           </div>
 
@@ -906,7 +932,7 @@ Sora AI Open House guided walkthrough logs ready for your review:
                   className="rounded bg-slate-950 border-slate-800 text-emerald-500 focus:ring-opacity-0 h-4 w-4 cursor-pointer"
                 />
                 <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5 font-mono">
-                  ⚠️ FORWARD TO MANUAL ADMIN COMPLIANCE REVIEW
+                  ⚠️ FORWARD TO MANUAL ADMIN COMPLIANCE FOR REVIEW
                 </span>
               </label>
 
@@ -1451,6 +1477,123 @@ Sora AI Open House guided walkthrough logs ready for your review:
         role="agent"
         propertyAddress={lead.listingAddress}
       />
+
+      {/* Outside Identity Verification Hub Guide Modal */}
+      {isVerificationGuideOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl p-6 max-w-xl w-full space-y-4 shadow-2xl font-sans">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-emerald-400 font-mono text-xs font-black uppercase tracking-wider">
+                <ShieldCheck className="h-5 w-5 text-emerald-500" /> Outside Identity Verification Hub & Provider SDKs
+              </div>
+              <button 
+                onClick={() => setIsVerificationGuideOpen(false)}
+                className="text-slate-400 hover:text-white font-mono text-sm px-2 py-0.5 rounded cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+              <p className="text-slate-200 font-medium">
+                The <strong className="text-emerald-400">Outside Identity Verification Hub</strong> coordinates government-grade identification protocols and real-time biometric matching for open house visitors.
+              </p>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <h4 className="font-bold text-slate-100 text-[11px] uppercase tracking-wider text-emerald-400 font-mono">1. Verification Methods</h4>
+                <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                  <li><strong>Government-issued photo ID:</strong> Attendee scans a driver's license or passport on the kiosk/QR page.</li>
+                  <li><strong>Third-party identity service:</strong> Automated cross-checking against Clearbit / FullContact identity endpoints.</li>
+                  <li><strong>Brokerage-admin verification:</strong> Manual sign-off by an authorized compliance officer or team lead.</li>
+                  <li><strong>Manual review only:</strong> Escalated desk audit for flagged or incomplete attendee records.</li>
+                </ul>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <h4 className="font-bold text-slate-100 text-[11px] uppercase tracking-wider text-emerald-400 font-mono">2. Verification Provider SDKs</h4>
+                <ul className="list-disc pl-4 space-y-1 text-slate-300 text-[11px]">
+                  <li><strong>Veriff:</strong> Enterprise 3D liveness detection & biometric document verification.</li>
+                  <li><strong>Sumsub:</strong> Global KYC/AML sanction screening and address lookup.</li>
+                  <li><strong>Onfido:</strong> Facial photo matching & government ID document authentication.</li>
+                  <li><strong>Jumio:</strong> Optical character recognition (OCR) ID scanning.</li>
+                  <li><strong>Local Auth Only:</strong> Standard self-declared tablet kiosk entry without external SDK check.</li>
+                </ul>
+              </div>
+
+              <div className="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl text-[11px] text-emerald-200">
+                💡 <strong>Compliance Workflow:</strong> When an identity status is changed to <em>ID verified</em> or <em>Brokerage verified</em>, the active trust score automatically updates to <strong>99% Certified</strong> and logs a cryptographically timestamped audit record in Firestore.
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
+              <Button
+                onClick={() => setIsVerificationGuideOpen(false)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs uppercase tracking-wider px-4 h-8 rounded-lg cursor-pointer"
+              >
+                Got It
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SMS Agent Notification Preview Modal */}
+      {isSmsModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-200 text-slate-900 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-blue-600 font-mono text-xs font-black uppercase tracking-wider">
+                <MessageSquare className="h-5 w-5 text-blue-600" /> SMS Agent Notification Preview
+              </div>
+              <button 
+                onClick={() => setIsSmsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 font-mono text-sm px-2 py-0.5 rounded cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs text-slate-600">
+                Via SMS, the agent receives a concise notification informing them that the full Prospect Insight Report was dispatched to their email:
+              </p>
+
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-xs font-mono text-slate-800 space-y-2">
+                <div className="flex justify-between items-center text-[10px] text-slate-500 border-b border-slate-200 pb-1 font-sans">
+                  <span>📱 Recipient Phone: <strong className="text-slate-900">{targetAgentPhone}</strong></span>
+                  <span>📧 Email Target: <strong className="text-slate-900">{agentEmail}</strong></span>
+                </div>
+                <p className="leading-relaxed font-semibold text-slate-900 pt-1">
+                  "{getSmsNotificationMessage()}"
+                </p>
+              </div>
+
+              <p className="text-[10px] text-slate-500 italic">
+                Note: The full 7-part report is sent via email to avoid SMS character limits and deliver rich HTML formatting.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(getSmsNotificationMessage());
+                  toast.success("Short SMS notification message copied to clipboard!");
+                }}
+                className="text-xs font-bold gap-1 cursor-pointer h-9"
+              >
+                <Copy className="h-3.5 w-3.5 text-slate-600" /> Copy SMS Text
+              </Button>
+              <Button
+                onClick={handleDispatchSmsNotification}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs gap-1.5 cursor-pointer h-9 px-4"
+              >
+                <Send className="h-3.5 w-3.5 text-white" /> Dispatch SMS
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

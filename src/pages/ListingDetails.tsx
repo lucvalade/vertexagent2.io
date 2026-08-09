@@ -258,7 +258,11 @@ export default function ListingDetails() {
         id: crypto.randomUUID(),
         address: `${listing.address} (Copy)`,
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
+        // Keep existing relational fields if present, or maintain owner as is
+        assigned_agent_id: listing.assigned_agent_id || listing.ownerId,
+        team_id: listing.team_id || "",
+        brokerage_id: listing.brokerage_id || ""
       };
       await createListing(duplicated);
       toast.success("Listing duplicated successfully! Redirecting...", { id: toastId });

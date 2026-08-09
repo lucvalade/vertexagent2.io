@@ -350,7 +350,7 @@ async function startServer() {
 
       if (process.env.GEMINI_API_KEY) {
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const model = ai.getGenerativeModel({
+        const model = (ai as any).getGenerativeModel({
           model: "gemini-2.5-flash",
           systemInstruction,
           generationConfig: { responseMimeType: "application/json" }

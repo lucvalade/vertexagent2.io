@@ -2812,6 +2812,9 @@ export default function EditListing() {
         const fullPayload = {
           id: newId,
           ownerId: user!.id,
+          assigned_agent_id: user!.id, // Default to owner
+          team_id: user!.team_id || "",
+          brokerage_id: user!.brokerage_id || "",
           createdAt: Date.now(),
           status: computedStatus,
           ...payload
@@ -3479,12 +3482,12 @@ export default function EditListing() {
                         if (inputEl) {
                           try {
                             if ('showPicker' in inputEl) {
-                              inputEl.showPicker();
+                              (inputEl as any).showPicker();
                             } else {
-                              inputEl.focus();
+                              (inputEl as any).focus();
                             }
                           } catch (err) {
-                            inputEl.focus();
+                            (inputEl as any).focus();
                           }
                         }
                       }}
@@ -3775,7 +3778,7 @@ export default function EditListing() {
         {currentStep === 3 && (
           <Card>
             <CardHeader>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+              <div className="flex flex-col gap-4 w-full">
                 <div>
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-slate-800 flex items-center gap-2">
@@ -3794,7 +3797,7 @@ export default function EditListing() {
                       <HelpCircle className="h-4 w-4" />
                     </button>
                   </div>
-                  <CardDescription>
+                  <CardDescription className="mt-1">
                     Configure up to 24 active questions that Sora can speak answers for. Drag and drop cards or use the up/down arrows to reorder questions. These presets sync directly with the AI Tour Ask Me About section.
                   </CardDescription>
 
@@ -3834,12 +3837,14 @@ export default function EditListing() {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row flex-wrap items-center gap-2 shrink-0">
+
+                {/* Control Action Buttons (Moved directly below Text & Search area) */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-200/80">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleResetAndSyncWithPhotos}
-                    className="gap-1.5 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold shadow-xs cursor-pointer text-xs h-10 w-full sm:w-auto"
+                    className="gap-1.5 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold shadow-xs cursor-pointer text-xs h-9"
                     title="Reset and match all Ask Me About questions, photos, and descriptions with Property Photos & Media Manager"
                   >
                     <RotateCcw className="h-3.5 w-3.5 text-amber-700" />
@@ -3849,7 +3854,7 @@ export default function EditListing() {
                     type="button"
                     variant="outline"
                     onClick={handleSortAlphabetically}
-                    className="gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold shadow-xs cursor-pointer text-xs h-10 w-full sm:w-auto"
+                    className="gap-1.5 border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold shadow-xs cursor-pointer text-xs h-9"
                     title="Sort all Custom Q&A questions alphabetically"
                   >
                     <ArrowUpDown className="h-3.5 w-3.5 text-blue-600" />
@@ -3858,7 +3863,7 @@ export default function EditListing() {
                   <Button 
                     type="button" 
                     onClick={() => setIsAddFormOpen(true)}
-                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md cursor-pointer text-xs h-10 w-full sm:w-auto"
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md cursor-pointer text-xs h-9"
                   >
                     <Plus className="h-4 w-4" />
                     Add Custom Q&A
@@ -3871,7 +3876,7 @@ export default function EditListing() {
                         toast.success("Ask Me About Q&As saved successfully!");
                       }
                     }}
-                    className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer text-xs h-10 w-full sm:w-auto"
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md cursor-pointer text-xs h-9"
                   >
                     Save
                   </Button>

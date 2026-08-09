@@ -235,6 +235,9 @@ export default function Dashboard() {
       const listing1: Listing = {
         id: crypto.randomUUID(),
         ownerId: user.id,
+        assigned_agent_id: user.id,
+        team_id: user.team_id || "",
+        brokerage_id: user.brokerage_id || "",
         address: "888 Bel Air Rd",
         city: "Los Angeles",
         province: "CA",
@@ -258,6 +261,9 @@ export default function Dashboard() {
       const listing2: Listing = {
         id: crypto.randomUUID(),
         ownerId: user.id,
+        assigned_agent_id: user.id,
+        team_id: user.team_id || "",
+        brokerage_id: user.brokerage_id || "",
         address: "15 Central Park West, Penthouse 40",
         city: "New York",
         province: "NY",
@@ -520,13 +526,19 @@ export default function Dashboard() {
 
           {(() => {
             const uniqueRaw = Array.from(new Map(listings.map(l => [l.id, l])).values());
-            const tabFiltered = uniqueRaw.filter(listing => isExpiredTab ? isListingExpired(listing) : !isListingExpired(listing));
-            const filtered = tabFiltered.filter(listing => {
-              if (!appliedQuery) return true;
-              const query = appliedQuery.toLowerCase();
-              const addressMatch = (listing.address || "").toLowerCase().includes(query);
-              const mlsMatch = (listing.mlsNumber || "").toLowerCase().includes(query);
-              return addressMatch || mlsMatch;
+            const filtered = uniqueRaw.filter(listing => {
+              if (appliedQuery.trim()) {
+                const query = appliedQuery.toLowerCase().trim();
+                const addressMatch = (listing.address || "").toLowerCase().includes(query);
+                const idMatch = (listing.id || "").toLowerCase().includes(query);
+                const mlsMatch = (listing.mlsNumber || "").toLowerCase().includes(query);
+                const cityMatch = (listing.city || "").toLowerCase().includes(query);
+                const provinceMatch = (listing.province || "").toLowerCase().includes(query);
+                const postalMatch = (listing.postalCode || "").toLowerCase().includes(query);
+                const descMatch = (listing.description || "").toLowerCase().includes(query);
+                return addressMatch || idMatch || mlsMatch || cityMatch || provinceMatch || postalMatch || descMatch;
+              }
+              return isExpiredTab ? isListingExpired(listing) : !isListingExpired(listing);
             });
 
             if (filtered.length === 0) {

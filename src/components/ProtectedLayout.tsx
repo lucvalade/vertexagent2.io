@@ -332,7 +332,6 @@ export default function ProtectedLayout() {
     { label: "CRM Integrations", icon: Zap, path: "/app/crm" },
     { label: "Teams", icon: Building2, path: "/app/team" },
     { label: "API Usage", icon: Cpu, path: "/app/api-usage" },
-    { label: "Support Tickets", icon: LifeBuoy, path: "/app/support" },
     { label: "Settings", icon: Settings, path: "/app/settings" },
   ];
 
@@ -542,20 +541,6 @@ export default function ProtectedLayout() {
 
             {/* Desktop Horizontal Quick Main Nav Links */}
             <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 border-l border-stone-200 pl-3 xl:pl-4 text-xs font-bold text-stone-600">
-              <Link 
-                to="/app/overview" 
-                className={`px-2 xl:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 xl:gap-1.5 text-xs ${location.pathname.includes('/overview') ? 'bg-blue-50 text-blue-700 font-black' : 'hover:bg-stone-100 hover:text-stone-900'}`}
-              >
-                <LayoutDashboard className="h-3.5 w-3.5 text-blue-600" />
-                <span>Dashboard</span>
-              </Link>
-              <Link 
-                to="/app/listings" 
-                className={`px-2 xl:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 xl:gap-1.5 text-xs ${location.pathname.includes('/listings') ? 'bg-blue-50 text-blue-700 font-black' : 'hover:bg-stone-100 hover:text-stone-900'}`}
-              >
-                <List className="h-3.5 w-3.5 text-blue-600" />
-                <span>Listings</span>
-              </Link>
               <Link 
                 to="/app/openhouses" 
                 className={`px-2 xl:px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 xl:gap-1.5 text-xs ${location.pathname.includes('/openhouses') ? 'bg-blue-50 text-blue-700 font-black' : 'hover:bg-stone-100 hover:text-stone-900'}`}

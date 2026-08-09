@@ -319,9 +319,14 @@ export default function Assets() {
     }, 200);
   };
 
-  const filteredListings = listings.filter(l => 
-    l.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredListings = listings.filter(l => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (l.address || "").toLowerCase().includes(q) ||
+      (l.id || "").toLowerCase().includes(q) ||
+      (l.mlsNumber || "").toLowerCase().includes(q) ||
+      (l.city || "").toLowerCase().includes(q);
+  });
 
   const renderAssetThumbnail = (asset: Asset, listing: Listing) => {
     switch (asset.type) {

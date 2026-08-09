@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { getAllListings, getUserListings, createLead, Listing, Lead, enrichLeadData, sendEmail, getOpenHouseSessions, createOpenHouseSession, parseDateTimeToUTC, normalizeToYYYYMMDD } from "@/lib/api";
 import { db } from "@/lib/firebase";
@@ -1624,12 +1624,12 @@ Thanks,
                   if (inputEl) {
                     try {
                       if ('showPicker' in inputEl) {
-                        inputEl.showPicker();
+                        (inputEl as any).showPicker();
                       } else {
-                        inputEl.focus();
+                        (inputEl as any).focus();
                       }
                     } catch (err) {
-                      inputEl.focus();
+                      (inputEl as any).focus();
                     }
                   }
                 }}
@@ -1749,13 +1749,16 @@ Thanks,
                               </CardDescription>
                             </div>
                             <div className="flex flex-col items-end gap-1">
-                              <span 
-                                title="Mode Hybrid: Combines an on-site tablet kiosk sign-in terminal at the property with touchless QR-code entry and Sora AI guided voice tours."
-                                className="text-[10px] font-black uppercase bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1"
+                              <Link 
+                                to="/how-it-works"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Click to view detailed guide on Hybrid Execution Mode (Tablet Kiosk + Touchless QR + Sora Voice Tour)"
+                                className="text-[10px] font-black uppercase bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1 cursor-pointer transition-colors"
                               >
                                 Mode: {evt.eventMode || "Hybrid"}
                                 <HelpCircle className="h-3 w-3 text-blue-500" />
-                              </span>
+                              </Link>
                               <span className="text-[9px] font-semibold text-stone-600 bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200 text-right max-w-[210px] leading-tight">
                                 💡 <strong>Hybrid:</strong> Tablet Kiosk + Touchless QR & Sora Voice Tour.
                               </span>

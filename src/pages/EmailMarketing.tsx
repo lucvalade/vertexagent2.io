@@ -98,14 +98,14 @@ export default function EmailMarketing() {
   const [activeTab, setActiveTab] = useState<"campaigns" | "ai-generator" | "audience" | "automations" | "weekly-ideas" | "tracking-physics" | "brand" | "deliverability">("campaigns");
 
   // Admin Verification (Exclusively for Luc Valade / Platform Admin)
-  const isAdmin = user?.role === 'admin' || user?.email === 'luc.valade@gmail.com';
+  const isAdmin = (user?.role as string) === 'ADMIN' || (user?.role as string) === 'admin' || user?.email === 'luc.valade@gmail.com';
 
   // Brand profile state default for Luc Valade / Admin
   const [brandProfile, setBrandProfile] = useState({
     businessName: "AI Open House Connect (Luc Valade, Platform Admin)",
     senderName: "Luc Valade — AI Open House Connect",
     replyToEmail: user?.email || "luc.valade@gmail.com",
-    logoUrl: user?.photoURL || "",
+    logoUrl: (user as any)?.photoURL || "",
     primaryColor: "#155dfc",
     secondaryColor: "#0f172a",
     complianceFooter: "AI Open House Connect Platform Administration. Equal Housing Opportunity. All rights reserved.",

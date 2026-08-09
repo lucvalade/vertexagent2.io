@@ -71,6 +71,7 @@ export const SUPPORTED_CRMS_47: CrmItem[] = [
 
 export default function Integrations() {
   const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN" || user?.email === "luc.valade@gmail.com";
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") === "logs" ? "logs" : "integrations";
 
@@ -170,30 +171,32 @@ export default function Integrations() {
         </div>
 
         {/* Sub-Page Navigation Tabs */}
-        <div className="flex items-center bg-slate-950 p-1 border border-slate-800 rounded-xl shrink-0">
-          <button
-            onClick={() => setSearchParams({ tab: "integrations" })}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-              activeTab === "integrations"
-                ? "bg-blue-600 text-white shadow-md"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-            }`}
-          >
-            <Plug className="h-4 w-4" />
-            Connected Integrations
-          </button>
-          <button
-            onClick={() => setSearchParams({ tab: "logs" })}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-              activeTab === "logs"
-                ? "bg-blue-600 text-white shadow-md"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-            }`}
-          >
-            <Activity className="h-4 w-4 text-emerald-400" />
-            CRM Sync Logs
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center bg-slate-950 p-1 border border-slate-800 rounded-xl shrink-0">
+            <button
+              onClick={() => setSearchParams({ tab: "integrations" })}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                activeTab === "integrations"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <Plug className="h-4 w-4" />
+              Connected Integrations
+            </button>
+            <button
+              onClick={() => setSearchParams({ tab: "logs" })}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                activeTab === "logs"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <Activity className="h-4 w-4 text-emerald-400" />
+              CRM Sync Logs
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 47 CRMs Search Bar placed directly below header text */}
@@ -301,13 +304,13 @@ export default function Integrations() {
                           onClick={() => toggleIntegration(crm.id, crm.name)}
                           className={`w-full py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                             isLinked
-                              ? "bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50"
+                              ? "bg-emerald-950/60 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-900/80 shadow-xs"
                               : "bg-blue-600 hover:bg-blue-500 text-white shadow-xs"
                           }`}
                         >
                           {isLinked ? (
                             <>
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Disconnect CRM
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> {crm.name} Connected
                             </>
                           ) : (
                             <>
@@ -326,8 +329,22 @@ export default function Integrations() {
       </div>
 
       {/* Render Active Sub-Page */}
-      {activeTab === "logs" ? (
+      {activeTab === "logs" && isAdmin ? (
         <CrmSyncLogs />
+      ) : activeTab === "logs" && !isAdmin ? (
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center space-y-3">
+          <ShieldAlert className="h-10 w-10 text-amber-500 mx-auto" />
+          <h3 className="text-lg font-bold text-white">Admin Access Restricted</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            CRM Sync Logs and live telemetry debugging are available to Platform Administrators only.
+          </p>
+          <Button 
+            onClick={() => setSearchParams({ tab: "integrations" })}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs mt-2 cursor-pointer"
+          >
+            Return to Connected Integrations
+          </Button>
+        </div>
       ) : (
         <div className="space-y-6">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -357,10 +374,16 @@ export default function Integrations() {
           </div>
           <div className="p-4 border-t border-slate-850 bg-slate-950/20 mt-auto">
             <button 
-              onClick={() => toggleIntegration('hubspot')}
-              className={`w-full font-bold py-2 px-4 rounded-lg border transition-all text-sm cursor-pointer ${integrations.hubspot ? 'border-amber-600/30 text-amber-400 bg-amber-950/10 hover:bg-amber-950/25' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+              onClick={() => toggleIntegration('hubspot', 'HubSpot')}
+              className={`w-full font-bold py-2 px-4 rounded-lg border transition-all text-sm cursor-pointer flex items-center justify-center gap-2 ${integrations.hubspot ? 'border-emerald-500/50 text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 shadow-xs' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
             >
-              {integrations.hubspot ? "Disconnect HubSpot" : "Connect HubSpot"}
+              {integrations.hubspot ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" /> HubSpot Connected
+                </>
+              ) : (
+                "Connect HubSpot"
+              )}
             </button>
           </div>
         </div>
@@ -375,8 +398,19 @@ export default function Integrations() {
             <p className="text-slate-400 text-sm mb-4">Connect AI Open House Connect with 5,000+ apps. Trigger workflows when new leads request an agent or when a conversation finishes.</p>
           </div>
           <div className="p-4 border-t border-slate-850 bg-slate-950/20 mt-auto">
-            <button className="w-full bg-slate-950 border border-slate-800 text-slate-300 font-medium py-2 rounded-lg text-sm hover:bg-slate-900 transition-colors flex justify-center items-center gap-2 cursor-pointer">
-              Configure Webhooks <ArrowRight className="h-4 w-4" />
+            <button 
+              onClick={() => toggleIntegration('zapier', 'Zapier Webhooks')}
+              className={`w-full font-bold py-2 px-4 rounded-lg border transition-all text-sm cursor-pointer flex items-center justify-center gap-2 ${integrations.zapier ? 'border-emerald-500/50 text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 shadow-xs' : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-900'}`}
+            >
+              {integrations.zapier ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Zapier Connected
+                </>
+              ) : (
+                <>
+                  Configure Webhooks <ArrowRight className="h-4 w-4" />
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -390,7 +424,7 @@ export default function Integrations() {
               </div>
               {integrations.followupboss && (
                 <div className="bg-emerald-900/50 text-emerald-200 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full flex items-center gap-1 border border-emerald-800">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Active
+                  <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Connected
                 </div>
               )}
             </div>
@@ -416,16 +450,22 @@ export default function Integrations() {
             </button>
             <button 
               onClick={() => {
-                if (!apiKey) {
+                if (!apiKey && !integrations.followupboss) {
                   setShowConfig(true);
                   toast.info("Please enter your Follow Up Boss API Key to begin.");
                 } else {
-                  toggleIntegration('followupboss');
+                  toggleIntegration('followupboss', 'Follow Up Boss');
                 }
               }}
-              className={`flex-grow font-bold py-2 rounded-lg text-sm transition-all cursor-pointer ${integrations.followupboss ? 'bg-slate-950 hover:bg-slate-900 text-slate-300 border border-slate-800' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
+              className={`flex-grow font-bold py-2 rounded-lg text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${integrations.followupboss ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-900/80' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
             >
-              {integrations.followupboss ? "Disconnect FUB" : "Connect FUB"}
+              {integrations.followupboss ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Follow Up Boss Connected
+                </>
+              ) : (
+                "Connect FUB"
+              )}
             </button>
           </div>
         </div>
