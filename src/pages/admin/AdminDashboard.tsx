@@ -389,57 +389,64 @@ export default function AdminDashboard() {
           {/* Brokerage Quota */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-left">
             <h3 className="font-bold text-slate-900 mb-4 text-sm uppercase tracking-wider flex items-center justify-between">
-              <span>Brokerage Quota</span>
-              <span className="text-[10px] font-bold text-slate-400 normal-case bg-slate-100 px-2 py-0.5 rounded-full">System Limits</span>
+              <span className="flex items-center gap-2">
+                <span>Brokerage Quota & Accounts</span>
+              </span>
+              <button
+                onClick={() => navigate('/app/admin/brokerage')}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>View All Brokerages →</span>
+              </button>
             </h3>
             <div className="grid sm:grid-cols-3 gap-4">
               <div 
                 className="group/item cursor-pointer p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors border border-slate-100"
-                onClick={() => navigate('/app/admin/users')}
-                title="Manage active agent seats"
+                onClick={() => navigate('/app/admin/brokerage')}
+                title="Manage multi-brokerage agent seats"
               >
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className="text-slate-600 group-hover/item:text-blue-600 font-bold flex items-center gap-1 transition-colors">
                     Agent Seats
                   </span>
-                  <span className="font-extrabold text-slate-900">24 / 50</span>
+                  <span className="font-extrabold text-slate-900">58 / 90</span>
                 </div>
                 <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden mb-1">
-                  <div className="h-full bg-blue-600 rounded-full group-hover/item:bg-blue-500 transition-colors" style={{ width: '48%' }}></div>
+                  <div className="h-full bg-blue-600 rounded-full group-hover/item:bg-blue-500 transition-colors" style={{ width: '64%' }}></div>
                 </div>
-                <span className="text-[9px] text-blue-600 font-black uppercase tracking-wider">Manage →</span>
+                <span className="text-[9px] text-blue-600 font-black uppercase tracking-wider">Manage Quotas →</span>
               </div>
 
               <div 
                 className="group/item cursor-pointer p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors border border-slate-100"
-                onClick={() => navigate('/app/assets')}
-                title="View dynamic asset storage"
+                onClick={() => navigate('/app/admin/brokerage')}
+                title="View multi-brokerage lead capture quota"
               >
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className="text-slate-600 group-hover/item:text-purple-600 font-bold flex items-center gap-1 transition-colors">
-                    Total Storage
+                    AI Leads Captured
                   </span>
-                  <span className="font-extrabold text-slate-900">12.4GB / 50GB</span>
+                  <span className="font-extrabold text-slate-900">7.2K / 9.0K</span>
                 </div>
                 <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden mb-1">
-                  <div className="h-full bg-purple-600 rounded-full group-hover/item:bg-purple-500 transition-colors" style={{ width: '25%' }}></div>
+                  <div className="h-full bg-purple-600 rounded-full group-hover/item:bg-purple-500 transition-colors" style={{ width: '80%' }}></div>
                 </div>
-                <span className="text-[9px] text-purple-600 font-black uppercase tracking-wider">Manage →</span>
+                <span className="text-[9px] text-purple-600 font-black uppercase tracking-wider">View Usage →</span>
               </div>
 
               <div 
                 className="group/item cursor-pointer p-3 rounded-xl bg-slate-50/80 hover:bg-slate-100/80 transition-colors border border-slate-100"
-                onClick={() => navigate('/app/admin/api-usage')}
-                title="View full API usage analytics"
+                onClick={() => navigate('/app/admin/brokerage')}
+                title="View full multi-brokerage API message limits"
               >
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className="text-slate-600 group-hover/item:text-amber-600 font-bold flex items-center gap-1 transition-colors">
-                    API Calls Quota
+                    Sora AI Messages
                   </span>
-                  <span className="font-extrabold text-slate-900">27.4K / 75K</span>
+                  <span className="font-extrabold text-slate-900">37.3K / 47K</span>
                 </div>
                 <div className="h-2 bg-slate-200/80 rounded-full overflow-hidden mb-1">
-                  <div className="h-full bg-amber-500 rounded-full group-hover/item:bg-amber-400 transition-colors" style={{ width: '36.5%' }}></div>
+                  <div className="h-full bg-amber-500 rounded-full group-hover/item:bg-amber-400 transition-colors" style={{ width: '79%' }}></div>
                 </div>
                 <span className="text-[9px] text-amber-600 font-black uppercase tracking-wider">Analytics →</span>
               </div>

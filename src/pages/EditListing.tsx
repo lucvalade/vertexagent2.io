@@ -2812,9 +2812,9 @@ export default function EditListing() {
         const fullPayload = {
           id: newId,
           ownerId: user!.id,
-          assigned_agent_id: user!.id, // Default to owner
+          assigned_agent_id: user!.assigned_agent_id || user!.id, // Default to owner
           team_id: user!.team_id || "",
-          brokerage_id: user!.brokerage_id || "",
+          brokerage_id: user!.brokerage_id || user!.brokerage || "",
           createdAt: Date.now(),
           status: computedStatus,
           ...payload

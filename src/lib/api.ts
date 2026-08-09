@@ -1291,4 +1291,68 @@ export interface ActivityLog {
   created_at: number;
 }
 
+// ==========================================
+// BROKERAGE QUOTA DATA MODELS
+// ==========================================
+
+export interface BrokerageQuotaLimits {
+  brokerage_id: string; // PK / FK
+  max_ai_leads: number;
+  max_open_houses: number;
+  max_ai_messages: number;
+  max_team_seats: number;
+  warning_threshold_pct: number; // e.g. 80 (%)
+  allow_overages: boolean;
+  hard_stop_on_limit: boolean;
+}
+
+export interface BrokerageQuotaUsage {
+  brokerage_id: string; // PK / FK
+  current_leads_used: number;
+  current_open_houses: number;
+  current_messages_used: number;
+  active_seats_occupied: number;
+  cycle_start_date: string; // YYYY-MM-DD
+  cycle_end_date: string; // YYYY-MM-DD
+  last_updated: number;
+}
+
+export interface BrokerageQuotaHistory {
+  id: string;
+  brokerage_id: string;
+  cycle_start_date: string;
+  cycle_end_date: string;
+  total_leads_used: number;
+  total_messages_used: number;
+  peak_open_houses: number;
+  peak_seats_occupied: number;
+}
+
+export interface QuotaAlert {
+  id: string;
+  brokerage_id: string;
+  brokerage_name?: string;
+  quota_type: "leads" | "open_houses" | "messages" | "seats";
+  alert_level: "warning" | "critical" | "exceeded";
+  triggered_value: number;
+  limit_value: number;
+  created_at: number;
+  acknowledged?: boolean;
+}
+
+export interface BrokerageAccount {
+  brokerage_id: string;
+  name: string;
+  code: string;
+  account_status: "active" | "paused" | "suspended" | "cancelled";
+  tier: "Starter" | "Pro" | "Elite" | "Enterprise";
+  primary_contact_name: string;
+  primary_contact_email: string;
+  themeColor: string;
+  complianceFooter: string;
+  created_at: number;
+  quota_limits: BrokerageQuotaLimits;
+  quota_usage: BrokerageQuotaUsage;
+}
+
 

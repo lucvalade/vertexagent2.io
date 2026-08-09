@@ -70,6 +70,9 @@ interface AppUser {
   name: string;
   role: "AGENT" | "ADMIN";
   brokerage?: string;
+  brokerage_id?: string;
+  team_id?: string;
+  assigned_agent_id?: string;
   defaultVoiceId?: string;
   maintenanceMode?: boolean;
   createdAt: number;

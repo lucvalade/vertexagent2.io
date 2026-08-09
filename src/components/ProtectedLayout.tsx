@@ -338,6 +338,7 @@ export default function ProtectedLayout() {
   const adminLinks = [
     { label: "Landing Page", icon: Globe, path: "/?no_redirect=true", external: true },
     { label: "Dashboard", icon: Shield, path: "/app/admin" },
+    { label: "Brokerages & Quotas", icon: Building2, path: "/app/admin/brokerage" },
     { label: "Manage Agents", icon: Users, path: "/app/admin/users" },
     { label: "All Listings", icon: List, path: "/app/admin/listings" },
     { label: "Analytics & Telemetry", icon: BarChart2, path: "/app/admin/analytics" },
