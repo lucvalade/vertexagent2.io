@@ -1962,46 +1962,53 @@ JSON Schema Output:
       const ai = getAi();
 
       const prompt = `You are the AI Voice Control system for "AI Open House Connect". 
-An agent has spoken a command or dictated notes. Your task is to accurately parse their speech into a structured command or dictation instruction.
+An agent has spoken a command, dictated notes, or asked a question about platform features. Your task is to accurately parse their speech into a structured command, dictation instruction, or platform answer.
 
-The user is speaking in one of two modes:
-1. "command" Mode: Navigating the dashboard, opening details, saving, toggling settings, or general actions.
+The user is speaking in one of three modes:
+1. "command" Mode: Navigating the dashboard, opening details, saving, safety check-in, re-importing MLS data, or triggering platform actions.
 2. "dictation" Mode: Dictating notes, listing descriptions, comments, or follow-up logs.
+3. "info" Mode: Asking a question about how a platform feature works (e.g., "How do I check in for safety?", "How does the Sora follow up email work?", "How does the lender consent gate work?", "How do I map Follow Up Boss?").
 
 TRANSCRIPT:
 "${transcript}"
 
 ACTIVE MODE SPECIFIED BY USER:
-${activeMode || "auto"} (If "auto", determine the most logical mode based on the transcript content. Commands like "go to...", "open...", "save..." or "navigate to..." are "command" mode. Complex descriptive sentences, logs, and notes are "dictation" mode.)
+${activeMode || "auto"} (If "auto", determine the most logical mode based on the transcript content.)
 
 MAPPING RULES:
 - If the action is screen navigation or going to a dashboard section, parse "action" as "navigate", and map the target section to one of these exact paths:
   * "Dashboard" / "Overview" / "Home" -> "/app/overview"
   * "Listings" / "Listing" -> "/app/listings"
   * "AI Tour" / "AI Tours" / "Walkthrough" -> "/app/aitours"
-  * "Open Houses" / "Open House" / "Events" -> "/app/openhouses"
+  * "Open Houses" / "Open House" / "Events" / "Safety" -> "/app/openhouses"
   * "Marketing Flyers" / "Flyers" / "Flyer Suite" -> "/app/flyers"
   * "Leads" / "Leads Captured" / "Contacts" -> "/app/leads"
   * "Lenders" / "Lender Settings" -> "/app/lenders"
   * "Teams" / "Team" / "Roster" -> "/app/team"
   * "Billing & Plans" / "Billing" / "Pricing" -> "/app/billing"
+  * "Integrations" / "Follow Up Boss" / "CRM" -> "/app/integrations"
   * "Settings" / "Profile" -> "/app/settings"
+  * "FAQ" / "Help" / "Knowledge Base" -> "/faq"
   - If they say "go back" or "navigate back", parse "action" as "navigate" and set "targetPath" to "back".
   - If they say "open lead [Name]" or "open profile for [Name]" or "view [Name]", set "action" to "open_lead" and "targetName" to the person's name (e.g. "John Smith").
   - If they say "open listing [Address]" or "open property [Address]", set "action" to "open_listing" and "targetName" to the address or listing name.
+  - If they say "check in agent", "safety check in", "perform safety check in", or "save safety logs", set "action" to "safety_checkin", "targetPath" to "/app/openhouses", and "feedbackMessage" to "Performing safety check-in and saving location audit logs now."
+  - If they say "reimport listing data", "refresh mls", or "re-import data", set "action" to "reimport_data", "targetPath" to "/app/listings", and "feedbackMessage" to "Navigating to Listings. Click 'Re-Import Listing Data' in Step 2 of Edit Listing to refresh MLS specs."
+  - If they say "send sora email", "generate follow up email", or "sora email draft", set "action" to "generate_email", "targetPath" to "/app/leads", and "feedbackMessage" to "Opening Leads workspace. Click 'Send Sora Follow-Up Email' on any lead profile to draft personalized AI emails."
   - If they say "save", "save listing", or "save changes", set "action" to "save".
   - If they say "turn on social sharing" or "toggle social", set "action" to "toggle_setting" and "targetName" to "social_sharing".
+  - If they ask a how-to question about platform features (e.g., safety check-in, Sora email follow-ups, offline kiosk buffer, lender consent gate, Follow Up Boss CRM mapping, or Go Live reminders), set "action" to "info", mode to "info", provide a concise, friendly 2-sentence explanation in "feedbackMessage", and put a detailed summary in "dictationSummary".
   - If they dictate a note (e.g., "Add follow-up note: Wants a fenced yard, moving in September"), parse "action" as "dictate", clean up conversational clutter, format the text beautifully, and extract action items.
 
 OUTPUT STRUCTURING:
-- "mode": Must be either "command" or "dictation".
-- "action": Must be "navigate", "open_lead", "open_listing", "toggle_setting", "save", "dictate", or "unknown".
+- "mode": Must be either "command", "dictation", or "info".
+- "action": Must be "navigate", "open_lead", "open_listing", "safety_checkin", "reimport_data", "generate_email", "toggle_setting", "save", "dictate", "info", or "unknown".
 - "targetPath": The mapped path or "back" or empty string.
 - "targetName": The extracted name/address or empty string.
-- "dictatedText": For dictation, a professionally polished, grammatically correct version of the dictated notes. For command mode, leave empty or clean transcript.
-- "dictationSummary": A short 1-sentence summary of the notes.
-- "actionItems": List of 1 to 3 key task bullet points extracted from their notes (e.g., "Add fenced yard preference", "Follow up in September").
-- "feedbackMessage": A warm, spoken-style feedback message from Sora (e.g., "Certainly, navigating to Leads Captured now.", "Opening the lead profile for Sarah Lee...", "Dictated note polished and ready to append.").
+- "dictatedText": For dictation, a professionally polished, grammatically correct version of the dictated notes.
+- "dictationSummary": For info/dictation mode, a clear summary or explanation.
+- "actionItems": List of 1 to 3 key task bullet points extracted from their notes or commands.
+- "feedbackMessage": A warm, spoken-style feedback message from Sora.
 
 Ensure perfect adherence to JSON structure. Close all quotes and braces. No wrapping markup like \`\`\`json.`;
 
@@ -2446,7 +2453,7 @@ AI Open House Connect (VertexAgent) Platform Documentation:
 
 PRODUCT NAME: AI Open House Connect
 TAGLINE / POSITIONING: Rela builds beautiful signs. VertexAgent makes them talk.
-MISSION / SUMMARY: AI Open House Connect is a premium real estate platform for agents, teams, brokerages, lenders, and buyers that combines AI-guided property tours, open house sign-in, QR-based entry, flyer-driven marketing, lead capture, and consent-based lender routing into one connected workflow. The in-app AI assistant is Sora, and the product is built using Google AI Studio with Firebase Authentication, Firestore, and Cloud Functions as the core application stack.
+MISSION / SUMMARY: AI Open House Connect is a premium real estate platform that streamlines workflows for agents, teams, brokerages, and lenders. It combines secure open house sign-in kiosks, lead capture, and consent-based lender routing, AI-guided property tours (powered by our multi-lingual assistant, Sora), The platform also features solo-agent safety tools, automated follow-up email generation, and direct CRM integrations to help you close deals faster and safer.
 
 CORE WORKFLOWS & KEY FEATURES:
 1. AI Property Tours (with Sora):
@@ -2457,30 +2464,48 @@ CORE WORKFLOWS & KEY FEATURES:
    - Every buyer interaction is transcribed, analyzed for intent, and pushed to the agent's CRM.
    - Room detection with conversational UI hints, completely hardware-free.
 
-2. Open House Sign-In (Kiosk UX):
+2. Open House Sign-In & Kiosk UX:
    - Tablet kiosk mode locked for consumer use (Attendee-Facing Lock Mode). Prevents accidental app exploration.
    - Exit PIN Verification: Requires a secure agent-configured PIN to unlock the kiosk and return to the backend.
    - Thank-You Auto-Reset Loop: Resets the screens to the welcome state exactly 5 seconds after a successful submission so the next visitor can sign in smoothly.
    - Offline Event Buffer UI: Real-time status reporting showing when the tablet is offline ("Local Cache Sync Pending: N leads"). Automatically queues submissions in localStorage/IndexedDB and syncs to Firestore once browser reconnects.
    - Customizable liability waivers and legal disclaimers that attendees must accept before submitting their information (PIPEDA + Quebec Law 25 compliant).
 
-3. Advanced Paired Lender & Mortgage Logic:
+3. Solo-Agent Safety System ("CHECKIN AGENT" & "SAVE LOGS"):
+   - Built directly into the Open Houses workspace to protect agents hosting solo open houses.
+   - "CHECKIN AGENT" button confirms the agent is safe on-site and resets the automated safety check-in timer.
+   - "SAVE LOGS" archives timestamped GPS location coordinates and visitor audit trails to Firestore.
+   - If an agent fails to check in before the event ends, an automated emergency protocol triggers alerts to designated emergency contacts.
+
+4. Sora Follow-Up Email Generator:
+   - Available inside the Guest Visitor Roster and Lead Details modal ("Send Sora Follow-Up Email").
+   - Sora analyzes the exact voice questions visitors asked during their AI Tour (e.g. kitchen finishes, HOA fees, master suite layout) alongside their mortgage consent status.
+   - Sora generates a tailored, high-converting follow-up email draft with 1-click AI re-drafting and instant sending capabilities.
+
+5. Re-Import Listing Data & 24-Hour Go Live Reminder:
+   - In Step 2 of the Edit Listing Dashboard, agents can click "Re-Import Listing Data" to re-fetch MLS specs, room counts, and descriptions from source URLs.
+   - If a draft listing remains unpublished for 24 hours, an automated "Go Live" reminder pops up, allowing agents to publish, activate Sora audio tours, and generate QR codes in 1 click.
+
+6. Step 5 Social Share AI Generator:
+   - In Step 5 of Edit Listing, click "Rewrite with AI" to generate engaging, platform-optimized captions and titles for Instagram, Facebook, and LinkedIn.
+
+7. Advanced Paired Lender & Mortgage Logic:
    - "My Paired Lender" Settings Page: Agents invite or accept pairing requests from active subscribed lenders. 
    - The Consent Gate: A mandatory mortgage interest checkbox ("Would you like information on financing options?").
    - Dynamic Question Logic: Disabling a paired lender, or selecting "No paired lender", immediately removes the mortgage questions and lender co-branding from the consumer-facing sign-in kiosk. No lender sees lead information unless mortgageConsent is recorded as true with the visitor's record.
    - Precedence Stack: 1. Listing override, 2. Team policy, 3. Agent's Preferred, 4. Market Default, 5. No lender (hides mortgage opt-in).
 
-4. Direct CRM Integration:
+8. Direct CRM Integration & Follow Up Boss:
    - Direct Follow Up Boss sync with full API key authentication and interactive field mapping.
    - Stored lead canonical local copy is preserved first; CRM downtime or failed sync states never crash the browser or lose data. Failed sync logs display retry count parameters and errors cleanly with manual retry buttons.
    - Automatically translates "Mortgage Opt-In: Yes" into a dedicated label or system tag (e.g. fub-mortgage-interest).
 
-5. Shared Listings & Cross-Hosting:
+9. Shared Listings & Cross-Hosting:
    - Shared Listing is available from the ellipsis menu on each listing inside Your Listings.
    - Listing ownership remains with listingOwnerAgentId, but open-house execution can be delegated to a hostingAgentId.
    - Leads captured at the event track both owners, hosts, and routing. Specialized assignments are saved in shared_listing_assignments and automated email notifications are dispatched.
 
-6. Data Enrichment & Verification:
+10. Data Enrichment & Verification:
    - Validates submitted emails and phone numbers against third-party identity APIs to assign a "Verified" confidence badge.
    - Extracts public background data like occupation, employer, education, and social media links.
 
@@ -2496,8 +2521,12 @@ PRICING PLANS & TIERS:
   - 10 Paired Agents: $80/month
   - 20 Paired Agents: $100/month
 
-FAQ:
+FAQ & KNOWLEDGE BASE:
+- Dedicated Knowledge Base Page: /faq
+- Role Help Manuals: /help
 - How do AI Guided tours work? Sora uses Gemini 2.5 Flash to narrate properties room-by-room or answer free-form questions. It syncs the screen photo dynamically with whatever feature is discussed.
+- What are CHECKIN AGENT and SAVE LOGS for? Part of the Solo-Agent Safety System. "CHECKIN AGENT" confirms safety on-site, and "SAVE LOGS" archives GPS location coordinates and visitor audit logs.
+- How does the Sora Follow-Up Email work? Inside Guest Visitor Roster, Sora analyzes visitor tour voice Q&As and generates a customized follow-up email draft.
 - Can we use the sign-in kiosk offline? Yes, the kiosk supports a secure offline buffer. Any captured sign-ins are stored in localStorage/IndexedDB and synced immediately once connection is restored.
 - Does it comply with real estate regulations? Yes, unbranded MLS-compliant modes are available, along with PIPEDA / Quebec Law 25 compliance audits and custom liability waivers.
 - How are leads sent to lenders? Lenders only receive leads if the attendee explicitly opts-in via the "mortgage consent gate". If they opt-in, the lead data is cleanly routed and logged in compliance audits.
@@ -2505,6 +2534,7 @@ FAQ:
 SUPPORTING LINKS:
 - How It Works: /how-it-works
 - Pricing: /pricing
+- FAQ & Knowledge Base: /faq
 - AI Tours & Voice Chat: /product#narrator
 - Open House Sign-In: /open-houses
 - Use Cases: /#features
@@ -2521,6 +2551,22 @@ SUPPORTING LINKS:
     const { query, lang = "English" } = req.body;
     if (!query || typeof query !== "string") {
       return res.status(400).json({ error: "Query is required" });
+    }
+
+    const normalizedQuery = query.toLowerCase().trim();
+    if (
+      normalizedQuery.includes("what is ai open house connect") ||
+      normalizedQuery.includes("detailed summary") ||
+      normalizedQuery.includes("all about")
+    ) {
+      return res.json({
+        answer: "AI Open House Connect is a premium real estate platform that streamlines workflows for agents, teams, brokerages, and lenders. It combines secure open house sign-in kiosks, lead capture, and consent-based lender routing, AI-guided property tours (powered by our multi-lingual assistant, Sora), The platform also features solo-agent safety tools, automated follow-up email generation, and direct CRM integrations to help you close deals faster and safer.",
+        links: [
+          { label: "How It Works", url: "/how-it-works" },
+          { label: "Pricing & Plans", url: "/pricing" },
+          { label: "FAQ & Knowledge Base", url: "/faq" }
+        ]
+      });
     }
 
     try {

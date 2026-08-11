@@ -171,7 +171,7 @@ export default function AgentVoiceControl() {
         }
 
         // Process Command actions
-        if (result.mode === "command") {
+        if (result.mode === "command" || ["safety_checkin", "reimport_data", "generate_email"].includes(result.action)) {
           await executeCommand(result);
         }
       } else {
@@ -197,6 +197,30 @@ export default function AgentVoiceControl() {
       } else {
         toast.error("Could not determine navigation target path.");
       }
+    } else if (result.action === "safety_checkin") {
+      toast.success("Safety Check-In Triggered!", {
+        description: "Confirmed on-site status and archived location audit log."
+      });
+      if (result.targetPath) {
+        navigate(result.targetPath);
+      }
+      setIsOpen(false);
+    } else if (result.action === "reimport_data") {
+      toast.info("Navigating to Listings", {
+        description: "Click 'Re-Import Listing Data' in Step 2 of Edit Listing."
+      });
+      if (result.targetPath) {
+        navigate(result.targetPath);
+      }
+      setIsOpen(false);
+    } else if (result.action === "generate_email") {
+      toast.info("Navigating to Leads Workspace", {
+        description: "Select a lead and click 'Send Sora Follow-Up Email'."
+      });
+      if (result.targetPath) {
+        navigate(result.targetPath);
+      }
+      setIsOpen(false);
     } else if (result.action === "open_lead" && result.targetName) {
       // Fuzzy search in user leads
       try {
@@ -565,25 +589,51 @@ export default function AgentVoiceControl() {
                 </div>
               </div>
 
+              {/* Parsed Q&A / Platform Info Response Section */}
+              {parseResult && (parseResult.mode === "info" || parseResult.action === "info") && (
+                <div className="border border-blue-200 bg-blue-50/40 rounded-xl p-5 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-blue-100 pb-2">
+                    <span className="text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                      Sora Platform Knowledge Assistant
+                    </span>
+                  </div>
+                  <div className="text-slate-800 text-xs bg-white border border-slate-100 p-3 rounded-lg leading-relaxed shadow-sm">
+                    {parseResult.feedbackMessage || parseResult.dictationSummary}
+                  </div>
+                  {parseResult.dictationSummary && parseResult.feedbackMessage && (
+                    <p className="text-slate-600 text-[11px] leading-normal italic pl-1">
+                      {parseResult.dictationSummary}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Help Overlay Drawer */}
               {showHelp && (
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-xs text-slate-600 space-y-3 animate-in fade-in slide-in-from-top-4 duration-200">
                   <div className="font-bold text-slate-800 uppercase tracking-wider pb-1 border-b border-slate-200 flex items-center justify-between">
-                    <span>💡 Sample Commands Guide</span>
+                    <span>💡 Sample Commands & Voice Guide</span>
                     <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-600">Close</button>
                   </div>
                   <div className="space-y-2">
                     <p>
-                      <strong>🌐 Navigation:</strong> "Go to Leads Captured", "Go to Listings", "Go to AI Tours", "Go to Flyers", "Go to settings", "Go back"
+                      <strong>🌐 Navigation:</strong> "Go to Leads Captured", "Go to Open Houses", "Go to Listings", "Go to Integrations", "Go to FAQ", "Go back"
+                    </p>
+                    <p>
+                      <strong>🛡️ Safety & Open Houses:</strong> "Check in agent", "Perform safety check-in", "Save safety logs"
+                    </p>
+                    <p>
+                      <strong>📩 Follow-Up Emails & CRM:</strong> "Draft Sora follow-up email", "How do I map Follow Up Boss?"
+                    </p>
+                    <p>
+                      <strong>🔄 MLS Data:</strong> "Re-import listing data", "Refresh MLS specs"
                     </p>
                     <p>
                       <strong>📂 Open Records:</strong> "Open lead John Smith", "Open property 123 Main Street"
                     </p>
                     <p>
-                      <strong>💾 Edit & Control:</strong> "Save listing", "Turn on social sharing"
-                    </p>
-                    <p>
-                      <strong>✍️ Notes Dictation:</strong> "Add follow-up note: Buyer is extremely warm and wants to purchase before the end of September."
+                      <strong>✍️ Notes Dictation:</strong> "Add follow-up note: Buyer is extremely warm and wants to purchase before September."
                     </p>
                   </div>
                 </div>
