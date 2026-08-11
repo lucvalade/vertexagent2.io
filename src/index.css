@@ -171,10 +171,21 @@
   box-shadow: 0 12px 24px -4px rgba(80, 162, 255, 0.4) !important;
 }
 
-/* Ensure child indicators and texts update dynamically upon hover check */
-.hover-card-blue:hover * {
+/* Ensure child indicators and texts update dynamically upon hover check except mini-card-icon */
+.hover-card-blue:hover *:not(.mini-card-icon):not(.mini-card-icon *) {
   color: white !important;
   border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.mini-card-icon {
+  background-color: #ffffff !important;
+  border: 1px solid #000000 !important;
+}
+
+.mini-card-icon,
+.mini-card-icon svg {
+  color: #2563eb !important;
+  border-color: #000000 !important;
 }
 
 @keyframes blue-pulsating-border-anim {

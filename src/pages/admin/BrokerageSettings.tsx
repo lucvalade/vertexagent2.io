@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,9 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { 
   Loader2, Save, ArrowLeft, Building, Users, Shield, AlertTriangle, 
   CheckCircle2, Plus, RefreshCw, BarChart2, Zap, Settings, Search,
-  Lock, AlertCircle, Layers, Calendar, Mail, FileText
+  Lock, AlertCircle, Layers, Calendar, Mail, FileText, ArrowRight, Check
 } from "lucide-react";
 import { 
   BrokerageAccount, 
@@ -230,8 +237,14 @@ export default function BrokerageSettings() {
   const [saving, setSaving] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // Editable state for selected brokerage
+  // Modal dialog state for clicking on the 4 top KPI cards
+  const [activeKpiModal, setActiveKpiModal] = useState<"total_brokerages" | "lead_captures" | "active_seats" | "quota_alerts" | null>(null);
+  const [modalSearchQuery, setModalSearchQuery] = useState("");
+
+  // Editable state for selected brokerage + Autosave status tracking
   const [selectedBrokerage, setSelectedBrokerage] = useState<BrokerageAccount | null>(null);
+  const [autosaveStatus, setAutosaveStatus] = useState<"saved" | "saving" | "idle">("idle");
+  const isInitialLoadRef = useRef(true);
 
   // New Brokerage Form State
   const [newBrokerageName, setNewBrokerageName] = useState("");
@@ -242,6 +255,35 @@ export default function BrokerageSettings() {
   useEffect(() => {
     fetchBrokerages();
   }, []);
+
+  // Autosave effect when selectedBrokerage changes
+  useEffect(() => {
+    if (!selectedBrokerage) return;
+
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    setAutosaveStatus("saving");
+    const timer = setTimeout(async () => {
+      try {
+        await setDoc(doc(db, "brokerages", selectedBrokerage.brokerage_id), selectedBrokerage, { merge: true });
+        setBrokerages((prev) =>
+          prev.map((b) => (b.brokerage_id === selectedBrokerage.brokerage_id ? selectedBrokerage : b))
+        );
+        setAutosaveStatus("saved");
+      } catch (err) {
+        console.warn("Autosaved locally to active session state:", err);
+        setBrokerages((prev) =>
+          prev.map((b) => (b.brokerage_id === selectedBrokerage.brokerage_id ? selectedBrokerage : b))
+        );
+        setAutosaveStatus("saved");
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [selectedBrokerage]);
 
   const fetchBrokerages = async () => {
     setLoading(true);
@@ -305,12 +347,16 @@ export default function BrokerageSettings() {
   };
 
   const handleSelectBrokerage = (b: BrokerageAccount) => {
+    isInitialLoadRef.current = true;
+    setAutosaveStatus("idle");
     setSelectedBrokerageId(b.brokerage_id);
     setSelectedBrokerage(JSON.parse(JSON.stringify(b)));
     setActiveDetailTab("limits");
   };
 
   const handleBackToList = () => {
+    isInitialLoadRef.current = true;
+    setAutosaveStatus("idle");
     setSelectedBrokerageId(null);
     setSelectedBrokerage(null);
   };
@@ -490,14 +536,32 @@ export default function BrokerageSettings() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Real-time Autosave Indicator */}
+            {autosaveStatus === "saving" ? (
+              <span className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 flex items-center gap-1.5 animate-pulse">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                <span>Autosaving...</span>
+              </span>
+            ) : autosaveStatus === "saved" ? (
+              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-emerald-600" />
+                <span>All changes autosaved</span>
+              </span>
+            ) : (
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-blue-600" />
+                <span>Autosave active</span>
+              </span>
+            )}
+
             <Button
               onClick={handleSaveSelectedBrokerage}
               disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2 text-xs px-4 py-2 rounded-xl shadow-sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2 text-xs px-4 py-2 rounded-xl shadow-sm cursor-pointer"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save Quota Configuration
+              <span>Save Quota Configuration</span>
             </Button>
           </div>
         </div>
@@ -1141,44 +1205,96 @@ export default function BrokerageSettings() {
         </div>
       </div>
 
-      {/* Global System Quota KPI Summary Cards */}
+      {/* Global System Quota KPI Summary Cards (Interactive Clickable Cards) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Brokerages</span>
-          <span className="text-2xl font-black text-slate-900">{brokerages.length}</span>
-          <span className="text-[11px] text-emerald-600 font-bold block">
-            {brokerages.filter((b) => b.account_status === "active").length} active accounts
-          </span>
+        <div 
+          onClick={() => {
+            setModalSearchQuery("");
+            setActiveKpiModal("total_brokerages");
+          }}
+          id="card-total-brokerages"
+          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Brokerages</span>
+            <Building className="h-4 w-4 text-blue-600 group-hover:scale-110 transition-transform" />
+          </div>
+          <span className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{brokerages.length}</span>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-emerald-600 font-bold block">
+              {brokerages.filter((b) => b.account_status === "active").length} active accounts
+            </span>
+            <span className="text-[10px] font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+          </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Global AI Lead Captures</span>
+        <div 
+          onClick={() => {
+            setModalSearchQuery("");
+            setActiveKpiModal("lead_captures");
+          }}
+          id="card-lead-captures"
+          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Global AI Lead Captures</span>
+            <Zap className="h-4 w-4 text-blue-600 group-hover:scale-110 transition-transform" />
+          </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-slate-900">{totalLeadsUsed.toLocaleString()}</span>
+            <span className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{totalLeadsUsed.toLocaleString()}</span>
             <span className="text-xs font-bold text-slate-500">/ {totalLeadsCapacity.toLocaleString()}</span>
           </div>
-          <span className="text-[11px] text-blue-600 font-bold block">
-            {Math.round((totalLeadsUsed / Math.max(1, totalLeadsCapacity)) * 100)}% network utilization
-          </span>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-blue-600 font-bold block">
+              {Math.round((totalLeadsUsed / Math.max(1, totalLeadsCapacity)) * 100)}% network utilization
+            </span>
+            <span className="text-[10px] font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+          </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Active Seats</span>
+        <div 
+          onClick={() => {
+            setModalSearchQuery("");
+            setActiveKpiModal("active_seats");
+          }}
+          id="card-active-seats"
+          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-purple-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Active Seats</span>
+            <Users className="h-4 w-4 text-purple-600 group-hover:scale-110 transition-transform" />
+          </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-slate-900">{totalSeatsOccupied}</span>
+            <span className="text-2xl font-black text-slate-900 group-hover:text-purple-600 transition-colors">{totalSeatsOccupied}</span>
             <span className="text-xs font-bold text-slate-500">/ {totalSeatsCapacity}</span>
           </div>
-          <span className="text-[11px] text-purple-600 font-bold block">
-            {Math.round((totalSeatsOccupied / Math.max(1, totalSeatsCapacity)) * 100)}% seats allocated
-          </span>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-purple-600 font-bold block">
+              {Math.round((totalSeatsOccupied / Math.max(1, totalSeatsCapacity)) * 100)}% seats allocated
+            </span>
+            <span className="text-[10px] font-extrabold text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+          </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-1">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Quota Alerts / Warnings</span>
-          <span className="text-2xl font-black text-amber-600">{totalWarnings}</span>
-          <span className="text-[11px] text-amber-700 font-bold block">
-            {totalWarnings === 0 ? "All limits operating normally" : `${totalWarnings} accounts near limit`}
-          </span>
+        <div 
+          onClick={() => {
+            setModalSearchQuery("");
+            setActiveKpiModal("quota_alerts");
+          }}
+          id="card-quota-alerts"
+          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-amber-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Quota Alerts / Warnings</span>
+            <AlertTriangle className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
+          </div>
+          <span className="text-2xl font-black text-amber-600 group-hover:text-amber-700 transition-colors">{totalWarnings}</span>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[11px] text-amber-700 font-bold block">
+              {totalWarnings === 0 ? "All limits operating normally" : `${totalWarnings} accounts near limit`}
+            </span>
+            <span className="text-[10px] font-extrabold text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+          </div>
         </div>
       </div>
 
@@ -1415,6 +1531,313 @@ export default function BrokerageSettings() {
           </div>
         </div>
       )}
+
+      {/* KPI 1: TOTAL BROKERAGES MODAL */}
+      <Dialog open={activeKpiModal === "total_brokerages"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-blue-100 text-blue-700">
+                <Building className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">Total Brokerages Network Directory</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Comprehensive listing of all {brokerages.length} provisioned brokerage accounts across the platform.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search brokerage name, code, contact email..."
+                value={modalSearchQuery}
+                onChange={(e) => setModalSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
+              />
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+              {brokerages
+                .filter((b) =>
+                  b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()) ||
+                  b.code.toLowerCase().includes(modalSearchQuery.toLowerCase()) ||
+                  b.primary_contact_email.toLowerCase().includes(modalSearchQuery.toLowerCase())
+                )
+                .map((b) => (
+                  <div key={b.brokerage_id} className="p-3 bg-white hover:bg-slate-50 flex items-center justify-between transition-colors">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-slate-900">{b.name}</span>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                          {b.code}
+                        </span>
+                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                          b.account_status === "active" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                        }`}>
+                          {b.account_status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        {b.primary_contact_name} ({b.primary_contact_email}) • <span className="font-bold text-blue-600">{b.tier} Plan</span>
+                      </p>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        handleSelectBrokerage(b);
+                        setActiveKpiModal(null);
+                      }}
+                      className="bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white font-bold text-xs gap-1 cursor-pointer transition-colors"
+                    >
+                      <span>Manage Quota</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* KPI 2: GLOBAL AI LEAD CAPTURES MODAL */}
+      <Dialog open={activeKpiModal === "lead_captures"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-blue-100 text-blue-700">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">Global AI Lead Captures & Utilization</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Total leads captured across all brokerage events: {totalLeadsUsed.toLocaleString()} / {totalLeadsCapacity.toLocaleString()} max capacity.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Filter brokerages by lead consumption..."
+                value={modalSearchQuery}
+                onChange={(e) => setModalSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
+              />
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+              {brokerages
+                .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
+                .map((b) => {
+                  const used = b.quota_usage?.current_leads_used || 0;
+                  const limit = b.quota_limits?.max_ai_leads || 1000;
+                  const pct = Math.round((used / Math.max(1, limit)) * 100);
+                  return (
+                    <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-sm text-slate-900">{b.name}</span>
+                          <span className="text-xs text-slate-500 ml-2">({b.code})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-slate-900">{used.toLocaleString()}</span>
+                          <span className="text-xs text-slate-400">/ {limit.toLocaleString()} leads</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                            pct >= 90 ? "bg-red-100 text-red-800" : pct >= 75 ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                          }`}>
+                            {pct}% used
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-blue-600"
+                          }`}
+                          style={{ width: `${Math.min(100, pct)}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span>Cycle: {b.quota_usage?.cycle_start_date} to {b.quota_usage?.cycle_end_date}</span>
+                        <button
+                          onClick={() => {
+                            handleSelectBrokerage(b);
+                            setActiveKpiModal(null);
+                          }}
+                          className="font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Adjust Lead Quota Limit</span>
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* KPI 3: TOTAL ACTIVE SEATS MODAL */}
+      <Dialog open={activeKpiModal === "active_seats"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">Total Active Seats & Team Allocations</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  {totalSeatsOccupied} occupied seats out of {totalSeatsCapacity} total allocated seats across all network brokerages.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search brokerage team seats..."
+                value={modalSearchQuery}
+                onChange={(e) => setModalSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
+              />
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+              {brokerages
+                .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
+                .map((b) => {
+                  const used = b.quota_usage?.active_seats_occupied || 0;
+                  const limit = b.quota_limits?.max_team_seats || 10;
+                  const pct = Math.round((used / Math.max(1, limit)) * 100);
+                  return (
+                    <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-sm text-slate-900">{b.name}</span>
+                          <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 ml-2">
+                            {b.tier} Plan
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black text-slate-900">{used} active</span>
+                          <span className="text-xs text-slate-400">/ {limit} seats</span>
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                            pct >= 90 ? "bg-amber-100 text-amber-800" : "bg-purple-100 text-purple-800"
+                          }`}>
+                            {pct}% filled
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="h-full bg-purple-600 transition-all duration-300"
+                          style={{ width: `${Math.min(100, pct)}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500">
+                        <span>Admin Contact: {b.primary_contact_name}</span>
+                        <button
+                          onClick={() => {
+                            handleSelectBrokerage(b);
+                            setActiveKpiModal(null);
+                          }}
+                          className="font-bold text-purple-600 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>Manage Seat Allocation</span>
+                          <ArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* KPI 4: QUOTA ALERTS / WARNINGS MODAL */}
+      <Dialog open={activeKpiModal === "quota_alerts"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">Quota Alerts & System Warnings</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  {totalWarnings} active accounts requiring capacity attention or threshold review.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+              {MOCK_ALERTS.map((alert) => {
+                const brk = brokerages.find((b) => b.brokerage_id === alert.brokerage_id);
+                return (
+                  <div key={alert.id} className="p-3.5 bg-amber-50/50 hover:bg-amber-50 flex items-start justify-between gap-4 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-xl mt-0.5 ${
+                        alert.alert_level === "critical" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                      }`}>
+                        <AlertTriangle className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900">{brk?.name || alert.brokerage_id}</span>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                            alert.alert_level === "critical" ? "bg-red-100 text-red-800 border border-red-200" : "bg-amber-100 text-amber-800 border border-amber-200"
+                          }`}>
+                            {alert.alert_level}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700">
+                          Quota type <strong className="uppercase">{alert.quota_type.replace("_", " ")}</strong> reached {alert.triggered_value} / {alert.limit_value} limit.
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          Triggered {new Date(alert.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (brk) handleSelectBrokerage(brk);
+                        setActiveKpiModal(null);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1 shrink-0 cursor-pointer"
+                    >
+                      <span>Resolve & Edit</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

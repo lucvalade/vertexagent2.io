@@ -508,7 +508,7 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
       
       fetchPromise.then(listings => {
         setListingCount(listings ? listings.length : 0);
-        setActiveListings(listings ? listings.slice(0, 3) : []);
+        setActiveListings(listings || []);
       }).catch(err => {
         console.error("Failed to fetch listings for overview", err);
         setListingCount(0);
@@ -665,8 +665,8 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
               <h3 className="text-2xl font-black text-slate-900 mt-1">{listingCount ?? <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}</h3>
               <p className="text-[10px] text-slate-500 mt-0.5">Properties online</p>
             </div>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
-              <Home className="h-5 w-5" />
+            <div className="mini-card-icon p-3 bg-white text-blue-600 rounded-lg border border-black shadow-xs">
+              <Home className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
@@ -698,8 +698,8 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
               <h3 className="text-2xl font-black text-slate-900 mt-1">{activeTourCount ?? 3}</h3>
               <p className="text-[10px] text-slate-500 mt-0.5">Active listen events</p>
             </div>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
-              <Mic2 className="h-5 w-5" />
+            <div className="mini-card-icon p-3 bg-white text-blue-600 rounded-lg border border-black shadow-xs">
+              <Mic2 className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
@@ -1049,42 +1049,56 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           </CardHeader>
           <CardContent className="p-5">
             {activeListings.length > 0 ? (
-              <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {activeListings.map((listing) => (
-                  <div 
-                    key={listing.id} 
-                    onClick={() => navigate(`/app/listings/${listing.id}?from=overview`, { state: { from: "overview" } })}
-                    className="border border-stone-200/90 rounded-xl bg-white overflow-hidden cursor-pointer hover:shadow-md transition-all flex flex-col justify-between hover-blue-pulse"
-                  >
-                    {(() => {
-                      const imageVal = listing.images && listing.images.length > 0 
-                        ? (typeof listing.images[0] === 'string' ? listing.images[0] : (listing.images[0] as any).url)
-                        : null;
-                      return imageVal ? (
-                        <img 
-                          referrerPolicy="no-referrer"
-                          src={imageVal} 
-                          alt={listing.address} 
-                          className="h-28 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-28 bg-stone-100 flex items-center justify-center text-stone-400">
-                          <Home className="h-8 w-8 text-stone-300" />
-                        </div>
-                      );
-                    })()}
-                    <div className="p-3 text-left space-y-1">
-                      <p className="text-[10px] font-black tracking-wider uppercase text-amber-700">MLS Active</p>
-                      <h4 className="text-[11px] font-bold text-stone-900 truncate">{listing.address}</h4>
-                      <p className="text-[9px] text-stone-500 font-medium">{listing.city}, {listing.province}</p>
+              <>
+                <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {activeListings.slice(0, 5).map((listing) => (
+                    <div 
+                      key={listing.id} 
+                      onClick={() => navigate(`/app/listings/${listing.id}?from=overview`, { state: { from: "overview" } })}
+                      className="border border-stone-200/90 rounded-xl bg-white overflow-hidden cursor-pointer hover:shadow-md transition-all flex flex-col justify-between hover-blue-pulse"
+                    >
+                      {(() => {
+                        const imageVal = listing.images && listing.images.length > 0 
+                          ? (typeof listing.images[0] === 'string' ? listing.images[0] : (listing.images[0] as any).url)
+                          : null;
+                        return imageVal ? (
+                          <img 
+                            referrerPolicy="no-referrer"
+                            src={imageVal} 
+                            alt={listing.address} 
+                            className="h-28 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-28 bg-stone-100 flex items-center justify-center text-stone-400">
+                            <Home className="h-8 w-8 text-stone-300" />
+                          </div>
+                        );
+                      })()}
+                      <div className="p-3 text-left space-y-1">
+                        <p className="text-[10px] font-black tracking-wider uppercase text-amber-700">MLS Active</p>
+                        <h4 className="text-[11px] font-bold text-stone-900 truncate">{listing.address}</h4>
+                        <p className="text-[9px] text-stone-500 font-medium">{listing.city}, {listing.province}</p>
+                      </div>
+                      <div className="p-2 bg-stone-50 border-t flex justify-between items-center text-[10px] font-bold text-stone-600">
+                        <span>{listing.beds} Beds · {listing.baths} Baths</span>
+                        <ArrowUpRight className="h-3.5 w-3.5 text-stone-400" />
+                      </div>
                     </div>
-                    <div className="p-2 bg-stone-50 border-t flex justify-between items-center text-[10px] font-bold text-stone-600">
-                      <span>{listing.beds} Beds · {listing.baths} Baths</span>
-                      <ArrowUpRight className="h-3.5 w-3.5 text-stone-400" />
-                    </div>
+                  ))}
+                </div>
+                {activeListings.length > 5 && (
+                  <div className="mt-4 pt-3 border-t border-stone-100 flex justify-between items-center text-xs text-stone-500">
+                    <span>Showing 5 of {activeListings.length} active listings</span>
+                    <button
+                      onClick={() => navigate("/app/listings")}
+                      className="font-bold text-amber-700 hover:text-amber-800 flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <span>View All ({activeListings.length}) Listings</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
               <p className="text-xs text-stone-400 italic">No listings synced yet. Use URL Import above to begin in seconds.</p>
             )}

@@ -5,7 +5,7 @@ import Logo from "./Logo";
 import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import AgentVoiceControl from "./AgentVoiceControl";
-import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail, Search, HelpCircle, LifeBuoy, Cpu, Activity, Lock, RefreshCw, Key } from "lucide-react";
+import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail, Search, HelpCircle, LifeBuoy, Cpu, Activity, Lock, RefreshCw, Key, CheckCircle2, Clock } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -309,47 +309,74 @@ export default function ProtectedLayout() {
       icon: List, 
       path: "/app/listings",
       subLinks: [
-        { label: "Active Listings", path: "/app/listings?tab=active" },
-        { label: "Expired Listings", path: "/app/listings?tab=expired" }
+        { label: "Active Listings", path: "/app/listings?tab=active", icon: CheckCircle2 },
+        { label: "Expired Listings", path: "/app/listings?tab=expired", icon: Clock },
+      ]
+    },
+    { label: "Open Houses", icon: Home, path: "/app/openhouses" },
+    { label: "Marketing Flyers", icon: LayoutTemplate, path: "/app/flyers" },
+    { 
+      label: "Partnerships", 
+      icon: Users, 
+      path: "/app/leads",
+      subLinks: [
+        { label: "Agent 360", path: "/app/agent-360", icon: Activity },
+        { label: "Leads", path: "/app/leads", icon: Users },
+        { label: "Lenders", path: "/app/lenders", icon: Link2 },
+        { label: "Teams", path: "/app/team", icon: Building2 },
       ]
     },
     { 
-      label: "Open Houses", 
-      icon: Home, 
-      path: "/app/openhouses",
+      label: "Tech Lab", 
+      icon: Mic2, 
+      path: "/app/aitours",
       subLinks: [
-        { label: "Scheduled", path: "/app/openhouses?tab=scheduled" },
-        { label: "Completed", path: "/app/openhouses?tab=completed" },
-        { label: "Events & Results", path: "/app/openhouses?tab=results" }
+        { label: "AI Tour", path: "/app/aitours", icon: Mic2 },
+        { label: "Voice Lab", path: "/app/voicelab", icon: Volume2 },
       ]
     },
-    { label: "Marketing Flyers", icon: LayoutTemplate, path: "/app/flyers" },
-    { label: "AI Tour", icon: Mic2, path: "/app/aitours" },
-    { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
-    { label: "Leads", icon: Users, path: "/app/leads" },
-    { label: "Analytics", icon: BarChart2, path: "/app/analytics" },
-    { label: "Lenders", icon: Link2, path: "/app/lenders" },
-    { label: "CRM Integrations", icon: Zap, path: "/app/crm" },
-    { label: "Teams", icon: Building2, path: "/app/team" },
-    { label: "API Usage", icon: Cpu, path: "/app/api-usage" },
-    { label: "Settings", icon: Settings, path: "/app/settings" },
+    { 
+      label: "Settings", 
+      icon: Settings, 
+      path: "/app/settings",
+      subLinks: [
+        { label: "API Usage", path: "/app/api-usage", icon: Cpu },
+        { label: "Analytics", path: "/app/analytics", icon: BarChart2 },
+        { label: "CRM Integrations", path: "/app/crm", icon: Zap },
+      ]
+    },
   ];
 
   const adminLinks = [
-    { label: "Landing Page", icon: Globe, path: "/?no_redirect=true", external: true },
     { label: "Dashboard", icon: Shield, path: "/app/admin" },
-    { label: "Brokerages & Quotas", icon: Building2, path: "/app/admin/brokerage" },
-    { label: "Manage Agents", icon: Users, path: "/app/admin/users" },
-    { label: "All Listings", icon: List, path: "/app/admin/listings" },
-    { label: "Analytics & Telemetry", icon: BarChart2, path: "/app/admin/analytics" },
-    { label: "Email Marketing Studio", icon: Mail, path: "/app/admin/email-marketing" },
-    { label: "Support Tickets", icon: LifeBuoy, path: "/app/admin/tickets" },
-    { label: "API Usage Tracking", icon: Cpu, path: "/app/admin/api-usage" },
-    { label: "Welcome Messages", icon: Volume2, path: "/app/admin/welcomes" },
-    { label: "Voice Lab", icon: Volume2, path: "/app/voicelab" },
-    { label: "Launch Notifications FREE Plan", icon: Bell, path: "/app/admin/notifications" },
-    { label: "System Logs", icon: FileBox, path: "/app/admin/logs" },
-    { label: "Settings", icon: Settings, path: "/app/admin/settings" },
+    { label: "Landing Page", icon: Globe, path: "/?no_redirect=true", external: true },
+    { 
+      label: "CRM", 
+      icon: Zap, 
+      path: "/app/admin/agent-360",
+      subLinks: [
+        { label: "Agent 360", path: "/app/admin/agent-360", icon: Activity },
+        { label: "All Listings", path: "/app/admin/listings", icon: List },
+        { label: "Active Listings", path: "/app/admin/listings?tab=active", icon: CheckCircle2 },
+        { label: "Expired Listings", path: "/app/admin/listings?tab=expired", icon: Clock },
+        { label: "Support Tickets", path: "/app/admin/tickets", icon: LifeBuoy },
+        { label: "Managed Agents", path: "/app/admin/users", icon: Users },
+        { label: "Email Marketing Studio", path: "/app/admin/email-marketing", icon: Mail },
+        { label: "Brokerages & Quotas", path: "/app/admin/brokerage", icon: Building2 },
+        { label: "Welcome Messages", path: "/app/admin/welcomes", icon: Volume2 },
+        { label: "Launch Notifications (Free Plan)", path: "/app/admin/notifications", icon: Bell },
+      ]
+    },
+    { 
+      label: "Settings", 
+      icon: Settings, 
+      path: "/app/admin/settings",
+      subLinks: [
+        { label: "Analytics & Telemetry", path: "/app/admin/analytics", icon: BarChart2 },
+        { label: "API Usage Tracking", path: "/app/admin/api-usage", icon: Cpu },
+        { label: "System Logs", path: "/app/admin/logs", icon: FileBox },
+      ]
+    },
   ];
 
   const currentLinks = viewMode === 'ADMIN' ? adminLinks : navLinks;
@@ -396,7 +423,6 @@ export default function ProtectedLayout() {
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="grid gap-1 px-4">
           {currentLinks.map((link: any) => {
-            const active = location.pathname.startsWith(link.path.split('?')[0]) && (link.path !== '/' || location.pathname === '/');
             const isExternal = 'external' in link && link.external;
             
             if (isExternal) {
@@ -414,8 +440,25 @@ export default function ProtectedLayout() {
               );
             }
 
-            const isSubOpen = Boolean(openSubMenus[link.label]);
             const hasSubLinks = Boolean(link.subLinks && link.subLinks.length > 0);
+            const searchTab = new URLSearchParams(location.search).get("tab");
+
+            const isAnySubActive = hasSubLinks && link.subLinks.some((sub: any) => {
+              const subBasePath = sub.path.split('?')[0];
+              if (sub.path.includes("tab=")) {
+                const targetTab = sub.path.split("tab=")[1];
+                return location.pathname.startsWith(subBasePath) && (searchTab === targetTab || (!searchTab && targetTab === "active"));
+              }
+              return location.pathname === subBasePath || (subBasePath !== '/app/admin' && location.pathname.startsWith(subBasePath));
+            });
+
+            const isSubOpen = openSubMenus[link.label] !== undefined 
+              ? openSubMenus[link.label] 
+              : (hasSubLinks ? true : false);
+
+            const active = isAnySubActive || (
+              location.pathname.startsWith(link.path.split('?')[0]) && (link.path !== '/' || location.pathname === '/')
+            );
 
             return (
               <div key={link.label} className="flex flex-col gap-1">
@@ -426,7 +469,7 @@ export default function ProtectedLayout() {
                       if (hasSubLinks) {
                         setOpenSubMenus(prev => ({
                           ...prev,
-                          [link.label]: !prev[link.label]
+                          [link.label]: !isSubOpen
                         }));
                       } else {
                         setMobileMenuOpen(false);
@@ -453,26 +496,28 @@ export default function ProtectedLayout() {
                 {hasSubLinks && isSubOpen && (
                   <div className="flex flex-col gap-1 pl-7 mt-1 border-l border-white/20 ml-5 animate-in fade-in slide-in-from-top-1 duration-150">
                     {link.subLinks.map((sub: any) => {
-                      const searchTab = new URLSearchParams(location.search).get("tab");
-                      const subActive = active && (
-                        (sub.path.includes("tab=active") && (searchTab === "active" || !searchTab)) ||
-                        (sub.path.includes("tab=expired") && searchTab === "expired") ||
-                        (sub.path.includes("tab=scheduled") && (searchTab === "scheduled" || !searchTab)) || 
-                        (sub.path.includes("tab=completed") && searchTab === "completed") ||
-                        (sub.path.includes("tab=results") && searchTab === "results")
-                      );
+                      const subBasePath = sub.path.split('?')[0];
+                      let subActive = false;
+                      if (sub.path.includes("tab=")) {
+                        const targetTab = sub.path.split("tab=")[1];
+                        subActive = location.pathname.startsWith(subBasePath) && (searchTab === targetTab || (!searchTab && targetTab === "active"));
+                      } else {
+                        subActive = location.pathname === subBasePath || (subBasePath !== '/app/admin' && location.pathname.startsWith(subBasePath));
+                      }
+
                       return (
                         <Link
                           key={sub.label}
                           to={sub.path}
                           onClick={() => setMobileMenuOpen(false)}
-                          className={`text-xs font-semibold py-1 px-2.5 rounded transition-all ${
+                          className={`text-xs font-semibold py-1.5 px-2.5 rounded transition-all flex items-center gap-2 ${
                             subActive 
-                              ? "bg-white/20 text-white font-bold" 
-                              : "text-white/70 hover:text-white hover:bg-white/5"
+                              ? "bg-white/25 text-white font-extrabold shadow-xs" 
+                              : "text-white/80 hover:text-white hover:bg-white/10"
                           }`}
                         >
-                          {sub.label}
+                          {sub.icon && <sub.icon className="h-3.5 w-3.5 shrink-0 opacity-80" />}
+                          <span className="truncate">{sub.label}</span>
                         </Link>
                       );
                     })}

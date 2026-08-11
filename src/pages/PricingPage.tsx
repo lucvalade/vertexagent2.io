@@ -125,6 +125,27 @@ export default function PricingPage() {
 
   const comparisonData: FeatureComparisonRow[] = [
     {
+      feature: "Support Level",
+      solo: "Level 1 Standard",
+      starter: "Level 2 Priority",
+      pro: "Level 2 Priority",
+      broker: "Level 3 VIP Concierge"
+    },
+    {
+      feature: "Expected Response Time",
+      solo: "< 24 Hours SLA",
+      starter: "< 4 Hours SLA",
+      pro: "< 4 Hours SLA",
+      broker: "< 30 Mins Live SLA"
+    },
+    {
+      feature: "Support Channels",
+      solo: "Help Desk Ticket",
+      starter: "Email & Ticket",
+      pro: "Priority Email & Chat",
+      broker: "Dedicated Manager + 24/7 Hotline"
+    },
+    {
       feature: "Guest sign-in",
       solo: "Unlimited",
       starter: "Unlimited",
@@ -180,13 +201,17 @@ export default function PricingPage() {
       isPopular: false,
       badgeText: "BASIC PLAN",
       description: "Ditch the paper sheets. Run unlimited, offline-capable open house sign-ins and organize your client contacts within a clean local workspace.",
+      supportLevel: "Level 1 Standard Support",
+      supportResponseTime: "< 24 Hours SLA",
+      supportDetail: "Self-serve Help Desk & Email Ticketing",
       features: [
         "Unlimited open house sign-ins",
         "Secure local buffer (works offline)",
         "Basic English-only Sora assistant",
         "Built-in visitor contact lists",
         "Lender pairing option",
-        "15 Gemini Mins/mo (3-min session max)"
+        "15 Gemini Mins/mo (3-min session max)",
+        "Standard Support (< 24h response time)"
       ]
     },
     {
@@ -200,13 +225,17 @@ export default function PricingPage() {
       isPopular: false,
       badgeText: "CONNECTED WORKFLOW",
       description: "Keep your database updated. Automatically syncs captured leads directly to Follow Up Boss, kvCORE, HubSpot, or any of 47 supported real estate CRMs.",
+      supportLevel: "Level 2 Priority Support",
+      supportResponseTime: "< 4 Hours SLA",
+      supportDetail: "Priority Email & Ticket Setup Guidance",
       features: [
         "Includes everything in Solo",
         "Automated CRM sync (47+ supported CRMs)",
         "FUB custom tag & field mapping",
         "kvCORE, HubSpot & 45+ CRM integrations",
         "Real-time contact status updates",
-        "30 Gemini Mins/mo (5-min session max)"
+        "30 Gemini Mins/mo (5-min session max)",
+        "Priority Support (< 4h response time)"
       ]
     },
     {
@@ -220,13 +249,17 @@ export default function PricingPage() {
       isPopular: true,
       badgeText: "MOST POPULAR",
       description: "Turn listings into immersive interactive experiences. Engages buyers in 70 languages, guided by custom knowledge bases and advanced voice tours.",
+      supportLevel: "Level 2 Priority Support",
+      supportResponseTime: "< 4 Hours SLA",
+      supportDetail: "Priority Tech Support & Live Chat Dispatch",
       features: [
         "Includes everything in Starter",
         "Full 70-language translation",
         "Interactive conversational Sora guide",
         "Personal & brokerage branding uploads",
         "Detailed buyer intent scoring",
-        "300 Gemini Mins/mo (15-min session max)"
+        "300 Gemini Mins/mo (15-min session max)",
+        "Priority Support (< 4h response time)"
       ]
     },
     {
@@ -240,14 +273,17 @@ export default function PricingPage() {
       isPopular: false,
       badgeText: "ENTERPRISE",
       description: "Empower your entire brokerage. Enforce brand templates, manage team-wide assignments, configure custom domains, and route shared listing leads.",
+      supportLevel: "Level 3 VIP Concierge SLA",
+      supportResponseTime: "< 30 Mins Live SLA",
+      supportDetail: "Dedicated Account Manager & 24/7 Crisis Hotline",
       features: [
         "Includes everything in Pro",
         "Brokerage-wide white-labeling",
         "Centralized team and admin controls",
         "Custom domain configuration",
         "Shared listing override rules",
-        "Priority onboarding support",
-        "Unlimited Gemini Mins"
+        "Unlimited Gemini Mins",
+        "VIP Concierge Support (< 30m response SLA)"
       ]
     }
   ];
@@ -370,6 +406,30 @@ export default function PricingPage() {
                       {card.period && (
                         <span className={`text-xs font-bold ${isBroker ? "text-slate-400" : "text-stone-500"}`}>/{card.period}</span>
                       )}
+                    </div>
+
+                    {/* Support Level & Response Time Highlight Box */}
+                    <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+                      isBroker 
+                        ? "bg-slate-800/80 border-slate-700 text-amber-200" 
+                        : card.isPopular 
+                          ? "bg-blue-50/80 border-blue-200 text-blue-950" 
+                          : "bg-stone-50 border-stone-200 text-stone-800"
+                    }`}>
+                      <div className="flex items-center justify-between font-extrabold text-[11px]">
+                        <span className="flex items-center gap-1">
+                          <ShieldCheck className={`h-3.5 w-3.5 ${isBroker ? "text-amber-400" : "text-blue-600"}`} />
+                          {card.supportLevel}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          isBroker ? "bg-amber-400 text-slate-950" : card.isPopular ? "bg-blue-600 text-white" : "bg-stone-200 text-stone-800"
+                        }`}>
+                          {card.supportResponseTime}
+                        </span>
+                      </div>
+                      <p className={`text-[10px] ${isBroker ? "text-slate-300" : "text-stone-500"}`}>
+                        {card.supportDetail}
+                      </p>
                     </div>
 
                     <div className="space-y-4">
@@ -510,6 +570,10 @@ export default function PricingPage() {
                   <li className="flex items-start gap-2">
                     <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
                     <span>Expand with volume pricing.</span>
+                  </li>
+                  <li className="flex items-start gap-2 font-bold text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <span>Partner Priority Support (&lt; 2h Response SLA).</span>
                   </li>
                 </ul>
               </div>

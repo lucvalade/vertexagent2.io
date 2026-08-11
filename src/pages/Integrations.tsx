@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { Plug, Zap, CheckCircle2, ArrowRight, Loader2, Key, Settings, HelpCircle, ShieldAlert, Activity, FileText, Search, ExternalLink, Database, Sparkles, Check, X } from "lucide-react";
+import { Plug, Zap, CheckCircle2, ArrowRight, Loader2, Key, Settings, HelpCircle, ShieldAlert, Activity, FileText, Search, ExternalLink, Database, Sparkles, Check, X, Users } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CrmSyncLogs from "@/components/CrmSyncLogs";
+import Agent360Dashboard from "@/components/Agent360Dashboard";
 
 export interface CrmItem {
   id: string;
@@ -73,7 +74,8 @@ export default function Integrations() {
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN" || user?.email === "luc.valade@gmail.com";
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") === "logs" ? "logs" : "integrations";
+  const tabParam = searchParams.get("tab");
+  const activeTab = tabParam === "logs" ? "logs" : tabParam === "agent360" ? "agent360" : "integrations";
 
   const [integrations, setIntegrations] = useState<any>({});
   const [loading, setLoading] = useState(true);
@@ -172,7 +174,18 @@ export default function Integrations() {
 
         {/* Sub-Page Navigation Tabs */}
         {isAdmin && (
-          <div className="flex items-center bg-slate-950 p-1 border border-slate-800 rounded-xl shrink-0">
+          <div className="flex flex-wrap items-center bg-slate-950 p-1 border border-slate-800 rounded-xl shrink-0">
+            <button
+              onClick={() => setSearchParams({ tab: "agent360" })}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
+                activeTab === "agent360"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+              }`}
+            >
+              <Users className="h-4 w-4 text-sky-300" />
+              Agent 360 Dashboard
+            </button>
             <button
               onClick={() => setSearchParams({ tab: "integrations" })}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
@@ -329,7 +342,9 @@ export default function Integrations() {
       </div>
 
       {/* Render Active Sub-Page */}
-      {activeTab === "logs" && isAdmin ? (
+      {activeTab === "agent360" ? (
+        <Agent360Dashboard />
+      ) : activeTab === "logs" && isAdmin ? (
         <CrmSyncLogs />
       ) : activeTab === "logs" && !isAdmin ? (
         <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center space-y-3">

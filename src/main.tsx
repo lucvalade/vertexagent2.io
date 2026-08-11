@@ -97,6 +97,7 @@ import Lenders from './pages/Lenders.tsx';
 import AiTours from './pages/AiTours.tsx';
 import OpenHousesAgent from './pages/OpenHousesAgent.tsx';
 
+import Agent360 from './pages/admin/Agent360.tsx';
 import EmailMarketing from './pages/EmailMarketing.tsx';
 import Integrations from './pages/Integrations.tsx';
 import SupportTickets from './pages/SupportTickets.tsx';
@@ -257,6 +258,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="automations" element={<Automations />} />
               <Route path="crm" element={<Integrations />} />
               <Route path="crm/logs" element={<Navigate to="/app/crm?tab=logs" replace />} />
+              <Route path="agent-360" element={<Agent360 />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="support" element={<SupportTickets />} />
               <Route path="tickets" element={<SupportTickets />} />
@@ -271,6 +273,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="pilot-admin" element={<PilotAdmin />} />
               <Route path="admin">
                 <Route index element={<AdminDashboard />} />
+                <Route path="agent-360" element={<Agent360 />} />
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="users/invite" element={<InviteAgent />} />
                 <Route path="listings" element={<AdminListings />} />

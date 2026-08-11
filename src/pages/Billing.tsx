@@ -83,6 +83,7 @@ export default function Billing() {
       title: "Solo Agent Starter",
       price: "Free",
       features: [
+        "Support SLA: Level 1 Standard (< 24 hrs response)",
         "1 Active Listing",
         "Kiosk Sign-In Mode with PIN Lock",
         "15 Gemini Mins/mo (3-min session max)",
@@ -97,6 +98,7 @@ export default function Billing() {
       title: "Starter Agent",
       price: "$14/month",
       features: [
+        "Support SLA: Level 2 Priority (< 4 hrs response)",
         "1 Active Listing",
         "CRM Syncing Integration (FUB, etc.)",
         "30 Gemini Mins/mo (5-min session max)",
@@ -109,6 +111,7 @@ export default function Billing() {
       title: "Pro Agent",
       price: "$29/month",
       features: [
+        "Support SLA: Level 2 Priority (< 4 hrs response)",
         "Up to 25 Active Listings",
         "300 Gemini Mins/mo (15-min session max)",
         "All 70 Multilingual AI Languages",
@@ -124,6 +127,7 @@ export default function Billing() {
       title: "Team Pro",
       price: "From $149/month",
       features: [
+        "Support SLA: Level 2 Priority (< 4 hrs response)",
         "1,500 Gemini Live API Voice Mins/mo (30-min session max)",
         "Team-level listings visibility & roster settings",
         "Enforce team lender block-policies globally",
@@ -135,6 +139,7 @@ export default function Billing() {
       title: "Brokerage Office",
       price: "From $399/month",
       features: [
+        "Support SLA: Level 3 VIP Concierge (< 30 mins live response)",
         "Unlimited Gemini Live API Voice Mins/mo",
         "Unlimited office-wide listing rules & logs",
         "Custom branded portal domain & overrides",
@@ -146,6 +151,7 @@ export default function Billing() {
       title: "Sponsoring Lender Plan",
       price: "$20 to $100/month",
       features: [
+        "Support SLA: Partner Priority Support (< 2 hrs response)",
         "Active B2B partnership seat subscriptions",
         "Direct client routing queues upon explicit opt-in",
         "Co-branding on open house kiosks",
@@ -662,6 +668,7 @@ export default function Billing() {
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Unlimited basic sign-ins</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> <span className="font-extrabold text-black">15 Gemini Mins/mo (3-min session max)</span></div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Secure offline buffer with sync</div>
+                <div className="flex items-center gap-2 font-bold text-slate-800"><ShieldCheck className="h-4 w-4 text-blue-500 shrink-0" /> Level 1 Standard Support (&lt;24h)</div>
               </div>
             </div>
           </div>
@@ -680,6 +687,7 @@ export default function Billing() {
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> <span className="font-extrabold text-black">30 Gemini Mins/mo (5-min session max)</span></div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Automated CRM synchronization</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> FUB custom tag & field mapping</div>
+                <div className="flex items-center gap-2 font-bold text-slate-800"><ShieldCheck className="h-4 w-4 text-blue-500 shrink-0" /> Level 2 Priority Support (&lt;4h)</div>
               </div>
             </div>
           </div>
@@ -699,6 +707,7 @@ export default function Billing() {
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> <span className="font-extrabold text-blue-800">300 Gemini Mins/mo (15-min session max)</span></div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Full 24-language translation</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" /> Advanced Conversational Sora</div>
+                <div className="flex items-center gap-2 font-bold text-blue-900"><ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" /> Level 2 Priority Support (&lt;4h)</div>
               </div>
             </div>
           </div>
@@ -717,6 +726,7 @@ export default function Billing() {
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Centralized team & admin controls</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Brokerage-wide white-labeling</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400 shrink-0" /> Custom domain configuration</div>
+                <div className="flex items-center gap-2 font-bold text-amber-300"><ShieldCheck className="h-4 w-4 text-amber-400 shrink-0" /> Level 3 VIP Concierge (&lt;30m SLA)</div>
               </div>
             </div>
           </div>

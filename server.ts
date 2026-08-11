@@ -387,6 +387,45 @@ async function startServer() {
     }
   });
 
+  // Property Description AI Revision Endpoint
+  app.post("/api/revise-description", async (req: any, res: any) => {
+    try {
+      const { description, address, price, beds, baths, talkingPoints } = req.body || {};
+      if (!description && !address) {
+        return res.status(400).json({ error: "Description or address is required" });
+      }
+
+      const ai = getAi();
+      if (!ai) {
+        return res.status(500).json({ error: "Gemini AI client unavailable" });
+      }
+
+      const pointsStr = Array.isArray(talkingPoints) ? talkingPoints.join(", ") : "";
+      const promptText = `You are a professional luxury real estate copywriter.
+Revise and enhance the following property description to make it polished, engaging, and compelling for prospective homebuyers while keeping all factual details completely accurate.
+Address: ${address || "Unspecified"}
+Price: ${price ? `$${price}` : "Unspecified"}
+Beds: ${beds || "N/A"}, Baths: ${baths || "N/A"}
+Highlights: ${pointsStr}
+
+Current Description:
+${description || "No existing description provided. Write a compelling summary from the property details provided above."}
+
+Format the revised description clearly in clean paragraphs (maximum 3 sentences per paragraph). Return ONLY the revised description text without any conversational intro or meta commentary.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: promptText,
+      });
+
+      const revisedText = response.text?.trim() || description;
+      return res.json({ revisedDescription: revisedText });
+    } catch (err: any) {
+      console.error("[Revise Description Error]:", err);
+      return res.status(500).json({ error: err.message || "Failed to revise description" });
+    }
+  });
+
   // Audio upload API endpoint
   app.post("/api/upload-audio", upload.single("file"), (req: any, res: any) => {
     try {

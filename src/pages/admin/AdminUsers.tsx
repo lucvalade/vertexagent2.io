@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Mail, UserPlus, ShieldCheck, ShieldAlert, Trash2, Pencil, ExternalLink, ChevronLeft, ChevronRight, Calendar, Clock, Eye, Send, Sparkles, MoreVertical } from 'lucide-react';
+import { Search, Mail, UserPlus, ShieldCheck, ShieldAlert, Trash2, Pencil, ExternalLink, ChevronLeft, ChevronRight, Calendar, Clock, Eye, Send, Sparkles, MoreVertical, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,11 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { sendEmail } from "@/lib/api";
 import { toast } from "sonner";
+import Agent360Dashboard from "@/components/Agent360Dashboard";
 
 export default function AdminUsers() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"directory" | "freetier">("directory");
+  const [activeTab, setActiveTab] = useState<"directory" | "agent360" | "freetier">("directory");
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [realUsers, setRealUsers] = useState<any[]>([]);
@@ -345,6 +346,14 @@ export default function AdminUsers() {
               Brokerage Directory
             </button>
             <button
+              id="tab-agent360"
+              onClick={() => { setActiveTab("agent360"); }}
+              className={`px-4 py-2 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 ${activeTab === 'agent360' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Agent 360
+            </button>
+            <button
               id="tab-freetier"
               onClick={() => { setActiveTab("freetier"); setPage(1); }}
               className={`px-4 py-2 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 ${activeTab === 'freetier' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
@@ -363,8 +372,11 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      {/* Main Panel Card */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden text-left">
+      {/* Main Panel Content */}
+      {activeTab === "agent360" ? (
+        <Agent360Dashboard />
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden text-left">
         {/* Sub-header Controls */}
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-50/50">
           <div className="relative w-full sm:max-w-xs">
@@ -743,6 +755,7 @@ export default function AdminUsers() {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">Page {page} of {totalPages || 1} • Brokerage Audit: PASS</p>
         </div>
       </div>
+      )}
 
       {/* Welcome & Reminder Email Template Viewer + SMTP Dispatcher Dialog (Answers Questions 2 & 3 beautifully) */}
       <Dialog open={isPreviewModalOpen} onOpenChange={setIsPreviewModalOpen}>

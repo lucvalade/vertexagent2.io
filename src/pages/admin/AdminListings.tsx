@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, MoreVertical, Eye, Trash2, Edit, X, Calendar, Loader2, Volume2, Upload } from 'lucide-react';
+import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, CheckCircle2, Clock, MoreVertical, Eye, Trash2, Edit, X, Calendar, Loader2, Volume2, Upload } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
@@ -99,14 +99,26 @@ export default function AdminListings() {
     setSortConfig({ key, direction });
   };
 
+  const searchParams = new URLSearchParams(location.search);
+  const searchTab = searchParams.get("tab");
+
+  const activeCount = allListings.filter(l => !isListingExpired(l)).length;
+  const expiredCount = allListings.filter(l => isListingExpired(l)).length;
+
   const filteredAndSortedListings = allListings
-    .filter(l => 
-      (l.address.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       (l.agentName && l.agentName.toLowerCase().includes(searchTerm.toLowerCase()))) &&
-      (!startDate || (l.createdAt && new Date(l.createdAt).toISOString() >= startDate)) &&
-      (!endDate || (l.createdAt && new Date(l.createdAt).toISOString() <= endDate)) &&
-      (!showComplianceOnly || l.flag === true)
-    )
+    .filter(l => {
+      const expired = isListingExpired(l);
+      if (searchTab === "active" && expired) return false;
+      if (searchTab === "expired" && !expired) return false;
+
+      return (
+        (l.address.toLowerCase().includes(searchTerm.toLowerCase()) || 
+         (l.agentName && l.agentName.toLowerCase().includes(searchTerm.toLowerCase()))) &&
+        (!startDate || (l.createdAt && new Date(l.createdAt).toISOString() >= startDate)) &&
+        (!endDate || (l.createdAt && new Date(l.createdAt).toISOString() <= endDate)) &&
+        (!showComplianceOnly || l.flag === true)
+      );
+    })
     .sort((a, b) => {
       if (!sortConfig) return 0;
       const { key, direction } = sortConfig;
@@ -237,9 +249,56 @@ export default function AdminListings() {
 
   return (
     <div className="space-y-6">
-      <div className="text-left">
-        <h1 className="text-3xl font-black tracking-tighter text-slate-900 italic uppercase">Brokerage Inventory</h1>
-        <p className="text-slate-500 font-medium">Global oversight of all property assets and agent compliance.</p>
+      <div className="text-left flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tighter text-slate-900 italic uppercase">Brokerage Inventory</h1>
+          <p className="text-slate-500 font-medium">Global oversight of all property assets and agent compliance.</p>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-200 gap-1 bg-slate-100/80 p-1 rounded-xl">
+          <button
+            onClick={() => navigate("/app/admin/listings")}
+            className={`px-3.5 py-1.5 text-xs font-black rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              !searchTab
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <span>ALL LISTINGS</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${!searchTab ? 'bg-slate-100 text-slate-800' : 'bg-slate-200/80 text-slate-600'}`}>
+              {allListings.length}
+            </span>
+          </button>
+          <button
+            onClick={() => navigate("/app/admin/listings?tab=active")}
+            className={`px-3.5 py-1.5 text-xs font-black rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              searchTab === "active"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "text-slate-600 hover:text-emerald-700"
+            }`}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            <span>ACTIVE</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${searchTab === "active" ? 'bg-emerald-700 text-white' : 'bg-slate-200/80 text-slate-600'}`}>
+              {activeCount}
+            </span>
+          </button>
+          <button
+            onClick={() => navigate("/app/admin/listings?tab=expired")}
+            className={`px-3.5 py-1.5 text-xs font-black rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+              searchTab === "expired"
+                ? "bg-amber-600 text-white shadow-sm"
+                : "text-slate-600 hover:text-amber-700"
+            }`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            <span>EXPIRED</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${searchTab === "expired" ? 'bg-amber-700 text-white' : 'bg-slate-200/80 text-slate-600'}`}>
+              {expiredCount}
+            </span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden text-left">

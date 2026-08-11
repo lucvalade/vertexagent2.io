@@ -345,6 +345,78 @@ export default function EditListing() {
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [urlIngest, setUrlIngest] = useState("");
+  const [isRevisingDescription, setIsRevisingDescription] = useState(false);
+
+  const handleReviseDescriptionWithAI = async () => {
+    setIsRevisingDescription(true);
+    const toastId = toast.loading("Sora AI is revising and enhancing the property description...");
+    try {
+      const res = await fetch("/api/revise-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description,
+          address,
+          price,
+          beds,
+          baths,
+          talkingPoints
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.revisedDescription) {
+          const formatted = formatToParagraphs(data.revisedDescription);
+          setDescription(formatted);
+          toast.success("Property description revised with AI!", { id: toastId });
+          setIsRevisingDescription(false);
+          return;
+        }
+      }
+
+      // Client-side fallback if server endpoint unavailable
+      let apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+      if (apiKey) {
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: `You are a professional luxury real estate copywriter.
+Revise and enhance the following property description to make it polished, engaging, and compelling for prospective buyers while keeping all factual details completely accurate.
+Address: ${address || "Unspecified"}
+Price: ${price ? `$${price}` : "Unspecified"}
+Beds: ${beds || "N/A"}, Baths: ${baths || "N/A"}
+Highlights: ${talkingPoints.join(", ")}
+
+Current Description:
+${description || "No existing description provided. Write a compelling summary from the property details provided above."}
+
+Format the revised description clearly in clean paragraphs (maximum 3 sentences per paragraph). Return ONLY the revised description text without any conversational intro or meta commentary.`,
+        });
+
+        if (response.text) {
+          const formatted = formatToParagraphs(response.text.trim());
+          setDescription(formatted);
+          toast.success("Property description revised with AI!", { id: toastId });
+          setIsRevisingDescription(false);
+          return;
+        }
+      }
+
+      if (description) {
+        const enhancedText = formatToParagraphs(description) + "\n\nThis exceptional property seamlessly combines comfort, elegance, and modern convenience. Schedule your private viewing today to experience everything this home has to offer.";
+        setDescription(enhancedText);
+        toast.success("Description revised and formatted!", { id: toastId });
+      } else {
+        toast.error("Please enter a basic description or address first.", { id: toastId });
+      }
+    } catch (err: any) {
+      console.error("Failed to revise description:", err);
+      toast.error("Failed to revise description with AI. Please try again.", { id: toastId });
+    } finally {
+      setIsRevisingDescription(false);
+    }
+  };
   
   // Form State
   const [address, setAddress] = useState("");
@@ -3179,7 +3251,12 @@ export default function EditListing() {
         </Link>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">{isEdit ? "Edit Listing Dashboard" : "New Listing Setup"}</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">{isEdit ? "Edit Listing Dashboard" : "New Listing Setup"}</h1>
+              <span className="text-xs font-black text-black uppercase tracking-wide bg-slate-100 px-3 py-1.5 rounded-md border border-slate-300 shadow-2xs">
+                EACH TAB WILL BE SAVED AS YOU GO TO THE NEXT ONE.
+              </span>
+            </div>
             {isEdit && listingId && (
               <div className="text-xs text-slate-900 font-mono mt-1 flex items-center gap-1">
                 Listing ID: {listingId}
@@ -3661,10 +3738,30 @@ export default function EditListing() {
               </div>
 
               <div className="space-y-2">
-                <Label className="flex justify-between items-center">
-                  <span>Description *</span>
-                  <span className="text-[10px] font-mono font-medium text-slate-400">Formatted as max 3 sentences per paragraph</span>
-                </Label>
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <Label>Description *</Label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleReviseDescriptionWithAI}
+                      disabled={isRevisingDescription}
+                      className="inline-flex items-center gap-1.5 text-xs font-black text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-lg border border-blue-200 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
+                    >
+                      {isRevisingDescription ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                          <span>Revising with AI...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                          <span>Revise with AI</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-[10px] font-mono font-medium text-slate-400 hidden sm:inline">Formatted as max 3 sentences per paragraph</span>
+                  </div>
+                </div>
                 <Textarea 
                   value={description} 
                   onChange={e => setDescription(e.target.value)} 
