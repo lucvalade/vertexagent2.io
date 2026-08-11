@@ -123,6 +123,7 @@ function AlertDialogTitle({
 
 function AlertDialogDescription({
   className,
+  render = <div />,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Description>) {
   return (
@@ -132,6 +133,7 @@ function AlertDialogDescription({
         "text-sm text-balance text-muted-foreground md:text-pretty *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
         className
       )}
+      render={render}
       {...props}
     />
   )

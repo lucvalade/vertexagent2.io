@@ -1254,6 +1254,96 @@ export default function PublicSite() {
         </div>
       </section>
 
+      {/* 8.5 FAQ Section */}
+      <section id="faq" className="py-24 bg-slate-900 text-white border-y border-slate-800 px-6">
+        <div className="max-w-5xl mx-auto space-y-12">
+          <div className="text-center space-y-3">
+            <span className="text-xs font-bold text-blue-400 tracking-widest uppercase bg-blue-500/10 px-3.5 py-1.5 rounded-full border border-blue-500/20 inline-flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+              {lang === "en" ? "KNOWLEDGE BASE & SUPPORT" : "BASE DE CONNAISSANCES ET SUPPORT"}
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              {lang === "en" ? "Frequently Asked Questions" : "Foire aux Questions"}
+            </h2>
+            <p className="text-slate-400 max-w-xl mx-auto text-sm md:text-base leading-relaxed">
+              {lang === "en" 
+                ? "Everything you need to know about solo agent safety, Sora AI audio tours, tablet kiosks, and CRM integrations."
+                : "Tout ce que vous devez savoir sur la sécurité des agents, les visites vocales IA, les kiosques et les CRM."}
+            </p>
+          </div>
+
+          <div className="space-y-4 max-w-3xl mx-auto">
+            {[
+              {
+                q: lang === "en" ? "What are the 'CHECKIN AGENT' and 'SAVE LOGS' buttons for?" : "À quoi servent les boutons 'CHECKIN AGENT' et 'SAVE LOGS' ?",
+                a: lang === "en" 
+                  ? "These controls are part of our Solo-Agent Safety System. Clicking 'CHECKIN AGENT' confirms you are safe on-site and resets your check-in timer. If you fail to check in before the event ends, an emergency protocol pings designated contacts. 'SAVE LOGS' archives timestamped location logs and visitor audit trails to Firestore."
+                  : "Ces commandes font partie de notre système de sécurité. Cliquer sur 'CHECKIN AGENT' confirme votre sécurité. 'SAVE LOGS' me dans les archives les journaux d'audit de localisation et de visiteurs."
+              },
+              {
+                q: lang === "en" ? "How does the 'Send Sora Follow-Up Email' feature work?" : "Comment fonctionne l'envoi de courriels de suivi Sora ?",
+                a: lang === "en"
+                  ? "Inside your Guest Visitor Roster, Sora analyzes the exact voice questions visitors asked during their tour (kitchen, master suite, HOA fees) and their mortgage consent status. Sora automatically generates a tailored follow-up email draft with 1-click re-drafting and instant sending."
+                  : "Dans votre liste de visiteurs, Sora analyse les questions vocales posées pendant la visite et génère un modèle de suivi personnalisé."
+              },
+              {
+                q: lang === "en" ? "Can I sign visitors in if the property has no Wi-Fi?" : "Puis-je inscrire des visiteurs sans Wi-Fi ?",
+                a: lang === "en"
+                  ? "Yes! Our Offline Event Buffer automatically caches guest sign-ins locally when internet connectivity is weak or absent. Once Wi-Fi or cellular data restores, all leads automatically sync to Firestore and your connected CRM."
+                  : "Oui ! Notre tampon d'événement hors ligne enregistre automatiquement les inscriptions localement."
+              },
+              {
+                q: lang === "en" ? "How do I re-import MLS listing data or trigger 'Go Live'?" : "Comment réimporter les données MLS ou publier ?",
+                a: lang === "en"
+                  ? "In Step 2 of the Edit Listing Dashboard, click 'Re-Import Listing Data' to refresh MLS specs and descriptions. If a draft listing is pending for over 24 hours, an automated 'Go Live' reminder lets you publish in 1 click."
+                  : "Dans l'étape 2 du tableau de bord de modification, cliquez sur 'Réimporter les données MLS' pour actualiser les spécifications."
+              },
+              {
+                q: lang === "en" ? "What is the Lender Consent Gate?" : "Qu'est-ce que la porte de consentement du prêteur ?",
+                a: lang === "en"
+                  ? "To satisfy PIPEDA and RESPA co-marketing compliance, visitors must explicitly check an opt-in box ('Would you like information on financing options?') for their contact info to route to your paired lender."
+                  : "Pour respecter la conformité, les visiteurs doivent cocher une case d'autorisation explicite pour transmettre leurs coordonnées au prêteur."
+              }
+            ].map((faq, idx) => {
+              const isOpen = !!openFaqIndices[idx];
+              return (
+                <div 
+                  key={idx}
+                  className="border border-slate-800 rounded-2xl bg-slate-950/60 overflow-hidden transition-all duration-200"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaqIndices(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                    className="w-full text-left p-5 flex items-center justify-between gap-4 cursor-pointer focus:outline-none"
+                  >
+                    <span className="font-bold text-white text-sm md:text-base flex items-center gap-3">
+                      <span className="h-6 w-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">Q</span>
+                      {faq.q}
+                    </span>
+                    <ChevronDown className={`h-5 w-5 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-blue-400" : ""}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="px-5 pb-5 pt-0 text-xs md:text-sm text-slate-300 leading-relaxed border-t border-slate-800/80 mt-2 pt-3 pl-14">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="text-center pt-4">
+            <Link
+              to="/faq"
+              className="inline-flex items-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs md:text-sm transition-all duration-200 shadow-lg hover:scale-105"
+            >
+              <span>{lang === "en" ? "View Full FAQ & Knowledge Base Page" : "Consulter la page FAQ complète"}</span>
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* 9. Final CTA Band */}
       <section id="pricing" className="py-24 bg-[#0B1220] text-center px-6 text-white relative">
         <div className="max-w-4xl mx-auto space-y-8 relative z-10">

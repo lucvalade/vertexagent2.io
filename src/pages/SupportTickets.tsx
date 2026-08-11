@@ -35,65 +35,6 @@ import {
   BarChart2,
   Zap,
   Check,
-  AlertTriangle
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
-import { 
-  collection, 
-  query, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  orderBy, 
-  onSnapshot 
-} from "firebase/firestore";
-import { 
-  LifeBuoy, 
-  Plus, 
-  Search, 
-  Filter, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle, 
-  MessageSquare, 
-  User, 
-  Send, 
-  ShieldAlert, 
-  Tag, 
-  ArrowLeft,
-  ChevronRight,
-  Sparkles,
-  RefreshCw,
-  X,
-  FileText,
-  Mail,
-  HelpCircle,
-  BarChart2,
-  Zap,
-  Check,
   AlertTriangle,
   Crown,
   Bell,
@@ -101,7 +42,9 @@ import {
   ShieldCheck,
   Layers,
   SmartphoneNfc,
-  Code
+  Code,
+  Timer,
+  Radio
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1154,10 +1097,12 @@ export default function SupportTickets() {
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${priorityInfo.color}`}>
                             {priorityInfo.label} Priority
                           </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${levelInfo.color}`}>
-                            {levelInfo.label}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${levelInfo.badgeClass}`}>
+                            {levelInfo.shortLabel || levelInfo.label}
                           </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${slaCountdown.color}`}>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${
+                            slaCountdown.isOverdue ? 'bg-red-100 text-red-700 border-red-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                          }`}>
                             <Timer className="h-3 w-3" />
                             <span>SLA: {slaCountdown.text}</span>
                           </span>
@@ -1295,7 +1240,7 @@ export default function SupportTickets() {
                     SLA & Dispatch Audit
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">
-                    SLA Target: {SUPPORT_LEVEL_CONFIG[selectedTicket.supportLevel || "level_1"]?.slaTarget}
+                    SLA Target: {SUPPORT_LEVEL_CONFIG[selectedTicket.supportLevel || "level_1"]?.slaText}
                   </span>
                 </div>
 

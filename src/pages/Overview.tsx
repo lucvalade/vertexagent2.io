@@ -456,6 +456,8 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
   const [newPasswordValue, setNewPasswordValue] = useState("");
   const [showPasswordRaw, setShowPasswordRaw] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const [goLiveReminderListing, setGoLiveReminderListing] = useState<any | null>(null);
+  const [showGoLiveReminderModal, setShowGoLiveReminderModal] = useState(false);
 
   useEffect(() => {
     getGlobalPromptSettings().then(settings => {
@@ -509,6 +511,20 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
       fetchPromise.then(listings => {
         setListingCount(listings ? listings.length : 0);
         setActiveListings(listings || []);
+
+        if (listings && listings.length > 0) {
+          const pendingListing = listings.find(l => {
+            const isNotLive = !l.publishedAt || l.status === "Processing" || (l as any).isIngested || !(l as any).isLive;
+            const createdTime = (l as any).ingestedAt || l.createdAt || 0;
+            const isOver24Hours = (Date.now() - createdTime) >= 24 * 60 * 60 * 1000;
+            return isNotLive && isOver24Hours;
+          }) || listings.find(l => !l.publishedAt || l.status === "Processing");
+
+          if (pendingListing && !sessionStorage.getItem(`go_live_dismissed_${pendingListing.id}`)) {
+            setGoLiveReminderListing(pendingListing);
+            setShowGoLiveReminderModal(true);
+          }
+        }
       }).catch(err => {
         console.error("Failed to fetch listings for overview", err);
         setListingCount(0);
@@ -1473,6 +1489,58 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
               className="bg-blue-600 hover:bg-blue-700 font-bold px-6 text-white"
             >
               Mark as Read & Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 24-Hour "Go Live" Reminder Popup */}
+      <Dialog open={showGoLiveReminderModal} onOpenChange={setShowGoLiveReminderModal}>
+        <DialogContent className="sm:max-w-md bg-white rounded-2xl p-6 border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 font-extrabold text-base">
+              <Clock className="w-5 h-5 text-amber-500 animate-bounce" />
+              24-Hour Go Live Reminder
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600 space-y-3 pt-3 text-left">
+              <div className="leading-relaxed">
+                Your property listing for <strong className="text-slate-900">{goLiveReminderListing?.address || "your ingested listing"}</strong> was created/ingested over 24 hours ago and is pending publication.
+              </div>
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-amber-900 space-y-1.5 text-xs">
+                <div className="font-bold">⚡ Why Go Live?</div>
+                <div className="text-amber-800 text-[11px]">
+                  Publishing activates your Sora AI audio tour, generates dynamic open house sign-in QR codes, and enables instant lead routing to your paired lender and CRM.
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
+            <Button 
+              type="button"
+              variant="ghost" 
+              onClick={() => {
+                if (goLiveReminderListing) {
+                  sessionStorage.setItem(`go_live_dismissed_${goLiveReminderListing.id}`, "true");
+                }
+                setShowGoLiveReminderModal(false);
+              }}
+              className="text-slate-500 text-xs font-semibold"
+            >
+              Remind Me Later
+            </Button>
+            <Button 
+              type="button"
+              onClick={() => {
+                if (goLiveReminderListing) {
+                  navigate(`/app/listings/edit/${goLiveReminderListing.id}?step=7`);
+                } else {
+                  navigate("/app/listings");
+                }
+                setShowGoLiveReminderModal(false);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 shadow-md"
+            >
+              Update & Go Live Now
             </Button>
           </DialogFooter>
         </DialogContent>

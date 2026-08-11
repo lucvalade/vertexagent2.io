@@ -127,6 +127,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
 
 function DialogDescription({
   className,
+  render = <div />,
   ...props
 }: DialogPrimitive.Description.Props) {
   return (
@@ -136,6 +137,7 @@ function DialogDescription({
         "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
         className
       )}
+      render={render}
       {...props}
     />
   )

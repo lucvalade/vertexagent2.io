@@ -732,7 +732,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       ]
     },
     { label: "Pricing", href: "/pricing" },
-    { label: "FAQ", href: "/#faq" }
+    { label: "FAQ", href: "/faq" }
   ];
 
   return (
@@ -1103,10 +1103,10 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             {/* FAQ */}
             <div className="border-b border-slate-100 py-3">
               <Link 
-                to="/#faq" 
+                to="/faq" 
                 onClick={() => setMobileMenuOpen(false)}
                 className={`font-extrabold text-base hover:text-blue-500 transition-colors block text-left ${
-                  isLinkActive("/#faq") ? "text-blue-600 font-black" : "text-[#111827]"
+                  isLinkActive("/faq") ? "text-blue-600 font-black" : "text-[#111827]"
                 }`}
               >
                 FAQ
@@ -1212,6 +1212,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             <div className="space-y-4">
               <h4 className="font-extrabold text-[10px] uppercase tracking-widest text-white">Resources</h4>
               <ul className="space-y-2.5">
+                <li><Link to="/faq" className="hover:text-white transition-colors text-blue-400 font-semibold">FAQ & Knowledge Base</Link></li>
+                <li><Link to="/help" className="hover:text-white transition-colors">Role Help Manuals</Link></li>
                 <li><Link to="/compliance" className="hover:text-white transition-colors">Agency Disclosures</Link></li>
                 <li><Link to="/open-houses" className="hover:text-white transition-colors">Open House Manual</Link></li>
                 <li><Link to="/url-import" className="hover:text-white transition-colors">URL Extraction API</Link></li>

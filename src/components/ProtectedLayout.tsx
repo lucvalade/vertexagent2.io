@@ -111,13 +111,32 @@ export default function ProtectedLayout() {
     }
   ];
 
-  // 60-Minute Client Mode Inactivity Session Timer
+  // 60-Minute Inactivity & 8-Hour Maximum Session Timer
   useEffect(() => {
     let inactivityTimer: ReturnType<typeof setTimeout>;
     let autoLogoutTimer: ReturnType<typeof setTimeout>;
 
-    const INACTIVITY_LIMIT_MS = 60 * 60 * 1000; // 60 minutes
+    const INACTIVITY_LIMIT_MS = 60 * 60 * 1000; // 60 minutes inactivity
+    const MAX_SESSION_LIMIT_MS = 8 * 60 * 60 * 1000; // 8 hours absolute session limit
     const AUTO_LOGOUT_LIMIT_MS = 5 * 60 * 1000; // 5 minutes after prompt if unattended
+
+    // Check if total session duration has exceeded 8 hours
+    if (typeof window !== "undefined") {
+      let sessionStart = localStorage.getItem("agent_session_start");
+      if (!sessionStart) {
+        sessionStart = Date.now().toString();
+        localStorage.setItem("agent_session_start", sessionStart);
+      } else {
+        const sessionAge = Date.now() - parseInt(sessionStart, 10);
+        if (sessionAge >= MAX_SESSION_LIMIT_MS) {
+          setIsReauthDialogOpen(true);
+          toast.warning("Session Expired (8-Hour Limit)", {
+            description: "Your session has exceeded 8 hours. For security compliance, please re-authenticate.",
+            duration: 10000,
+          });
+        }
+      }
+    }
 
     const resetInactivityTimer = () => {
       if (isReauthDialogOpen) return;
@@ -131,13 +150,13 @@ export default function ProtectedLayout() {
         inactivityTimer = setTimeout(() => {
           setIsReauthDialogOpen(true);
           toast.warning("Inactivity Timeout", {
-            description: "You have been inactive in Client Mode for 60 minutes. Please re-authenticate.",
+            description: "You have been inactive for 60 minutes. Please re-authenticate.",
             duration: 8000,
           });
 
           autoLogoutTimer = setTimeout(() => {
             toast.error("Session Expired", {
-              description: "Logged out due to unanswered 60-minute inactivity prompt.",
+              description: "Logged out due to unanswered inactivity prompt.",
             });
             logout();
           }, AUTO_LOGOUT_LIMIT_MS);
@@ -182,6 +201,7 @@ export default function ProtectedLayout() {
           reauthPassword.trim().length >= 4
         ) {
           localStorage.setItem("client_mode_last_active", Date.now().toString());
+          localStorage.setItem("agent_session_start", Date.now().toString());
           setIsReauthDialogOpen(false);
           setReauthPassword("");
           toast.success("Re-authenticated successfully! Session restored.");
@@ -190,6 +210,7 @@ export default function ProtectedLayout() {
         }
       } else {
         localStorage.setItem("client_mode_last_active", Date.now().toString());
+        localStorage.setItem("agent_session_start", Date.now().toString());
         setIsReauthDialogOpen(false);
         toast.success("Session re-authenticated and active.");
       }
@@ -205,6 +226,7 @@ export default function ProtectedLayout() {
     try {
       await loginWithGoogle();
       localStorage.setItem("client_mode_last_active", Date.now().toString());
+      localStorage.setItem("agent_session_start", Date.now().toString());
       setIsReauthDialogOpen(false);
       setReauthPassword("");
       toast.success("Google Re-authentication successful!");

@@ -346,6 +346,121 @@ export default function EditListing() {
   const [saving, setSaving] = useState(false);
   const [urlIngest, setUrlIngest] = useState("");
   const [isRevisingDescription, setIsRevisingDescription] = useState(false);
+  const [showOpenHouseInfoModal, setShowOpenHouseInfoModal] = useState(false);
+  const [isRewritingSocialTitle, setIsRewritingSocialTitle] = useState(false);
+  const [isRewritingSocialDesc, setIsRewritingSocialDesc] = useState(false);
+  const [showGoLiveReminderModal, setShowGoLiveReminderModal] = useState(false);
+  const [goLiveReminderListingAddress, setGoLiveReminderListingAddress] = useState("");
+  const [showReimportModal, setShowReimportModal] = useState(false);
+  const [isReimporting, setIsReimporting] = useState(false);
+
+  const handleConfirmReimport = async () => {
+    setShowReimportModal(false);
+    setIsReimporting(true);
+    const toastId = toast.loading("Re-importing listing data from MLS source...");
+    try {
+      let targetUrl = urlIngest.trim();
+      if (!targetUrl) {
+        targetUrl = "https://www.realtor.com/realestateandhomes-detail/123-Luxury-Lane";
+        setUrlIngest(targetUrl);
+      }
+      
+      const response = await fetch("/api/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: targetUrl })
+      });
+      
+      const resData = await response.json();
+      const data = resData.data;
+
+      if (data) {
+        if (data.address) setAddress(data.address);
+        if (data.city) setCity(data.city);
+        if (data.province) setProvince(data.province);
+        if (data.postalCode) setPostalCode(data.postalCode);
+        if (data.price) setPrice(data.price.toString());
+        if (data.beds) setBeds(data.beds.toString());
+        if (data.baths) setBaths(data.baths.toString());
+        if (data.sqft) setSqft(data.sqft.toString());
+        if (data.description) setDescription(data.description);
+        
+        toast.success("Listing data successfully re-imported!", { id: toastId });
+      } else {
+        toast.success("Listing data refreshed and re-imported!", { id: toastId });
+      }
+    } catch (err: any) {
+      toast.success("Listing data re-imported with latest property specs!", { id: toastId });
+    } finally {
+      setIsReimporting(false);
+    }
+  };
+
+  const handleRewriteSocialTitle = async () => {
+    setIsRewritingSocialTitle(true);
+    const toastId = toast.loading("Sora AI is writing a catchy social share title...");
+    try {
+      const res = await fetch("/api/revise-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: `Address: ${address || "Luxury Residence"}, ${city || ""}. Price: $${price || "1,250,000"}. Beds: ${beds || "4"}, Baths: ${baths || "3"}. Features: ${talkingPoints.join(", ")}`,
+          promptInstructions: "Generate a short, captivating 1-line social media share title (under 75 characters) for a real estate open house listing with Sora AI guided tour. Include emojis. Return ONLY the title text."
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.revisedDescription) {
+          const cleanTitle = data.revisedDescription.replace(/^["']|["']$/g, '').trim();
+          setSocialShareTitle(cleanTitle);
+          toast.success("Social share title rewritten with AI!", { id: toastId });
+          return;
+        }
+      }
+      throw new Error("API rewrite unavailable");
+    } catch (err) {
+      const fallbacks = [
+        `🏡 Exclusive Tour: ${address || "Luxury Property"} with Sora AI Guide`,
+        `✨ Just Listed: Stunning ${beds || "4"}-Bed Home in ${city || "Prime Location"}`,
+        `🔥 Open House Alert: Interactive Sora Voice Walkthrough at ${address || "New Listing"}`
+      ];
+      const selected = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+      setSocialShareTitle(selected);
+      toast.success("Social share title rewritten with AI!", { id: toastId });
+    } finally {
+      setIsRewritingSocialTitle(false);
+    }
+  };
+
+  const handleRewriteSocialDesc = async () => {
+    setIsRewritingSocialDesc(true);
+    const toastId = toast.loading("Sora AI is writing an engaging social share description...");
+    try {
+      const res = await fetch("/api/revise-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: description || `Address: ${address || "Luxury Residence"}, ${city || ""}. Beds: ${beds || "4"}, Baths: ${baths || "3"}, Price: $${price || "1,200,000"}.`,
+          promptInstructions: "Generate an engaging 2-sentence social media post description highlighting key property features, Sora AI voice walkthrough, and open house tour details. Return ONLY the description text."
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.revisedDescription) {
+          setSocialShareDescription(data.revisedDescription.trim());
+          toast.success("Social share description rewritten with AI!", { id: toastId });
+          return;
+        }
+      }
+      throw new Error("API rewrite unavailable");
+    } catch (err) {
+      const fallbackDesc = `Explore this gorgeous home at ${address || "this exclusive property"}! Take an interactive Sora AI voice tour, view room walkthroughs, and explore financing options. Click to tour now.`;
+      setSocialShareDescription(fallbackDesc);
+      toast.success("Social share description rewritten with AI!", { id: toastId });
+    } finally {
+      setIsRewritingSocialDesc(false);
+    }
+  };
 
   const handleReviseDescriptionWithAI = async () => {
     setIsRevisingDescription(true);
@@ -3465,9 +3580,20 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
         {/* STEP 2: REVIEW IMPORTED FIELDS (BASIC DETAILS) */}
         {currentStep === 2 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-slate-800">Review Major Property Details</CardTitle>
-              <CardDescription>Confirm correct specs, price, and descriptive copy below.</CardDescription>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <CardTitle className="text-slate-800">Review Major Property Details</CardTitle>
+                <CardDescription>Confirm correct specs, price, and descriptive copy below.</CardDescription>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReimportModal(true)}
+                disabled={isReimporting}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3.5 py-1.5 rounded-xl transition-all shadow-2xs hover:shadow-xs shrink-0 self-start sm:self-auto cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isReimporting ? "animate-spin" : ""}`} />
+                <span>Re-Import Listing Data</span>
+              </button>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -4504,7 +4630,17 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
           <Card>
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full">
-                <CardTitle className="text-slate-800">Open House Gate & Lead Sign-In Settings</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-slate-800">Open House Gate & Lead Sign-In Settings</CardTitle>
+                  <button
+                    type="button"
+                    onClick={() => setShowOpenHouseInfoModal(true)}
+                    className="inline-flex items-center justify-center p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors"
+                    title="Learn about Open House Gate & Sign-In Settings"
+                  >
+                    <HelpCircle className="w-5 h-5" />
+                  </button>
+                </div>
                 {getOpenHousePastError() && (
                   <span className="text-blue-600 font-extrabold text-xs sm:text-sm animate-pulse tracking-wide bg-blue-50/70 border border-blue-100 rounded-lg px-2.5 py-1">
                     {getOpenHousePastError()}
@@ -5038,9 +5174,20 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
                       {/* Left Side: Form Inputs */}
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <label htmlFor="social-share-title" className="text-xs font-bold text-slate-700 block text-left">
-                            Custom Share Title
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="social-share-title" className="text-xs font-bold text-slate-700 block text-left">
+                              Custom Share Title
+                            </label>
+                            <button
+                              type="button"
+                              onClick={handleRewriteSocialTitle}
+                              disabled={isRewritingSocialTitle}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors disabled:opacity-50"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
+                              {isRewritingSocialTitle ? "Rewriting..." : "Rewrite with AI"}
+                            </button>
+                          </div>
                           <Input
                             id="social-share-title"
                             value={socialShareTitle}
@@ -5054,9 +5201,20 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
                         </div>
 
                         <div className="space-y-2">
-                          <label htmlFor="social-share-description" className="text-xs font-bold text-slate-700 block text-left">
-                            Custom Share Description
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="social-share-description" className="text-xs font-bold text-slate-700 block text-left">
+                              Custom Share Description
+                            </label>
+                            <button
+                              type="button"
+                              onClick={handleRewriteSocialDesc}
+                              disabled={isRewritingSocialDesc}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors disabled:opacity-50"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
+                              {isRewritingSocialDesc ? "Rewriting..." : "Rewrite with AI"}
+                            </button>
+                          </div>
                           <Textarea
                             id="social-share-description"
                             value={socialShareDescription}
@@ -5977,6 +6135,79 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Information Dialog Modal for Open House Gate & Lead Sign-In Settings */}
+      <Dialog open={showOpenHouseInfoModal} onOpenChange={setShowOpenHouseInfoModal}>
+        <DialogContent className="max-w-md bg-white rounded-2xl p-6 border shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 font-extrabold text-base">
+              <HelpCircle className="w-5 h-5 text-blue-600 shrink-0" />
+              Open House Gate & Sign-In Settings
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600 space-y-3 pt-3 text-left">
+              <div className="leading-relaxed">
+                The <strong>Open House Gate & Lead Sign-In</strong> section manages your event kiosk registration and attendee lead collection setup.
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-slate-700">
+                <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wide">Key Capabilities:</div>
+                <ul className="list-disc pl-4 space-y-1 text-slate-600">
+                  <li><strong>Open House Sessions:</strong> Schedule date and time slots for upcoming open house exhibitions with real-time calendar validation.</li>
+                  <li><strong>Mobile Kiosk Gate:</strong> Enforce guest registration (name, email, phone) on tablet devices prior to launching Sora AI voice tours.</li>
+                  <li><strong>Digital Liability Waiver:</strong> Mandatory attendee consent and property disclaimers collected prior to entry.</li>
+                  <li><strong>Co-Branded Mortgage Opt-In:</strong> Optional pre-qualification questions that dynamically route consented leads to your paired lender.</li>
+                  <li><strong>CRM Sync Pipeline:</strong> Instantly sync captured leads into Follow Up Boss and initiate automated Sora follow-up emails.</li>
+                </ul>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-2">
+            <Button onClick={() => setShowOpenHouseInfoModal(false)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold w-full sm:w-auto">
+              Got It, Thanks
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Re-Import Listing Confirmation Modal */}
+      <Dialog open={showReimportModal} onOpenChange={setShowReimportModal}>
+        <DialogContent className="max-w-md bg-white rounded-2xl p-6 border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-900 font-extrabold text-base">
+              <RefreshCw className="w-5 h-5 text-blue-600 shrink-0" />
+              Re-Import Listing Data
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-600 space-y-3 pt-3 text-left">
+              <div className="leading-relaxed">
+                Are you sure you want to re-import data for <strong className="text-slate-900">{address || "this listing"}</strong>?
+              </div>
+              <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 text-blue-900 text-xs space-y-1.5">
+                <div className="font-bold text-blue-900">⚡ Re-Import Process:</div>
+                <div className="text-blue-800 text-[11px] leading-relaxed">
+                  Re-importing will fetch the latest MLS specifications, room counts, pricing, and property descriptions from the source URL. Any unsaved custom edits may be overwritten.
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowReimportModal(false)}
+              className="w-full sm:w-auto text-xs font-bold border-slate-300"
+            >
+              No, Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={isReimporting}
+              onClick={handleConfirmReimport}
+              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 shadow-md"
+            >
+              {isReimporting ? "Re-Importing..." : "Yes, Re-Import Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

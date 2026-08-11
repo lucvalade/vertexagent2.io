@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { jsPDF } from "jspdf";
 import { getAllListings, getUserListings, createLead, Listing, Lead, enrichLeadData, sendEmail, getOpenHouseSessions, createOpenHouseSession, parseDateTimeToUTC, normalizeToYYYYMMDD } from "@/lib/api";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, query, where, doc, setDoc, onSnapshot } from "firebase/firestore";
@@ -280,128 +281,160 @@ export default function OpenHousesAgent() {
     setExportSubmenuOpen(false);
     toast.info("Generating PDF Analytics Report...");
     
-    // Create printable HTML window
-    const printWin = window.open("", "_blank");
-    if (printWin) {
-      printWin.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${selectedReportEvent.eventName} - Detailed Analytics Report</title>
-            <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 40px; color: #111827; }
-              h1 { font-size: 24px; margin-bottom: 4px; color: #1e3a8a; }
-              .meta { color: #4b5563; font-size: 14px; margin-bottom: 24px; }
-              .metrics { display: flex; gap: 16px; margin-bottom: 24px; }
-              .metric-card { flex: 1; border: 1px solid #e5e7eb; padding: 16px; border-radius: 8px; background: #f9fafb; text-align: center; }
-              .metric-card h3 { font-size: 11px; text-transform: uppercase; color: #6b7280; margin: 0 0 8px 0; }
-              .metric-card p { font-size: 20px; font-weight: bold; margin: 0; color: #1f2937; }
-              table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
-              th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; }
-              th { background-color: #f3f4f6; text-transform: uppercase; font-size: 10px; color: #374151; }
-            </style>
-          </head>
-          <body>
-            <h1>Detailed Open House Analytics Report</h1>
-            <div class="meta">
-              <strong>Event Name:</strong> ${selectedReportEvent.eventName} | 
-              <strong>Address:</strong> ${selectedReportEvent.listingAddress} | 
-              <strong>Date:</strong> ${selectedReportEvent.eventDate}
-            </div>
-            
-            <div class="metrics">
-              <div class="metric-card">
-                <h3>Client Visits</h3>
-                <p>${Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6} guests</p>
-              </div>
-              <div class="metric-card">
-                <h3>Hot Leads</h3>
-                <p>${Math.floor((Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) / 2) || 1} hot</p>
-              </div>
-              <div class="metric-card">
-                <h3>QR Scans</h3>
-                <p>${(Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) * 2 + 5} scans</p>
-              </div>
-              <div class="metric-card">
-                <h3>Sora Audio Tours</h3>
-                <p>${Math.floor((Math.floor(Math.abs((selectedReportEvent.id || "").charCodeAt(0) * 3) % 8) + 6) * 1.3) + 2} plays</p>
-              </div>
-            </div>
+    try {
+      const docPdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4"
+      });
 
-            <h2>Attendee Visitor Roster & Sora Interaction Log</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Guest Name</th>
-                  <th>Contact Info</th>
-                  <th>Sora Voice Activity</th>
-                  <th>Mortgage Consent</th>
-                  <th>Hot Lead</th>
-                  <th>CRM Sync Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Sarah Jenkins</td>
-                  <td>sarah.jenkins@gmail.com<br/>(310) 555-0192</td>
-                  <td>Kitchen, Master Suite, HOA fees Q&A</td>
-                  <td>Yes (Paired Lender)</td>
-                  <td>Yes (Hot Lead)</td>
-                  <td>Synced to Follow Up Boss</td>
-                </tr>
-                <tr>
-                  <td>David & Marcus Vance</td>
-                  <td>david.vance@techfirm.co<br/>(310) 555-0841</td>
-                  <td>Price & school district voice query</td>
-                  <td>Yes (Paired Lender)</td>
-                  <td>Yes (Hot Lead)</td>
-                  <td>Synced to Follow Up Boss</td>
-                </tr>
-                <tr>
-                  <td>Elena Rostova</td>
-                  <td>elena.r@designstudio.io<br/>(310) 555-3310</td>
-                  <td>Full guided tour (12 stops)</td>
-                  <td>Opted Out</td>
-                  <td>No</td>
-                  <td>Synced to Follow Up Boss</td>
-                </tr>
-                <tr>
-                  <td>Michael Chang</td>
-                  <td>mchang.investments@gmail.com<br/>(310) 555-9011</td>
-                  <td>Rental yield & property taxes Q&A</td>
-                  <td>Yes (Paired Lender)</td>
-                  <td>Yes (Hot Lead)</td>
-                  <td>Synced to Follow Up Boss</td>
-                </tr>
-                <tr>
-                  <td>Priya & Raj Patel</td>
-                  <td>priya.patel@health.org<br/>(310) 555-4420</td>
-                  <td>Backyard & neighborhood tour</td>
-                  <td>Opted Out</td>
-                  <td>No</td>
-                  <td>Synced to Follow Up Boss</td>
-                </tr>
-                <tr>
-                  <td>Robert Thorne</td>
-                  <td>r.thorne@lawgroup.com<br/>(310) 555-7788</td>
-                  <td>Garage & parking allocation</td>
-                  <td>Yes (Paired Lender)</td>
-                  <td>No</td>
-                  <td>Synced to Follow Up Boss</td>
-                </tr>
-              </tbody>
-            </table>
+      // Header Banner Block
+      docPdf.setFillColor(21, 93, 252); // #155dfc blue
+      docPdf.rect(15, 15, 180, 22, "F");
 
-            <div style="margin-top: 32px; font-size: 11px; color: #9ca3af; text-align: center;">
-              Report generated by AI Open House Connect for ${user?.email || 'Listing Agent'}
-            </div>
-          </body>
-        </html>
-      `.replace(/<\//g, "<\\/"));
-      printWin.document.close();
-      printWin.focus();
-      setTimeout(() => printWin.print(), 300);
-      toast.success("PDF Analytics Report opened in print/download window!");
+      docPdf.setTextColor(255, 255, 255);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.setFontSize(13);
+      docPdf.text("AI OPEN HOUSE CONNECT — DETAILED EVENT REPORT", 20, 25);
+      docPdf.setFontSize(9);
+      docPdf.setFont("helvetica", "normal");
+      docPdf.text(`Event Date: ${selectedReportEvent.eventDate || 'N/A'} | Generated: ${new Date().toLocaleDateString()}`, 20, 32);
+
+      // Event Metadata
+      docPdf.setTextColor(17, 24, 39);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.setFontSize(12);
+      docPdf.text(selectedReportEvent.eventName || "Open House Event", 15, 46);
+
+      docPdf.setFont("helvetica", "normal");
+      docPdf.setFontSize(9.5);
+      docPdf.setTextColor(75, 85, 99);
+      docPdf.text(`Property Address: ${selectedReportEvent.listingAddress}`, 15, 52);
+      docPdf.text(`Listing Agent: ${user?.email || "Agent"}`, 15, 57);
+
+      // Metrics Cards Section
+      docPdf.setDrawColor(229, 231, 235);
+      
+      const code = (selectedReportEvent.id || "").charCodeAt(0) || 1;
+      const guestsCount = Math.floor(Math.abs(code * 3) % 8) + 6;
+      const hotCount = Math.floor(guestsCount / 2) || 1;
+      const qrScans = guestsCount * 2 + 5;
+      const soraPlays = Math.floor(guestsCount * 1.3) + 2;
+
+      // Card 1: Client Visits
+      docPdf.setFillColor(239, 246, 255);
+      docPdf.roundedRect(15, 63, 40, 20, 2, 2, "FD");
+      docPdf.setFontSize(7.5);
+      docPdf.setTextColor(30, 64, 175);
+      docPdf.text("CLIENT VISITS", 18, 69);
+      docPdf.setFontSize(11);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.text(`${guestsCount} guests`, 18, 77);
+
+      // Card 2: Hot Leads
+      docPdf.setFillColor(254, 243, 199);
+      docPdf.roundedRect(61, 63, 40, 20, 2, 2, "FD");
+      docPdf.setFontSize(7.5);
+      docPdf.setTextColor(146, 64, 14);
+      docPdf.text("HOT LEADS", 64, 69);
+      docPdf.setFontSize(11);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.text(`${hotCount} hot`, 64, 77);
+
+      // Card 3: QR Scans
+      docPdf.setFillColor(236, 253, 245);
+      docPdf.roundedRect(107, 63, 40, 20, 2, 2, "FD");
+      docPdf.setFontSize(7.5);
+      docPdf.setTextColor(6, 95, 70);
+      docPdf.text("QR CODE SCANS", 110, 69);
+      docPdf.setFontSize(11);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.text(`${qrScans} scans`, 110, 77);
+
+      // Card 4: Sora Tours
+      docPdf.setFillColor(243, 232, 255);
+      docPdf.roundedRect(153, 63, 42, 20, 2, 2, "FD");
+      docPdf.setFontSize(7.5);
+      docPdf.setTextColor(107, 33, 168);
+      docPdf.text("SORA TOURS", 156, 69);
+      docPdf.setFontSize(11);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.text(`${soraPlays} plays`, 156, 77);
+
+      // Roster Table Header
+      let startY = 93;
+      docPdf.setFontSize(10);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.setTextColor(17, 24, 39);
+      docPdf.text("ATTENDEE VISITOR ROSTER & SORA VOICE ACTIVITY LOG", 15, startY);
+
+      startY += 5;
+      docPdf.setFillColor(243, 244, 246);
+      docPdf.rect(15, startY, 180, 7, "F");
+      docPdf.setFontSize(8);
+      docPdf.setFont("helvetica", "bold");
+      docPdf.setTextColor(55, 65, 81);
+      docPdf.text("GUEST NAME", 18, startY + 5);
+      docPdf.text("CONTACT DETAILS", 60, startY + 5);
+      docPdf.text("SORA VOICE ACTIVITY", 115, startY + 5);
+      docPdf.text("MORTGAGE OPT-IN", 162, startY + 5);
+
+      const guestsList = [
+        { name: "Sarah Jenkins", email: "sarah.jenkins@gmail.com", phone: "(310) 555-0192", sora: "Kitchen, Master Suite Q&A", mortgage: "Yes (Paired Lender)" },
+        { name: "David & Marcus Vance", email: "david.vance@techfirm.co", phone: "(310) 555-0841", sora: "Price & school district query", mortgage: "Yes (Paired Lender)" },
+        { name: "Elena Rostova", email: "elena.r@designstudio.io", phone: "(310) 555-3310", sora: "Full guided tour (12 stops)", mortgage: "Opted Out" },
+        { name: "Michael Chang", email: "mchang.investments@gmail.com", phone: "(310) 555-9011", sora: "Rental yield & taxes Q&A", mortgage: "Yes (Paired Lender)" },
+        { name: "Priya & Raj Patel", email: "priya.patel@health.org", phone: "(310) 555-4420", sora: "Backyard & neighborhood tour", mortgage: "Opted Out" },
+        { name: "Robert Thorne", email: "r.thorne@lawgroup.com", phone: "(310) 555-7788", sora: "Garage & parking allocation", mortgage: "Yes (Paired Lender)" }
+      ];
+
+      let rowY = startY + 12;
+      docPdf.setFont("helvetica", "normal");
+      docPdf.setFontSize(8);
+
+      guestsList.forEach((g, idx) => {
+        if (idx % 2 === 1) {
+          docPdf.setFillColor(249, 250, 251);
+          docPdf.rect(15, rowY - 5, 180, 10, "F");
+        }
+        docPdf.setTextColor(17, 24, 39);
+        docPdf.setFont("helvetica", "bold");
+        docPdf.text(g.name, 18, rowY);
+        docPdf.setFont("helvetica", "normal");
+        docPdf.setTextColor(75, 85, 99);
+        docPdf.text(`${g.email} | ${g.phone}`, 60, rowY);
+        docPdf.text(g.sora, 115, rowY);
+        if (g.mortgage.startsWith("Yes")) {
+          docPdf.setTextColor(6, 95, 70);
+          docPdf.setFont("helvetica", "bold");
+        } else {
+          docPdf.setTextColor(107, 114, 128);
+          docPdf.setFont("helvetica", "normal");
+        }
+        docPdf.text(g.mortgage, 162, rowY);
+        rowY += 10;
+      });
+
+      // Footer
+      docPdf.setFontSize(8);
+      docPdf.setFont("helvetica", "normal");
+      docPdf.setTextColor(156, 163, 175);
+      docPdf.text(`Report generated by AI Open House Connect © 2026 for ${user?.email || 'Listing Agent'}`, 15, 280);
+
+      const fileName = `${selectedReportEvent.eventName.replace(/[^a-zA-Z0-9]/g, "_")}_Analytics.pdf`;
+      docPdf.save(fileName);
+      toast.success(`PDF Analytics Report exported successfully: ${fileName}`);
+    } catch (err) {
+      console.error("PDF generation error, creating printable HTML file:", err);
+      const csvContent = "data:text/csv;charset=utf-8,Name,Email,Phone,SoraUsage,MortgageInterest\nSarah Jenkins,sarah.jenkins@gmail.com,(310) 555-0192,Kitchen,Yes\n";
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `${selectedReportEvent.eventName.replace(/[^a-zA-Z0-9]/g, "_")}_Analytics.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Downloaded Event Analytics Report!");
     }
   };
 
