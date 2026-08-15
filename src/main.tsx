@@ -95,8 +95,10 @@ import PilotAdmin from './pages/admin/PilotAdmin.tsx';
 import Flyers from './pages/Flyers.tsx';
 import Lenders from './pages/Lenders.tsx';
 import AiTours from './pages/AiTours.tsx';
-import OpenHousesAgent from './pages/OpenHousesAgent.tsx';
+import WaitlistAdminPage from './pages/WaitlistAdminPage.tsx';
 
+import OpenHousesAgent from './pages/OpenHousesAgent.tsx';
+import PhotoEnhancer from './pages/PhotoEnhancer.tsx';
 import Agent360 from './pages/admin/Agent360.tsx';
 import EmailMarketing from './pages/EmailMarketing.tsx';
 import Integrations from './pages/Integrations.tsx';
@@ -244,6 +246,7 @@ createRoot(document.getElementById('root')!).render(
               <Route index element={<Navigate to="overview" replace />} />
               <Route path="overview" element={<Overview />} />
               <Route path="listings" element={<Listings />} />
+              <Route path="listings/photo-enhancer" element={<PhotoEnhancer />} />
               <Route path="listings/:listingId" element={<ListingDetails />} />
               <Route path="listings/edit/:listingId?" element={<EditListing />} />
               <Route path="leads" element={<Leads />} />
@@ -286,6 +289,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="api-usage" element={<ApiUsage />} />
                 <Route path="logs" element={<AdminLogs />} />
                 <Route path="emails" element={<AdminEmails />} />
+                <Route path="waitlist" element={<WaitlistAdminPage />} />
                 <Route path="email-marketing" element={<EmailMarketing />} />
                 <Route path="brokerage" element={<BrokerageSettings />} />
                 <Route path="settings" element={<Settings />} />

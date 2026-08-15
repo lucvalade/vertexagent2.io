@@ -209,6 +209,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
     }
 
+    match /waitlist_signups/{signupId} {
+      allow read: if isAdmin();
+      allow create: if true;
+    }
+
     match /shared_listing_assignments/{assignmentId} {
       allow read, write: if isSignedIn();
     }
@@ -242,8 +247,12 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    match /teams/{teamId} {
+      allow read, write: if isSignedIn();
+    }
+
     match /agents/{agentId} {
-      allow read, write: if true;
+      allow read, write: if isSignedIn();
     }
 
     match /auditLogs/{docId} {

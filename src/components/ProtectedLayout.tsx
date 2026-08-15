@@ -5,7 +5,7 @@ import Logo from "./Logo";
 import { doc, getDoc } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import AgentVoiceControl from "./AgentVoiceControl";
-import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail, Search, HelpCircle, LifeBuoy, Cpu, Activity, Lock, RefreshCw, Key, CheckCircle2, Clock } from "lucide-react";
+import { LogOut, Home, LayoutDashboard, List, Users, MessageSquare, Image, Mic2, Zap, Link2, BarChart2, LayoutTemplate, Building2, CreditCard, Settings, Menu, Shield, AlertTriangle, Globe, ChevronDown, Bell, FileBox, Volume2, Video, Mail, Search, HelpCircle, LifeBuoy, Cpu, Activity, Lock, RefreshCw, Key, CheckCircle2, Clock, Sparkles } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -333,6 +333,7 @@ export default function ProtectedLayout() {
       subLinks: [
         { label: "Active Listings", path: "/app/listings?tab=active", icon: CheckCircle2 },
         { label: "Expired Listings", path: "/app/listings?tab=expired", icon: Clock },
+        { label: "Photo Enhancer / Declutter", path: "/app/listings/photo-enhancer", icon: Sparkles },
       ]
     },
     { label: "Open Houses", icon: Home, path: "/app/openhouses" },
@@ -384,6 +385,7 @@ export default function ProtectedLayout() {
         { label: "Support Tickets", path: "/app/admin/tickets", icon: LifeBuoy },
         { label: "Managed Agents", path: "/app/admin/users", icon: Users },
         { label: "Email Marketing Studio", path: "/app/admin/email-marketing", icon: Mail },
+        { label: "Waitlist", path: "/app/admin/waitlist", icon: Users },
         { label: "Brokerages & Quotas", path: "/app/admin/brokerage", icon: Building2 },
         { label: "Welcome Messages", path: "/app/admin/welcomes", icon: Volume2 },
         { label: "Launch Notifications (Free Plan)", path: "/app/admin/notifications", icon: Bell },
