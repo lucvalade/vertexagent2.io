@@ -298,8 +298,8 @@ export default function Analytics() {
         </CardHeader>
 
         <CardContent className="pt-6">
-          <div className="h-[340px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[340px] w-full min-w-0 relative">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
               <ComposedChart data={LEAD_CONVERSION_TIME_DATA} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                 <defs>
                   <linearGradient id="visitorGradient" x1="0" y1="0" x2="0" y2="1">
@@ -389,8 +389,8 @@ export default function Analytics() {
         </CardHeader>
 
         <CardContent className="pt-6">
-          <div className="h-[340px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[340px] w-full min-w-0 relative">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
               <ComposedChart data={OPEN_HOUSE_ATTENDANCE_TIME_DATA} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
@@ -454,8 +454,8 @@ export default function Analytics() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[260px] w-full min-w-0 relative">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
                 <BarChart data={ADMIN_BROKERAGE_DATA} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} unit="%" />
@@ -481,8 +481,8 @@ export default function Analytics() {
             <Globe2 className="h-5 w-5 text-blue-500" />
           </CardHeader>
           <CardContent className="pt-4 space-y-4">
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[200px] w-full min-w-0 relative">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={150}>
                 <BarChart data={LANGUAGE_DATA}>
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />

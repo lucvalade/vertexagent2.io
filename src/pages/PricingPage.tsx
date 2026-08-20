@@ -134,7 +134,7 @@ export default function PricingPage() {
     {
       feature: "Expected Response Time",
       solo: "< 24 Hours SLA",
-      starter: "< 4 Hours SLA",
+      starter: "< 8 Hours SLA",
       pro: "< 4 Hours SLA",
       broker: "< 30 Mins Live SLA"
     },
@@ -226,7 +226,7 @@ export default function PricingPage() {
       badgeText: "CONNECTED WORKFLOW",
       description: "Keep your database updated. Automatically syncs captured leads directly to Follow Up Boss, kvCORE, HubSpot, or any of 47 supported real estate CRMs.",
       supportLevel: "Level 2 Priority Support",
-      supportResponseTime: "< 4 Hours SLA",
+      supportResponseTime: "< 8 Hours SLA",
       supportDetail: "Priority Email & Ticket Setup Guidance",
       features: [
         "Includes everything in Solo",
@@ -235,7 +235,7 @@ export default function PricingPage() {
         "kvCORE, HubSpot & 45+ CRM integrations",
         "Real-time contact status updates",
         "30 Gemini Mins/mo (5-min session max)",
-        "Priority Support (< 4h response time)"
+        "Priority Support (< 8h response time)"
       ]
     },
     {

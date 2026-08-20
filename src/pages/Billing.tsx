@@ -98,7 +98,7 @@ export default function Billing() {
       title: "Starter Agent",
       price: "$14/month",
       features: [
-        "Support SLA: Level 2 Priority (< 4 hrs response)",
+        "Support SLA: Level 2 Priority (< 8 hrs response)",
         "1 Active Listing",
         "CRM Syncing Integration (FUB, etc.)",
         "30 Gemini Mins/mo (5-min session max)",
@@ -687,7 +687,7 @@ export default function Billing() {
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> <span className="font-extrabold text-black">30 Gemini Mins/mo (5-min session max)</span></div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> Automated CRM synchronization</div>
                 <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> FUB custom tag & field mapping</div>
-                <div className="flex items-center gap-2 font-bold text-slate-800"><ShieldCheck className="h-4 w-4 text-blue-500 shrink-0" /> Level 2 Priority Support (&lt;4h)</div>
+                <div className="flex items-center gap-2 font-bold text-slate-800"><ShieldCheck className="h-4 w-4 text-blue-500 shrink-0" /> Level 2 Priority Support (&lt;8h)</div>
               </div>
             </div>
           </div>

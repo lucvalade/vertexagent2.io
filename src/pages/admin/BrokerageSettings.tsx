@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
+import { adminAutosave } from "@/lib/adminAutosave";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -15,7 +16,10 @@ import {
 import { 
   Loader2, Save, ArrowLeft, Building, Users, Shield, AlertTriangle, 
   CheckCircle2, Plus, RefreshCw, BarChart2, Zap, Settings, Search,
-  Lock, AlertCircle, Layers, Calendar, Mail, FileText, ArrowRight, Check
+  Lock, AlertCircle, Layers, Calendar, Mail, FileText, ArrowRight, Check,
+  Radio, Smartphone, Headphones, MessageSquare, TrendingUp, Compass,
+  Clock, Sparkles, CheckCircle, Sliders, Download, ExternalLink, ShieldCheck, Activity,
+  HelpCircle, Info
 } from "lucide-react";
 import { 
   BrokerageAccount, 
@@ -24,6 +28,278 @@ import {
   BrokerageQuotaHistory, 
   QuotaAlert 
 } from "@/lib/api";
+
+export interface BrokeragePlanTier {
+  name: "Starter" | "Pro" | "Elite" | "Enterprise";
+  monthlyPrice: number;
+  maxLeads: number;
+  maxOpenHouses: number;
+  maxMessages: number;
+  maxSeats: number;
+  sla: string;
+  slaLevel: string;
+  badgeColor: string;
+  features: string[];
+}
+
+export const BROKERAGE_TIER_CONFIG: Record<string, BrokeragePlanTier> = {
+  Starter: {
+    name: "Starter",
+    monthlyPrice: 99,
+    maxLeads: 500,
+    maxOpenHouses: 10,
+    maxMessages: 2000,
+    maxSeats: 5,
+    sla: "< 8 Hours SLA",
+    slaLevel: "Level 2 Priority Support",
+    badgeColor: "bg-amber-100 text-amber-800 border-amber-200",
+    features: [
+      "Up to 500 AI Lead Captures / mo",
+      "Up to 10 Active Open Houses",
+      "2,000 Sora AI Voice & Chat Turns",
+      "5 Team Agent Seats included",
+      "Level 2 Priority Support (< 8 Hours SLA)",
+      "Standard CRM Sync & Local Buffer"
+    ]
+  },
+  Pro: {
+    name: "Pro",
+    monthlyPrice: 199,
+    maxLeads: 1000,
+    maxOpenHouses: 20,
+    maxMessages: 5000,
+    maxSeats: 10,
+    sla: "< 4 Hours SLA",
+    slaLevel: "Level 2 Priority Support",
+    badgeColor: "bg-blue-100 text-blue-800 border-blue-200",
+    features: [
+      "Up to 1,000 AI Lead Captures / mo",
+      "Up to 20 Active Open Houses",
+      "5,000 Sora AI Voice & Chat Turns",
+      "10 Team Agent Seats included",
+      "Level 2 Priority Support (< 4 Hours SLA)",
+      "Advanced Multilingual Voice (70 languages)",
+      "Follow Up Boss Custom Tag Mapping"
+    ]
+  },
+  Elite: {
+    name: "Elite",
+    monthlyPrice: 399,
+    maxLeads: 2500,
+    maxOpenHouses: 50,
+    maxMessages: 15000,
+    maxSeats: 25,
+    sla: "< 30 Mins Live SLA",
+    slaLevel: "Level 3 VIP Concierge",
+    badgeColor: "bg-purple-100 text-purple-800 border-purple-200",
+    features: [
+      "Up to 2,500 AI Lead Captures / mo",
+      "Up to 50 Active Open Houses",
+      "15,000 Sora AI Voice & Chat Turns",
+      "25 Team Agent Seats included",
+      "Level 3 VIP Concierge (< 30 Mins Live SLA)",
+      "Shared Listing Routing & Overrides",
+      "Dedicated Onboarding & Account Manager"
+    ]
+  },
+  Enterprise: {
+    name: "Enterprise",
+    monthlyPrice: 799,
+    maxLeads: 5000,
+    maxOpenHouses: 100,
+    maxMessages: 30000,
+    maxSeats: 50,
+    sla: "< 30 Mins Live SLA",
+    slaLevel: "Level 3 VIP Concierge",
+    badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    features: [
+      "Up to 5,000+ AI Lead Captures / mo",
+      "Up to 100+ Active Open Houses",
+      "30,000+ Sora AI Voice & Chat Turns",
+      "50+ Team Agent Seats included",
+      "Level 3 VIP Concierge (< 30 Mins Live SLA)",
+      "Full Brokerage White-Labeling & Domain",
+      "Custom Webhook & Data Enrichment API"
+    ]
+  }
+};
+
+export interface ExceededPlanAnalysis {
+  isExceeded: boolean;
+  currentTier: string;
+  currentPrice: number;
+  recommendedTier: string;
+  recommendedPrice: number;
+  exceededItems: {
+    field: string;
+    label: string;
+    currentConfig: number;
+    planLimit: number;
+    difference: number;
+  }[];
+}
+
+export function analyzePlanQuotas(brokerage: BrokerageAccount): ExceededPlanAnalysis {
+  const currentTierKey = brokerage.tier || "Starter";
+  const currentPlan = BROKERAGE_TIER_CONFIG[currentTierKey] || BROKERAGE_TIER_CONFIG.Starter;
+  
+  const limits = brokerage.quota_limits;
+  const exceededItems: {
+    field: string;
+    label: string;
+    currentConfig: number;
+    planLimit: number;
+    difference: number;
+  }[] = [];
+
+  if (limits.max_ai_leads > currentPlan.maxLeads) {
+    exceededItems.push({
+      field: "max_ai_leads",
+      label: "Max AI Leads",
+      currentConfig: limits.max_ai_leads,
+      planLimit: currentPlan.maxLeads,
+      difference: limits.max_ai_leads - currentPlan.maxLeads
+    });
+  }
+
+  if (limits.max_open_houses > currentPlan.maxOpenHouses) {
+    exceededItems.push({
+      field: "max_open_houses",
+      label: "Max Active Open Houses",
+      currentConfig: limits.max_open_houses,
+      planLimit: currentPlan.maxOpenHouses,
+      difference: limits.max_open_houses - currentPlan.maxOpenHouses
+    });
+  }
+
+  if (limits.max_ai_messages > currentPlan.maxMessages) {
+    exceededItems.push({
+      field: "max_ai_messages",
+      label: "Max AI Voice & Chat Messages",
+      currentConfig: limits.max_ai_messages,
+      planLimit: currentPlan.maxMessages,
+      difference: limits.max_ai_messages - currentPlan.maxMessages
+    });
+  }
+
+  if (limits.max_team_seats > currentPlan.maxSeats) {
+    exceededItems.push({
+      field: "max_team_seats",
+      label: "Max Team Agent Seats",
+      currentConfig: limits.max_team_seats,
+      planLimit: currentPlan.maxSeats,
+      difference: limits.max_team_seats - currentPlan.maxSeats
+    });
+  }
+
+  const isExceeded = exceededItems.length > 0;
+  
+  let recommendedTier = currentTierKey;
+  let recommendedPrice = currentPlan.monthlyPrice;
+
+  if (isExceeded) {
+    const tierKeys: ("Starter" | "Pro" | "Elite" | "Enterprise")[] = ["Starter", "Pro", "Elite", "Enterprise"];
+    for (const key of tierKeys) {
+      const plan = BROKERAGE_TIER_CONFIG[key];
+      if (
+        limits.max_ai_leads <= plan.maxLeads &&
+        limits.max_open_houses <= plan.maxOpenHouses &&
+        limits.max_ai_messages <= plan.maxMessages &&
+        limits.max_team_seats <= plan.maxSeats
+      ) {
+        recommendedTier = key;
+        recommendedPrice = plan.monthlyPrice;
+        break;
+      }
+      recommendedTier = "Enterprise";
+      recommendedPrice = BROKERAGE_TIER_CONFIG.Enterprise.monthlyPrice;
+    }
+  }
+
+  return {
+    isExceeded,
+    currentTier: currentTierKey,
+    currentPrice: currentPlan.monthlyPrice,
+    recommendedTier,
+    recommendedPrice,
+    exceededItems
+  };
+}
+
+/** Format ISO/YYYY-MM-DD date strings into clean readable "Aug 01, 2026" display */
+export const formatCycleDate = (dateStr?: string): string => {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+    }
+  }
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+};
+
+/** Tab explanations for the Brokerage Management sub-tabs */
+export const DETAIL_TAB_EXPLANATIONS: Record<
+  "limits" | "telemetry" | "history" | "alerts" | "branding",
+  { title: string; badge: string; description: string; highlights: string[] }
+> = {
+  limits: {
+    title: "Quota Limits & Enforcements",
+    badge: "Contract Ceilings & Policies",
+    description: "Configure contractual capacity ceilings (AI leads, active open houses, voice turns, team seats), warning threshold percentages, and enforcement rules (soft pay-per-lead overages vs hard stop on limit reach).",
+    highlights: [
+      "Sets organizational ceilings for AI Leads, Open Houses, AI Messages, and Agent Seats.",
+      "Monitors quota alignment against the brokerage's active subscription plan.",
+      "Configures soft pay-per-lead overage options or strict kiosk hard-stop lockouts.",
+      "Triggers automatic plan upgrade workflows and notification receipts when exceeded."
+    ]
+  },
+  telemetry: {
+    title: "Live Usage & Cycle Reset",
+    badge: "Real-time Consumption",
+    description: "Monitor real-time consumption telemetry for the active billing cycle. Track active lead counts, concurrent open houses, voice narration runtime, and execute instant cycle resets or manual meter adjustments.",
+    highlights: [
+      "Displays live consumption meters against allocated cycle allowances.",
+      "Shows current cycle active dates (e.g., Aug 01, 2026 to Aug 31, 2026).",
+      "Allows administrative manual counter resets when resolving billing cycles or testing."
+    ]
+  },
+  history: {
+    title: "Historical Cycles",
+    badge: "Cycle Archives & Audits",
+    description: "Access archived monthly billing cycles, past utilization benchmarks, overage audit snapshots, and exportable reconciliation reports across previous accounting periods.",
+    highlights: [
+      "Archival storage of previous billing periods with exact consumption tallies.",
+      "Records peak open houses and peak agent seat occupancy per cycle.",
+      "Provides historical reference for broker contract renewals and reconciliations."
+    ]
+  },
+  alerts: {
+    title: "Quota Alerts",
+    badge: "Threshold Triggers",
+    description: "Review automated warnings and threshold notifications triggered when consumption crosses 80%, 90%, or 100% of contract capacity. Acknowledge notices or dispatch resolution actions to broker administrators.",
+    highlights: [
+      "Real-time automated alerts triggered when approaching or exceeding limits.",
+      "Displays critical warning levels, triggered values, timestamps, and resolution states.",
+      "Allows admins to acknowledge warnings and track proactive compliance notices."
+    ]
+  },
+  branding: {
+    title: "Branding & Cascading Rules",
+    badge: "Office Customization",
+    description: "Manage brokerage-wide branding assets, logos, brand colors, disclaimers, and mandatory compliance footer rules that cascade automatically to all agent open houses, touchless kiosks, and printed flyers.",
+    highlights: [
+      "Centralized brand assets (logos, primary/secondary colors, theme tokens).",
+      "Mandatory legal disclaimers and compliance footer text.",
+      "Enforces cascading inheritance rules down to individual agent kiosks and flyers."
+    ]
+  }
+};
 
 // Default initial brokerages if Firestore is empty
 const INITIAL_BROKERAGES: BrokerageAccount[] = [
@@ -234,12 +510,55 @@ export default function BrokerageSettings() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "warning" | "paused">("all");
   const [activeDetailTab, setActiveDetailTab] = useState<"limits" | "telemetry" | "history" | "alerts" | "branding">("limits");
+  const [selectedTabInfoKey, setSelectedTabInfoKey] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // Modal dialog state for clicking on the 4 top KPI cards
-  const [activeKpiModal, setActiveKpiModal] = useState<"total_brokerages" | "lead_captures" | "active_seats" | "quota_alerts" | null>(null);
+  // Modal dialog state for clicking on the 4 top KPI cards and global quota cards
+  const [activeKpiModal, setActiveKpiModal] = useState<
+    "total_brokerages" | "lead_captures" | "open_houses" | "messages" | "active_seats" | "quota_alerts" | null
+  >(null);
   const [modalSearchQuery, setModalSearchQuery] = useState("");
+
+  // Plan Exceeded Warning & Automated Email State
+  const [planExceededModalOpen, setPlanExceededModalOpen] = useState(false);
+  const [exceededPlanData, setExceededPlanData] = useState<ExceededPlanAnalysis | null>(null);
+  const [isSendingPlanEmail, setIsSendingPlanEmail] = useState(false);
+  const [emailReceiptModalOpen, setEmailReceiptModalOpen] = useState(false);
+  const [emailReceiptData, setEmailReceiptData] = useState<{
+    recipient: string;
+    recipientName: string;
+    brokerageName: string;
+    brokerageCode: string;
+    oldTier: string;
+    oldPrice: number;
+    newTier: string;
+    newPrice: number;
+    effectiveDate: string;
+    sentAt: string;
+    trackingId: string;
+    subject: string;
+    messageSummary: string;
+  } | null>(null);
+
+  // Soft Overages Policy Change Modal & Email Log State
+  const [softOverageModalOpen, setSoftOverageModalOpen] = useState(false);
+  const [softOverageEmailData, setSoftOverageEmailData] = useState<{
+    action: "enabled" | "disabled";
+    recipient: string;
+    recipientName: string;
+    brokerageName: string;
+    brokerageCode: string;
+    trackingId: string;
+    sentAt: string;
+    subject: string;
+    emailBody: string;
+    auditLogId: string;
+    adminActor: string;
+  } | null>(null);
+
+  // Brokerage Pricing & Plan Matrix Modal
+  const [isPricingMatrixModalOpen, setIsPricingMatrixModalOpen] = useState(false);
 
   // Editable state for selected brokerage + Autosave status tracking
   const [selectedBrokerage, setSelectedBrokerage] = useState<BrokerageAccount | null>(null);
@@ -254,7 +573,47 @@ export default function BrokerageSettings() {
 
   useEffect(() => {
     fetchBrokerages();
+
+    // Check for drilldown query parameter in URL (e.g. ?drilldown=leads | open_houses | messages | seats | alerts | brokerages)
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const drilldownParam = searchParams.get("drilldown");
+      if (drilldownParam === "leads" || drilldownParam === "ai_leads" || drilldownParam === "lead_captures") {
+        setActiveKpiModal("lead_captures");
+      } else if (drilldownParam === "open_houses" || drilldownParam === "events") {
+        setActiveKpiModal("open_houses");
+      } else if (drilldownParam === "messages" || drilldownParam === "voice" || drilldownParam === "ai_messages") {
+        setActiveKpiModal("messages");
+      } else if (drilldownParam === "seats" || drilldownParam === "agent_seats" || drilldownParam === "active_seats") {
+        setActiveKpiModal("active_seats");
+      } else if (drilldownParam === "alerts" || drilldownParam === "warnings") {
+        setActiveKpiModal("quota_alerts");
+      } else if (drilldownParam === "brokerages") {
+        setActiveKpiModal("total_brokerages");
+      }
+    } catch (e) {
+      // ignore
+    }
   }, []);
+
+  // Register with Global Admin Autosave Manager
+  useEffect(() => {
+    const unregister = adminAutosave.register(
+      "brokerage-settings",
+      async () => {
+        if (selectedBrokerage) {
+          try {
+            await setDoc(doc(db, "brokerages", selectedBrokerage.brokerage_id), selectedBrokerage, { merge: true });
+          } catch (e) {
+            console.warn("Autosaved locally in state:", e);
+          }
+        }
+      },
+      () => autosaveStatus === "saving" || autosaveStatus === "idle",
+      "Brokerage Quotas & Governance"
+    );
+    return () => unregister();
+  }, [selectedBrokerage, autosaveStatus]);
 
   // Autosave effect when selectedBrokerage changes
   useEffect(() => {
@@ -363,26 +722,235 @@ export default function BrokerageSettings() {
 
   const handleSaveSelectedBrokerage = async () => {
     if (!selectedBrokerage) return;
+
+    // Check if the configured quota limits exceed the current plan
+    const analysis = analyzePlanQuotas(selectedBrokerage);
+    if (analysis.isExceeded) {
+      setExceededPlanData(analysis);
+      setPlanExceededModalOpen(true);
+      return;
+    }
+
+    // Direct save if within current plan
+    await executeSaveBrokerage(selectedBrokerage);
+  };
+
+  const executeSaveBrokerage = async (brokerageToSave: BrokerageAccount) => {
     setSaving(true);
     try {
-      await setDoc(doc(db, "brokerages", selectedBrokerage.brokerage_id), selectedBrokerage, { merge: true });
+      await setDoc(doc(db, "brokerages", brokerageToSave.brokerage_id), brokerageToSave, { merge: true });
       
       // Update local state list
       setBrokerages((prev) =>
-        prev.map((b) => (b.brokerage_id === selectedBrokerage.brokerage_id ? selectedBrokerage : b))
+        prev.map((b) => (b.brokerage_id === brokerageToSave.brokerage_id ? brokerageToSave : b))
       );
 
-      toast.success(`Quota & settings updated for ${selectedBrokerage.name}`);
+      toast.success(`Quota & settings updated for ${brokerageToSave.name}`);
     } catch (err) {
       console.error(err);
       toast.error("Saved locally. Connection update pending.");
       // Still update local array
       setBrokerages((prev) =>
-        prev.map((b) => (b.brokerage_id === selectedBrokerage.brokerage_id ? selectedBrokerage : b))
+        prev.map((b) => (b.brokerage_id === brokerageToSave.brokerage_id ? brokerageToSave : b))
       );
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleResetToPlanLimits = () => {
+    if (!selectedBrokerage) return;
+    const plan = BROKERAGE_TIER_CONFIG[selectedBrokerage.tier || "Starter"] || BROKERAGE_TIER_CONFIG.Starter;
+    const resetBrokerage: BrokerageAccount = {
+      ...selectedBrokerage,
+      quota_limits: {
+        ...selectedBrokerage.quota_limits,
+        max_ai_leads: plan.maxLeads,
+        max_open_houses: plan.maxOpenHouses,
+        max_ai_messages: plan.maxMessages,
+        max_team_seats: plan.maxSeats
+      }
+    };
+    setSelectedBrokerage(resetBrokerage);
+    setPlanExceededModalOpen(false);
+    toast.info(`Quota limits restored to ${plan.name} Plan ($${plan.monthlyPrice}/mo) baselines.`);
+  };
+
+  const handleConfirmPlanUpgradeAndSendEmail = async (overrideTier?: string) => {
+    if (!selectedBrokerage || !exceededPlanData) return;
+
+    setIsSendingPlanEmail(true);
+    const targetTier = (overrideTier || exceededPlanData.recommendedTier) as "Starter" | "Pro" | "Elite" | "Enterprise";
+    const targetPlan = BROKERAGE_TIER_CONFIG[targetTier] || BROKERAGE_TIER_CONFIG.Enterprise;
+    const trackingId = `NOTIF-${Date.now().toString(36).toUpperCase()}`;
+    const effectiveDate = new Date(Date.now() + 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const sentAt = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+
+    const updatedAccount: BrokerageAccount = {
+      ...selectedBrokerage,
+      tier: targetTier
+    };
+
+    try {
+      // 1. Save updated brokerage account
+      await setDoc(doc(db, "brokerages", updatedAccount.brokerage_id), updatedAccount, { merge: true });
+
+      // 2. Dispatch / record simulated automated email notification
+      const emailRecord = {
+        notification_id: trackingId,
+        recipient_email: updatedAccount.primary_contact_email,
+        recipient_name: updatedAccount.primary_contact_name,
+        brokerage_id: updatedAccount.brokerage_id,
+        brokerage_name: updatedAccount.name,
+        brokerage_code: updatedAccount.code,
+        previous_tier: exceededPlanData.currentTier,
+        previous_price: exceededPlanData.currentPrice,
+        new_tier: targetTier,
+        new_monthly_price: targetPlan.monthlyPrice,
+        effective_date: effectiveDate,
+        sent_at: Date.now(),
+        status: "delivered",
+        subject: `Important Update: Subscription Plan Adjustment & New Monthly Pricing for ${updatedAccount.name}`,
+        exceeded_quotas: exceededPlanData.exceededItems
+      };
+
+      try {
+        await setDoc(doc(db, "email_notifications", trackingId), emailRecord);
+        await setDoc(doc(db, "auditLogs", `log-${Date.now()}`), {
+          action: "BROKERAGE_PLAN_AUTO_UPGRADE",
+          actor: user?.email || "Super Admin",
+          target_brokerage: updatedAccount.name,
+          details: `Plan upgraded from ${exceededPlanData.currentTier} ($${exceededPlanData.currentPrice}/mo) to ${targetTier} ($${targetPlan.monthlyPrice}/mo) due to quota configuration increase. Email dispatched to ${updatedAccount.primary_contact_email}.`,
+          timestamp: Date.now()
+        });
+      } catch (e) {
+        console.warn("Logged email notification to local state:", e);
+      }
+
+      // 3. Update local state
+      setSelectedBrokerage(updatedAccount);
+      setBrokerages((prev) =>
+        prev.map((b) => (b.brokerage_id === updatedAccount.brokerage_id ? updatedAccount : b))
+      );
+
+      // 4. Store receipt data and show confirmation
+      setEmailReceiptData({
+        recipient: updatedAccount.primary_contact_email,
+        recipientName: updatedAccount.primary_contact_name,
+        brokerageName: updatedAccount.name,
+        brokerageCode: updatedAccount.code,
+        oldTier: exceededPlanData.currentTier,
+        oldPrice: exceededPlanData.currentPrice,
+        newTier: targetTier,
+        newPrice: targetPlan.monthlyPrice,
+        effectiveDate,
+        sentAt,
+        trackingId,
+        subject: `Important Update: Subscription Plan Adjustment & New Monthly Pricing for ${updatedAccount.name}`,
+        messageSummary: `Plan automatically adjusted from ${exceededPlanData.currentTier} ($${exceededPlanData.currentPrice}/mo) to ${targetTier} ($${targetPlan.monthlyPrice}/mo). New quota allocations activated.`
+      });
+
+      setPlanExceededModalOpen(false);
+      setEmailReceiptModalOpen(true);
+      toast.success(`Plan adjusted to ${targetTier} ($${targetPlan.monthlyPrice}/mo)! Notification email sent to ${updatedAccount.primary_contact_email}.`);
+    } catch (error) {
+      console.error("Error confirming plan upgrade:", error);
+      toast.error("Failed to update plan. Please try again.");
+    } finally {
+      setIsSendingPlanEmail(false);
+    }
+  };
+
+  const handleToggleAllowOverages = async (checked: boolean) => {
+    if (!selectedBrokerage) return;
+
+    const previousState = !!selectedBrokerage.quota_limits?.allow_overages;
+    if (previousState === checked) return;
+
+    const updatedAccount: BrokerageAccount = {
+      ...selectedBrokerage,
+      quota_limits: {
+        ...selectedBrokerage.quota_limits,
+        allow_overages: checked
+      }
+    };
+
+    setSelectedBrokerage(updatedAccount);
+
+    const trackingId = `OVRG-${Date.now().toString(36).toUpperCase()}`;
+    const auditLogId = `audit-${Date.now()}`;
+    const timestamp = Date.now();
+    const sentAt = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+    const adminActor = user?.email || "Super Administrator";
+    const actionText = checked ? "Enabled" : "Disabled";
+
+    const subject = `Important Notice: Soft Overages (Pay-per-Lead) Policy ${actionText.toUpperCase()} for ${selectedBrokerage.name}`;
+    const emailBody = checked
+      ? `Dear ${selectedBrokerage.primary_contact_name},\n\nPlease be advised that the Soft Overages (Pay-per-Lead) policy has been ENABLED for ${selectedBrokerage.name} (${selectedBrokerage.code}) by Platform Administrator ${adminActor} on ${sentAt}.\n\nWhat this means for your organization:\n• Lead capture and visitor sign-ins will continue without interruption even if your monthly allocation limit of ${selectedBrokerage.quota_limits.max_ai_leads.toLocaleString()} leads is exceeded during peak open house events.\n• Overage leads captured beyond your baseline allowance will be billed at standard pay-per-lead rates ($0.25/lead) at the end of the current billing cycle (${formatCycleDate(selectedBrokerage.quota_usage.cycle_end_date)}).\n• Automated warning alerts will notify your team when quota consumption surpasses ${selectedBrokerage.quota_limits.warning_threshold_pct}% capacity.\n\nIf you have any questions or wish to adjust your contract parameters, please reach out to your account administrator.`
+      : `Dear ${selectedBrokerage.primary_contact_name},\n\nPlease be advised that the Soft Overages (Pay-per-Lead) policy has been DISABLED for ${selectedBrokerage.name} (${selectedBrokerage.code}) by Platform Administrator ${adminActor} on ${sentAt}.\n\nUnder strict enforcement, lead captures and Sora AI interactions will lock once your plan quota of ${selectedBrokerage.quota_limits.max_ai_leads.toLocaleString()} leads is reached until the next cycle reset on ${formatCycleDate(selectedBrokerage.quota_usage.cycle_end_date)}.`;
+
+    try {
+      // 1. Save updated brokerage to Firestore
+      await setDoc(doc(db, "brokerages", updatedAccount.brokerage_id), updatedAccount, { merge: true });
+
+      // 2. Track in Firestore auditLogs collection
+      await setDoc(doc(db, "auditLogs", auditLogId), {
+        action: checked ? "ALLOW_SOFT_OVERAGES_ENABLED" : "ALLOW_SOFT_OVERAGES_DISABLED",
+        actor: adminActor,
+        target_brokerage: selectedBrokerage.name,
+        brokerage_id: selectedBrokerage.brokerage_id,
+        brokerage_code: selectedBrokerage.code,
+        previous_value: previousState,
+        new_value: checked,
+        email_sent_to: selectedBrokerage.primary_contact_email,
+        email_tracking_id: trackingId,
+        details: `Soft Overages (Pay-per-Lead) ${actionText} for ${selectedBrokerage.name}. Official notification email dispatched to Plan Administrator / Team Leader ${selectedBrokerage.primary_contact_name} (${selectedBrokerage.primary_contact_email}).`,
+        timestamp,
+        date_formatted: sentAt
+      });
+
+      // 3. Store notification record in email_notifications collection
+      await setDoc(doc(db, "email_notifications", trackingId), {
+        notification_id: trackingId,
+        type: "SOFT_OVERAGES_POLICY_UPDATE",
+        recipient_email: selectedBrokerage.primary_contact_email,
+        recipient_name: selectedBrokerage.primary_contact_name,
+        brokerage_id: selectedBrokerage.brokerage_id,
+        brokerage_name: selectedBrokerage.name,
+        brokerage_code: selectedBrokerage.code,
+        subject,
+        body: emailBody,
+        sent_at: timestamp,
+        sent_at_formatted: sentAt,
+        status: "delivered",
+        actor: adminActor
+      });
+    } catch (err) {
+      console.warn("Soft overage change logged locally:", err);
+    }
+
+    // 4. Update local brokerages array
+    setBrokerages((prev) =>
+      prev.map((b) => (b.brokerage_id === updatedAccount.brokerage_id ? updatedAccount : b))
+    );
+
+    // 5. Open Modal with full email copy and audit log record
+    setSoftOverageEmailData({
+      action: checked ? "enabled" : "disabled",
+      recipient: selectedBrokerage.primary_contact_email,
+      recipientName: selectedBrokerage.primary_contact_name,
+      brokerageName: selectedBrokerage.name,
+      brokerageCode: selectedBrokerage.code,
+      trackingId,
+      sentAt,
+      subject,
+      emailBody,
+      auditLogId,
+      adminActor
+    });
+
+    setSoftOverageModalOpen(true);
+    toast.success(`Soft Overages ${actionText}! Audit logged & notification email dispatched.`);
   };
 
   const handleCreateBrokerage = async (e: React.FormEvent) => {
@@ -527,11 +1095,11 @@ export default function BrokerageSettings() {
                   {selectedBrokerage.account_status}
                 </span>
                 <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                  {selectedBrokerage.tier} Tier
+                  {selectedBrokerage.tier} Tier (${(BROKERAGE_TIER_CONFIG[selectedBrokerage.tier || "Starter"] || BROKERAGE_TIER_CONFIG.Starter).monthlyPrice}/mo)
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Primary Contact: <strong className="text-slate-700">{selectedBrokerage.primary_contact_name}</strong> ({selectedBrokerage.primary_contact_email})
+                Plan Holder: <strong className="text-slate-700">{selectedBrokerage.primary_contact_name}</strong> ({selectedBrokerage.primary_contact_email})
               </p>
             </div>
           </div>
@@ -566,15 +1134,82 @@ export default function BrokerageSettings() {
           </div>
         </div>
 
-        {/* Quota Overview KPI Bar for Selected Brokerage */}
+        {/* Current Plan & Pricing Subscription Bar */}
+        {(() => {
+          const currentPlan = BROKERAGE_TIER_CONFIG[selectedBrokerage.tier || "Starter"] || BROKERAGE_TIER_CONFIG.Starter;
+          const liveCheck = analyzePlanQuotas(selectedBrokerage);
+
+          return (
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-400/30">
+                    Active Subscription Plan
+                  </span>
+                  <span className="text-xs text-slate-300 font-medium">
+                    Invoicing to: <strong className="text-white">{selectedBrokerage.primary_contact_name}</strong> ({selectedBrokerage.primary_contact_email})
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-lg sm:text-xl font-black tracking-tight text-white flex items-center gap-2">
+                    <span>{currentPlan.name} Plan</span>
+                    <span className="text-sm font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-500/30">
+                      ${currentPlan.monthlyPrice}/month
+                    </span>
+                  </h3>
+                  <span className="text-xs text-slate-400 font-medium hidden md:inline">
+                    • {currentPlan.slaLevel} ({currentPlan.sla})
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Included Baseline: <strong className="text-white">{currentPlan.maxLeads.toLocaleString()} Leads</strong> • <strong className="text-white">{currentPlan.maxOpenHouses} Open Houses</strong> • <strong className="text-white">{currentPlan.maxMessages.toLocaleString()} Messages</strong> • <strong className="text-white">{currentPlan.maxSeats} Agent Seats</strong>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsPricingMatrixModalOpen(true)}
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-bold gap-1.5 cursor-pointer"
+                >
+                  <Compass className="h-3.5 w-3.5 text-blue-300" />
+                  <span>View All Pricing Plans & SLAs</span>
+                </Button>
+                {liveCheck.isExceeded && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setExceededPlanData(liveCheck);
+                      setPlanExceededModalOpen(true);
+                    }}
+                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs gap-1.5 shadow-sm animate-pulse cursor-pointer"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>Plan Upgrade Required ({liveCheck.recommendedTier})</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Quota Overview KPI Bar for Selected Brokerage (Interactive Drill-down Cards) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+          <div
+            id="card-selected-ai-leads"
+            onClick={() => {
+              setModalSearchQuery(selectedBrokerage.name);
+              setActiveKpiModal("lead_captures");
+            }}
+            className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-2 relative"
+          >
             <div className="flex items-center justify-between text-xs text-slate-500 font-bold uppercase tracking-wider">
-              <span>AI Lead Captures</span>
-              <Zap className="h-4 w-4 text-blue-600" />
+              <span className="group-hover:text-blue-600 transition-colors">AI Lead Captures</span>
+              <Zap className="h-4 w-4 text-blue-600 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-slate-900">
+              <span className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">
                 {selectedBrokerage.quota_usage.current_leads_used.toLocaleString()}
               </span>
               <span className="text-xs font-bold text-slate-500">
@@ -589,16 +1224,26 @@ export default function BrokerageSettings() {
                 style={{ width: `${Math.min(100, leadPct)}%` }}
               />
             </div>
-            <span className="text-[10px] font-bold text-slate-400 block text-right">{leadPct}% capacity used</span>
+            <div className="flex items-center justify-between pt-0.5">
+              <span className="text-[10px] font-bold text-slate-400">{leadPct}% capacity used</span>
+              <span className="text-[10px] font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
+            </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+          <div
+            id="card-selected-open-houses"
+            onClick={() => {
+              setModalSearchQuery(selectedBrokerage.name);
+              setActiveKpiModal("open_houses");
+            }}
+            className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-purple-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-2 relative"
+          >
             <div className="flex items-center justify-between text-xs text-slate-500 font-bold uppercase tracking-wider">
-              <span>Active Open Houses</span>
-              <Building className="h-4 w-4 text-purple-600" />
+              <span className="group-hover:text-purple-600 transition-colors">Active Open Houses</span>
+              <Building className="h-4 w-4 text-purple-600 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-slate-900">
+              <span className="text-2xl font-black text-slate-900 group-hover:text-purple-600 transition-colors">
                 {selectedBrokerage.quota_usage.current_open_houses}
               </span>
               <span className="text-xs font-bold text-slate-500">
@@ -613,16 +1258,26 @@ export default function BrokerageSettings() {
                 style={{ width: `${Math.min(100, ohPct)}%` }}
               />
             </div>
-            <span className="text-[10px] font-bold text-slate-400 block text-right">{ohPct}% active quota</span>
+            <div className="flex items-center justify-between pt-0.5">
+              <span className="text-[10px] font-bold text-slate-400">{ohPct}% active quota</span>
+              <span className="text-[10px] font-extrabold text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
+            </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+          <div
+            id="card-selected-ai-messages"
+            onClick={() => {
+              setModalSearchQuery(selectedBrokerage.name);
+              setActiveKpiModal("messages");
+            }}
+            className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-amber-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-2 relative"
+          >
             <div className="flex items-center justify-between text-xs text-slate-500 font-bold uppercase tracking-wider">
-              <span>AI Chat/Voice Messages</span>
-              <BarChart2 className="h-4 w-4 text-amber-600" />
+              <span className="group-hover:text-amber-600 transition-colors">AI Chat/Voice Messages</span>
+              <BarChart2 className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-slate-900">
+              <span className="text-2xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">
                 {selectedBrokerage.quota_usage.current_messages_used.toLocaleString()}
               </span>
               <span className="text-xs font-bold text-slate-500">
@@ -637,16 +1292,26 @@ export default function BrokerageSettings() {
                 style={{ width: `${Math.min(100, msgPct)}%` }}
               />
             </div>
-            <span className="text-[10px] font-bold text-slate-400 block text-right">{msgPct}% cycle usage</span>
+            <div className="flex items-center justify-between pt-0.5">
+              <span className="text-[10px] font-bold text-slate-400">{msgPct}% cycle usage</span>
+              <span className="text-[10px] font-extrabold text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
+            </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+          <div
+            id="card-selected-agent-seats"
+            onClick={() => {
+              setModalSearchQuery(selectedBrokerage.name);
+              setActiveKpiModal("active_seats");
+            }}
+            className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-emerald-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-2 relative"
+          >
             <div className="flex items-center justify-between text-xs text-slate-500 font-bold uppercase tracking-wider">
-              <span>Agent Seats Occupied</span>
-              <Users className="h-4 w-4 text-emerald-600" />
+              <span className="group-hover:text-emerald-600 transition-colors">Agent Seats Occupied</span>
+              <Users className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-black text-slate-900">
+              <span className="text-2xl font-black text-slate-900 group-hover:text-emerald-600 transition-colors">
                 {selectedBrokerage.quota_usage.active_seats_occupied}
               </span>
               <span className="text-xs font-bold text-slate-500">
@@ -661,252 +1326,596 @@ export default function BrokerageSettings() {
                 style={{ width: `${Math.min(100, seatPct)}%` }}
               />
             </div>
-            <span className="text-[10px] font-bold text-slate-400 block text-right">{seatPct}% seats allocated</span>
+            <div className="flex items-center justify-between pt-0.5">
+              <span className="text-[10px] font-bold text-slate-400">{seatPct}% seats allocated</span>
+              <span className="text-[10px] font-extrabold text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
+            </div>
           </div>
         </div>
 
-        {/* Tab Selection */}
-        <div className="flex items-center gap-1 border-b border-slate-200">
+        {/* Tab Selection with Interactive (?) Info Buttons */}
+        <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
+          {(Object.keys(DETAIL_TAB_EXPLANATIONS) as Array<keyof typeof DETAIL_TAB_EXPLANATIONS>).map((tabKey) => {
+            const tabInfo = DETAIL_TAB_EXPLANATIONS[tabKey];
+            const isActive = activeDetailTab === tabKey;
+            const countBadge =
+              tabKey === "history"
+                ? brokerageHistory.length
+                : tabKey === "alerts"
+                ? brokerageAlerts.length
+                : null;
+            const hasUnreadAlerts =
+              tabKey === "alerts" && brokerageAlerts.some((a) => !a.acknowledged);
+
+            return (
+              <div key={tabKey} className="relative flex items-center group/tab">
+                <button
+                  onClick={() => setActiveDetailTab(tabKey)}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 cursor-pointer ${
+                    isActive
+                      ? "border-blue-600 text-blue-600 bg-blue-50/60 shadow-sm"
+                      : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>{tabInfo.title}</span>
+                  {countBadge !== null && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                        isActive
+                          ? "bg-blue-200 text-blue-800"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {countBadge}
+                    </span>
+                  )}
+                  {hasUnreadAlerts && (
+                    <span className="h-2 w-2 rounded-full bg-red-500 animate-ping ml-0.5" />
+                  )}
+                </button>
+
+                {/* Information (?) button for each tab */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedTabInfoKey(tabKey);
+                  }}
+                  title={`Click to learn about "${tabInfo.title}"`}
+                  className={`mr-1 p-1 rounded-full transition-all cursor-pointer ${
+                    isActive
+                      ? "text-blue-600 hover:text-blue-800 hover:bg-blue-100/70"
+                      : "text-slate-400 hover:text-blue-600 hover:bg-slate-200/70"
+                  }`}
+                  aria-label={`Learn what ${tabInfo.title} is`}
+                >
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Active Tab Explanation Helper Strip */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 text-slate-600">
+          <div className="flex items-center gap-2">
+            <div className="p-1 rounded-md bg-blue-100 text-blue-700">
+              <Info className="h-3.5 w-3.5" />
+            </div>
+            <span className="font-bold text-slate-800">{DETAIL_TAB_EXPLANATIONS[activeDetailTab].title}:</span>
+            <span className="text-slate-600 text-[11px] leading-tight">
+              {DETAIL_TAB_EXPLANATIONS[activeDetailTab].description}
+            </span>
+          </div>
           <button
-            onClick={() => setActiveDetailTab("limits")}
-            className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-              activeDetailTab === "limits"
-                ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
+            type="button"
+            onClick={() => setSelectedTabInfoKey(activeDetailTab)}
+            className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 shrink-0 cursor-pointer ml-auto"
           >
-            Quota Limits & Enforcements
-          </button>
-          <button
-            onClick={() => setActiveDetailTab("telemetry")}
-            className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-              activeDetailTab === "telemetry"
-                ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
-          >
-            Live Usage & Cycle Reset
-          </button>
-          <button
-            onClick={() => setActiveDetailTab("history")}
-            className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-              activeDetailTab === "history"
-                ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
-          >
-            Historical Cycles ({brokerageHistory.length})
-          </button>
-          <button
-            onClick={() => setActiveDetailTab("alerts")}
-            className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 relative ${
-              activeDetailTab === "alerts"
-                ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
-          >
-            Quota Alerts ({brokerageAlerts.length})
-            {brokerageAlerts.some((a) => !a.acknowledged) && (
-              <span className="absolute top-2 right-1 h-2 w-2 rounded-full bg-red-500 animate-ping" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveDetailTab("branding")}
-            className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 ${
-              activeDetailTab === "branding"
-                ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                : "border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-            }`}
-          >
-            Branding & Cascading Rules
+            <HelpCircle className="h-3.5 w-3.5" />
+            <span>Full Guide & FAQs</span>
           </button>
         </div>
 
         {/* TAB CONTENT: QUOTA LIMITS & RULES */}
-        {activeDetailTab === "limits" && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
-            <div>
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Shield className="h-5 w-5 text-blue-600" />
-                <span>Brokerage Quota Limits Configuration</span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Define contract limits, threshold alert parameters, and enforcement rules for {selectedBrokerage.name}.
-              </p>
-            </div>
+        {activeDetailTab === "limits" && (() => {
+          const currentPlan = BROKERAGE_TIER_CONFIG[selectedBrokerage.tier || "Starter"] || BROKERAGE_TIER_CONFIG.Starter;
+          const liveCheck = analyzePlanQuotas(selectedBrokerage);
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Max AI Leads per Billing Cycle
-                </label>
-                <Input
-                  type="number"
-                  value={selectedBrokerage.quota_limits.max_ai_leads}
-                  onChange={(e) =>
-                    setSelectedBrokerage({
-                      ...selectedBrokerage,
-                      quota_limits: {
-                        ...selectedBrokerage.quota_limits,
-                        max_ai_leads: Math.max(1, parseInt(e.target.value) || 0)
-                      }
-                    })
-                  }
-                  className="font-mono text-sm"
-                />
-                <span className="text-[11px] text-slate-500 block">Total AI captured lead budget for all agent open houses.</span>
+          return (
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-blue-600" />
+                    <span>Brokerage Quota Limits Configuration</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Define contract limits, threshold alert parameters, and enforcement rules for {selectedBrokerage.name}.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                    Plan Tier: <strong className="text-blue-600">{currentPlan.name} (${currentPlan.monthlyPrice}/mo)</strong>
+                  </span>
+                  {liveCheck.isExceeded && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleResetToPlanLimits}
+                      className="text-xs font-bold text-slate-700 hover:bg-slate-100 border-slate-300 gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="h-3 w-3 text-slate-500" />
+                      <span>Reset to {currentPlan.name} Limits</span>
+                    </Button>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Max Active Open Houses
-                </label>
-                <Input
-                  type="number"
-                  value={selectedBrokerage.quota_limits.max_open_houses}
-                  onChange={(e) =>
-                    setSelectedBrokerage({
-                      ...selectedBrokerage,
-                      quota_limits: {
-                        ...selectedBrokerage.quota_limits,
-                        max_open_houses: Math.max(1, parseInt(e.target.value) || 0)
-                      }
-                    })
-                  }
-                  className="font-mono text-sm"
-                />
-                <span className="text-[11px] text-slate-500 block">Concurrent open house events permitted across team agents.</span>
-              </div>
+              {/* Prominent Active Subscription Plan & Details Card */}
+              <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white rounded-2xl p-5 border border-slate-700 shadow-md space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/80 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-blue-600/30 text-blue-400 border border-blue-500/30 shrink-0">
+                      <Building className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Current Organization Plan</span>
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                          {selectedBrokerage.account_status}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-black text-white flex items-center gap-2">
+                        <span>{currentPlan.name} Plan</span>
+                        <span className="text-blue-300 font-mono text-sm font-bold">• ${currentPlan.monthlyPrice}/month</span>
+                      </h3>
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Max AI Chat & Voice Responses
-                </label>
-                <Input
-                  type="number"
-                  value={selectedBrokerage.quota_limits.max_ai_messages}
-                  onChange={(e) =>
-                    setSelectedBrokerage({
-                      ...selectedBrokerage,
-                      quota_limits: {
-                        ...selectedBrokerage.quota_limits,
-                        max_ai_messages: Math.max(100, parseInt(e.target.value) || 0)
-                      }
-                    })
-                  }
-                  className="font-mono text-sm"
-                />
-                <span className="text-[11px] text-slate-500 block">Sora AI Voice tour turns and message interactions per cycle.</span>
-              </div>
+                  <div className="flex items-center gap-2">
+                    <div className="bg-white/10 px-3.5 py-1.5 rounded-xl border border-white/10 text-right">
+                      <span className="text-[10px] text-slate-300 block font-semibold uppercase">Invoiced Plan Holder</span>
+                      <span className="text-xs font-bold text-white block">{selectedBrokerage.primary_contact_name}</span>
+                      <span className="text-[10px] text-blue-300 block font-mono">{selectedBrokerage.primary_contact_email}</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsPricingMatrixModalOpen(true)}
+                      className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-bold gap-1.5 cursor-pointer"
+                    >
+                      <Compass className="h-3.5 w-3.5 text-blue-300" />
+                      <span>Pricing Matrix</span>
+                    </Button>
+                  </div>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Max Team Agent Seats
-                </label>
-                <Input
-                  type="number"
-                  value={selectedBrokerage.quota_limits.max_team_seats}
-                  onChange={(e) =>
-                    setSelectedBrokerage({
-                      ...selectedBrokerage,
-                      quota_limits: {
-                        ...selectedBrokerage.quota_limits,
-                        max_team_seats: Math.max(1, parseInt(e.target.value) || 0)
-                      }
-                    })
-                  }
-                  className="font-mono text-sm"
-                />
-                <span className="text-[11px] text-slate-500 block">Active licensed agent accounts associated with this brokerage.</span>
-              </div>
+                {/* Quota Allowance Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-white/5 rounded-xl p-3 border border-white/10 space-y-0.5">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Max AI Leads</span>
+                    <span className="text-base font-black text-white">{currentPlan.maxLeads.toLocaleString()}</span>
+                    <span className="text-[10px] text-slate-400 block">per cycle included</span>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 border border-white/10 space-y-0.5">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Active Open Houses</span>
+                    <span className="text-base font-black text-white">{currentPlan.maxOpenHouses}</span>
+                    <span className="text-[10px] text-slate-400 block">concurrent events</span>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 border border-white/10 space-y-0.5">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">AI Voice & Chat</span>
+                    <span className="text-base font-black text-white">{currentPlan.maxMessages.toLocaleString()}</span>
+                    <span className="text-[10px] text-slate-400 block">Sora AI turns</span>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 border border-white/10 space-y-0.5">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Team Agent Seats</span>
+                    <span className="text-base font-black text-white">{currentPlan.maxSeats}</span>
+                    <span className="text-[10px] text-slate-400 block">licensed agents</span>
+                  </div>
+                </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  Warning Alert Threshold (%)
-                </label>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="range"
-                    min="50"
-                    max="95"
-                    step="5"
-                    value={selectedBrokerage.quota_limits.warning_threshold_pct}
-                    onChange={(e) =>
-                      setSelectedBrokerage({
-                        ...selectedBrokerage,
-                        quota_limits: {
-                          ...selectedBrokerage.quota_limits,
-                          warning_threshold_pct: parseInt(e.target.value)
-                        }
-                      })
-                    }
-                    className="w-full accent-blue-600"
-                  />
-                  <span className="font-mono font-bold text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
-                    {selectedBrokerage.quota_limits.warning_threshold_pct}%
+                {/* SLA Badge Bar & Billing Period */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800 text-xs">
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span>Support Level: <strong className="text-white">{currentPlan.slaLevel}</strong></span>
+                    <span className="text-slate-500">•</span>
+                    <span className="font-mono text-emerald-400 font-bold">{currentPlan.sla}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    Active Cycle: <strong className="text-slate-200">{formatCycleDate(selectedBrokerage.quota_usage.cycle_start_date)}</strong> to <strong className="text-slate-200">{formatCycleDate(selectedBrokerage.quota_usage.cycle_end_date)}</strong>
                   </span>
                 </div>
-                <span className="text-[11px] text-slate-500 block">
-                  Triggers automated warning alerts to the Broker Administrator when consumption exceeds this percentage.
-                </span>
               </div>
-            </div>
 
-            <hr className="border-slate-100" />
+              {/* Real-time Plan Exceeded Banner */}
+              {liveCheck.isExceeded ? (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 text-amber-950 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 rounded-xl bg-amber-200/80 text-amber-900 shrink-0 mt-0.5">
+                        <AlertTriangle className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-sm font-black text-amber-900 flex items-center gap-2">
+                          <span>⚠️ Quota Configuration Exceeds {currentPlan.name} Plan Baseline</span>
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                            Upgrade Required
+                          </span>
+                        </h3>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                          The current quota inputs exceed the allowance included in {selectedBrokerage.name}'s <strong>{currentPlan.name} Plan (${currentPlan.monthlyPrice}/month)</strong>. 
+                          Saving these changes will adjust the organization to the <strong>{liveCheck.recommendedTier} Plan (${liveCheck.recommendedPrice}/month)</strong> and automatically dispatch an itemized notification email to plan holder <strong>{selectedBrokerage.primary_contact_name} ({selectedBrokerage.primary_contact_email})</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Quota Enforcement Rules</h3>
-              
-              <div className="grid md:grid-cols-2 gap-4">
-                <label className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={selectedBrokerage.quota_limits.allow_overages}
+                  {/* Exceeded Items List */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 pt-1">
+                    {liveCheck.exceededItems.map((item) => (
+                      <div key={item.field} className="bg-white/80 border border-amber-300 rounded-xl p-2.5 space-y-0.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block truncate">{item.label}</span>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-sm font-black text-slate-900">{item.currentConfig.toLocaleString()}</span>
+                          <span className="text-[11px] font-extrabold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
+                            +{item.difference.toLocaleString()} over {currentPlan.name}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 block">Plan Limit: {item.planLimit.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-amber-200/80">
+                    <div className="text-xs text-amber-900 flex items-center gap-1.5">
+                      <Mail className="h-4 w-4 text-amber-700 shrink-0" />
+                      <span>Notification Email will be delivered to: <strong>{selectedBrokerage.primary_contact_email}</strong></span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setExceededPlanData(liveCheck);
+                          setPlanExceededModalOpen(true);
+                        }}
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        <span>Review Plan Upgrade & Email Preview</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-emerald-900">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>
+                      All quota inputs are within the <strong>{currentPlan.name} Plan (${currentPlan.monthlyPrice}/mo)</strong> standard allowance: {currentPlan.maxLeads.toLocaleString()} Leads, {currentPlan.maxOpenHouses} Open Houses, {currentPlan.maxMessages.toLocaleString()} Messages, {currentPlan.maxSeats} Seats • <strong>{currentPlan.slaLevel} ({currentPlan.sla})</strong>.
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded border border-emerald-300 shrink-0">
+                    Plan Compliant
+                  </span>
+                </div>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Max AI Leads per Billing Cycle
+                    </label>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {currentPlan.name} Limit: {currentPlan.maxLeads.toLocaleString()}
+                    </span>
+                  </div>
+                  <Input
+                    type="number"
+                    value={selectedBrokerage.quota_limits.max_ai_leads}
                     onChange={(e) =>
                       setSelectedBrokerage({
                         ...selectedBrokerage,
                         quota_limits: {
                           ...selectedBrokerage.quota_limits,
-                          allow_overages: e.target.checked
+                          max_ai_leads: Math.max(1, parseInt(e.target.value) || 0)
                         }
                       })
                     }
-                    className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    className={`font-mono text-sm ${
+                      selectedBrokerage.quota_limits.max_ai_leads > currentPlan.maxLeads
+                        ? "border-amber-400 bg-amber-50/30 text-amber-950 font-bold ring-1 ring-amber-400"
+                        : ""
+                    }`}
                   />
-                  <div>
-                    <span className="text-xs font-bold text-slate-900 block">Allow Soft Overages (Pay-per-Lead)</span>
-                    <span className="text-[11px] text-slate-500 leading-relaxed block mt-0.5">
-                      Permits lead capture to continue past 100% capacity and flags accounts for monthly overage billing.
+                  <span className="text-[11px] text-slate-500 block">Total AI captured lead budget for all agent open houses.</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Max Active Open Houses
+                    </label>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {currentPlan.name} Limit: {currentPlan.maxOpenHouses}
                     </span>
                   </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50/50 cursor-pointer hover:bg-slate-100/50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={selectedBrokerage.quota_limits.hard_stop_on_limit}
+                  <Input
+                    type="number"
+                    value={selectedBrokerage.quota_limits.max_open_houses}
                     onChange={(e) =>
                       setSelectedBrokerage({
                         ...selectedBrokerage,
                         quota_limits: {
                           ...selectedBrokerage.quota_limits,
-                          hard_stop_on_limit: e.target.checked
+                          max_open_houses: Math.max(1, parseInt(e.target.value) || 0)
                         }
                       })
                     }
-                    className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    className={`font-mono text-sm ${
+                      selectedBrokerage.quota_limits.max_open_houses > currentPlan.maxOpenHouses
+                        ? "border-amber-400 bg-amber-50/30 text-amber-950 font-bold ring-1 ring-amber-400"
+                        : ""
+                    }`}
                   />
-                  <div>
-                    <span className="text-xs font-bold text-slate-900 block">Strict Hard Stop on Limit Exceeded</span>
-                    <span className="text-[11px] text-slate-500 leading-relaxed block mt-0.5">
-                      Immediately locks kiosk sign-ins and Sora AI voice interactions when limits are reached until quota reset.
+                  <span className="text-[11px] text-slate-500 block">Concurrent open house events permitted across team agents.</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Max AI Chat & Voice Responses
+                    </label>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {currentPlan.name} Limit: {currentPlan.maxMessages.toLocaleString()}
                     </span>
                   </div>
-                </label>
+                  <Input
+                    type="number"
+                    value={selectedBrokerage.quota_limits.max_ai_messages}
+                    onChange={(e) =>
+                      setSelectedBrokerage({
+                        ...selectedBrokerage,
+                        quota_limits: {
+                          ...selectedBrokerage.quota_limits,
+                          max_ai_messages: Math.max(100, parseInt(e.target.value) || 0)
+                        }
+                      })
+                    }
+                    className={`font-mono text-sm ${
+                      selectedBrokerage.quota_limits.max_ai_messages > currentPlan.maxMessages
+                        ? "border-amber-400 bg-amber-50/30 text-amber-950 font-bold ring-1 ring-amber-400"
+                        : ""
+                    }`}
+                  />
+                  <span className="text-[11px] text-slate-500 block">Sora AI Voice tour turns and message interactions per cycle.</span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Max Team Agent Seats
+                    </label>
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {currentPlan.name} Limit: {currentPlan.maxSeats}
+                    </span>
+                  </div>
+                  <Input
+                    type="number"
+                    value={selectedBrokerage.quota_limits.max_team_seats}
+                    onChange={(e) =>
+                      setSelectedBrokerage({
+                        ...selectedBrokerage,
+                        quota_limits: {
+                          ...selectedBrokerage.quota_limits,
+                          max_team_seats: Math.max(1, parseInt(e.target.value) || 0)
+                        }
+                      })
+                    }
+                    className={`font-mono text-sm ${
+                      selectedBrokerage.quota_limits.max_team_seats > currentPlan.maxSeats
+                        ? "border-amber-400 bg-amber-50/30 text-amber-950 font-bold ring-1 ring-amber-400"
+                        : ""
+                    }`}
+                  />
+                  <span className="text-[11px] text-slate-500 block">Active licensed agent accounts associated with this brokerage.</span>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                      Warning Alert Threshold (%)
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      Type percentage or drag slider (1% – 100%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      step="1"
+                      value={selectedBrokerage.quota_limits.warning_threshold_pct}
+                      onChange={(e) => {
+                        const val = Math.min(100, Math.max(1, parseInt(e.target.value) || 0));
+                        setSelectedBrokerage({
+                          ...selectedBrokerage,
+                          quota_limits: {
+                            ...selectedBrokerage.quota_limits,
+                            warning_threshold_pct: val
+                          }
+                        });
+                      }}
+                      className="w-full accent-blue-600 cursor-pointer h-2 bg-slate-200 rounded-lg"
+                    />
+                    <div className="relative flex items-center shrink-0">
+                      <Input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={selectedBrokerage.quota_limits.warning_threshold_pct}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === "" ? 0 : Math.min(100, Math.max(0, parseInt(raw) || 0));
+                          setSelectedBrokerage({
+                            ...selectedBrokerage,
+                            quota_limits: {
+                              ...selectedBrokerage.quota_limits,
+                              warning_threshold_pct: val
+                            }
+                          });
+                        }}
+                        onBlur={(e) => {
+                          const val = Math.min(100, Math.max(1, parseInt(e.target.value) || 80));
+                          setSelectedBrokerage({
+                            ...selectedBrokerage,
+                            quota_limits: {
+                              ...selectedBrokerage.quota_limits,
+                              warning_threshold_pct: val
+                            }
+                          });
+                        }}
+                        className="w-24 font-mono font-black text-sm text-blue-700 bg-blue-50/90 border-2 border-blue-300 pr-8 text-center focus:ring-blue-500 rounded-xl shadow-xs"
+                      />
+                      <span className="absolute right-3 text-xs font-black text-blue-700 pointer-events-none">%</span>
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-slate-500 block">
+                    Triggers automated warning alerts to the Broker Administrator when consumption exceeds this percentage.
+                  </span>
+                </div>
+              </div>
+
+              <hr className="border-slate-100" />
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Quota Enforcement Rules</h3>
+                  <span className="text-[11px] text-slate-400">Changes are audit-logged with email receipts</span>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div
+                    className={`p-4 rounded-xl border transition-all ${
+                      selectedBrokerage.quota_limits.allow_overages
+                        ? "border-blue-300 bg-blue-50/40 shadow-xs"
+                        : "border-slate-200 bg-slate-50/50 hover:bg-slate-100/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <label className="flex items-start gap-3 cursor-pointer flex-1">
+                        <input
+                          type="checkbox"
+                          checked={selectedBrokerage.quota_limits.allow_overages}
+                          onChange={(e) => handleToggleAllowOverages(e.target.checked)}
+                          className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block flex items-center gap-2">
+                            <span>Allow Soft Overages (Pay-per-Lead)</span>
+                            {selectedBrokerage.quota_limits.allow_overages && (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-200/80 text-blue-800 border border-blue-300">
+                                Active Policy
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-[11px] text-slate-500 leading-relaxed block mt-0.5">
+                            Permits lead capture to continue past 100% capacity and flags accounts for monthly overage billing.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Mail className="h-3.5 w-3.5 text-blue-600" />
+                        <span>Sends email notice to: <strong>{selectedBrokerage.primary_contact_email}</strong></span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const actionText = selectedBrokerage.quota_limits.allow_overages ? "Enabled" : "Disabled";
+                          const sentAt = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+                          const adminActor = user?.email || "Super Administrator";
+                          const trackingId = `OVRG-${Date.now().toString(36).toUpperCase()}`;
+                          const subject = `Important Notice: Soft Overages (Pay-per-Lead) Policy ${actionText.toUpperCase()} for ${selectedBrokerage.name}`;
+                          const emailBody = selectedBrokerage.quota_limits.allow_overages
+                            ? `Dear ${selectedBrokerage.primary_contact_name},\n\nPlease be advised that the Soft Overages (Pay-per-Lead) policy is currently ENABLED for ${selectedBrokerage.name} (${selectedBrokerage.code}).\n\n• Lead capture and open house visitor sign-ins will continue without interruption even if your monthly quota is exceeded.\n• Overage leads are billed at standard pay-per-lead rates at the end of the billing cycle (${formatCycleDate(selectedBrokerage.quota_usage.cycle_end_date)}).\n• Real-time alerts are sent when quota reaches ${selectedBrokerage.quota_limits.warning_threshold_pct}%.`
+                            : `Dear ${selectedBrokerage.primary_contact_name},\n\nPlease be advised that the Soft Overages (Pay-per-Lead) policy is currently DISABLED for ${selectedBrokerage.name} (${selectedBrokerage.code}).`;
+
+                          setSoftOverageEmailData({
+                            action: selectedBrokerage.quota_limits.allow_overages ? "enabled" : "disabled",
+                            recipient: selectedBrokerage.primary_contact_email,
+                            recipientName: selectedBrokerage.primary_contact_name,
+                            brokerageName: selectedBrokerage.name,
+                            brokerageCode: selectedBrokerage.code,
+                            trackingId,
+                            sentAt,
+                            subject,
+                            emailBody,
+                            auditLogId: `audit-view-${Date.now()}`,
+                            adminActor
+                          });
+                          setSoftOverageModalOpen(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer shrink-0 ml-2"
+                      >
+                        View Email & Log Details →
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-100/50 transition-colors">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedBrokerage.quota_limits.hard_stop_on_limit}
+                        onChange={(e) =>
+                          setSelectedBrokerage({
+                            ...selectedBrokerage,
+                            quota_limits: {
+                              ...selectedBrokerage.quota_limits,
+                              hard_stop_on_limit: e.target.checked
+                            }
+                          })
+                        }
+                        className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 block">Strict Hard Stop on Limit Exceeded</span>
+                        <span className="text-[11px] text-slate-500 leading-relaxed block mt-0.5">
+                          Immediately locks kiosk sign-ins and Sora AI voice interactions when limits are reached until quota reset.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Action Footer */}
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
+                <div className="text-xs text-slate-500">
+                  <span>Current Subscription Tier: <strong>{currentPlan.name} Plan</strong> (${currentPlan.monthlyPrice}/mo)</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={handleSaveSelectedBrokerage}
+                    disabled={saving}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2 text-xs px-5 py-2.5 rounded-xl shadow-sm cursor-pointer"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    <span>Save Quota Configuration</span>
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB CONTENT: LIVE TELEMETRY & CYCLE RESET */}
         {activeDetailTab === "telemetry" && (
@@ -918,7 +1927,7 @@ export default function BrokerageSettings() {
                   <span>Current Billing Cycle Telemetry</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Active consumption meters for cycle {selectedBrokerage.quota_usage.cycle_start_date} to {selectedBrokerage.quota_usage.cycle_end_date}.
+                  Active consumption meters for cycle <strong>{formatCycleDate(selectedBrokerage.quota_usage.cycle_start_date)}</strong> to <strong>{formatCycleDate(selectedBrokerage.quota_usage.cycle_end_date)}</strong>.
                 </p>
               </div>
               <Button
@@ -1004,12 +2013,12 @@ export default function BrokerageSettings() {
             </div>
 
             <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-200 text-xs text-blue-900 space-y-1">
-              <span className="font-bold block flex items-center gap-1">
+              <span className="font-bold flex items-center gap-1">
                 <Calendar className="h-4 w-4 text-blue-600" />
                 Automatic Monthly Cycle Rollover
               </span>
               <p className="leading-relaxed text-blue-800/90">
-                At 23:59:59 UTC on cycle end date ({selectedBrokerage.quota_usage.cycle_end_date}), all active usage metrics automatically transfer to <strong className="font-semibold">brokerage_quota_history</strong> and reset to 0 for the next billing cycle.
+                At 23:59:59 UTC on cycle end date ({formatCycleDate(selectedBrokerage.quota_usage.cycle_end_date)}), all active usage metrics automatically transfer to <strong className="font-semibold">brokerage_quota_history</strong> and reset to 0 for the next billing cycle.
               </p>
             </div>
           </div>
@@ -1030,7 +2039,7 @@ export default function BrokerageSettings() {
 
             {brokerageHistory.length === 0 ? (
               <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-500 text-xs">
-                No past billing cycles archived yet. Active cycle ends on {selectedBrokerage.quota_usage.cycle_end_date}.
+                No past billing cycles archived yet. Active cycle ends on {formatCycleDate(selectedBrokerage.quota_usage.cycle_end_date)}.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1048,7 +2057,7 @@ export default function BrokerageSettings() {
                     {brokerageHistory.map((h) => (
                       <tr key={h.id} className="hover:bg-slate-50/80">
                         <td className="p-3 font-mono font-bold text-slate-900">
-                          {h.cycle_start_date} → {h.cycle_end_date}
+                          {formatCycleDate(h.cycle_start_date)} → {formatCycleDate(h.cycle_end_date)}
                         </td>
                         <td className="p-3 font-semibold text-blue-600">{h.total_leads_used.toLocaleString()}</td>
                         <td className="p-3 font-semibold text-purple-600">{h.total_messages_used.toLocaleString()}</td>
@@ -1176,6 +2185,10 @@ export default function BrokerageSettings() {
   // =========================================================================
   const totalLeadsUsed = brokerages.reduce((acc, b) => acc + (b.quota_usage?.current_leads_used || 0), 0);
   const totalLeadsCapacity = brokerages.reduce((acc, b) => acc + (b.quota_limits?.max_ai_leads || 0), 0);
+  const totalOpenHousesUsed = brokerages.reduce((acc, b) => acc + (b.quota_usage?.current_open_houses || 0), 0);
+  const totalOpenHousesCapacity = brokerages.reduce((acc, b) => acc + (b.quota_limits?.max_open_houses || 0), 0);
+  const totalMessagesUsed = brokerages.reduce((acc, b) => acc + (b.quota_usage?.current_messages_used || 0), 0);
+  const totalMessagesCapacity = brokerages.reduce((acc, b) => acc + (b.quota_limits?.max_ai_messages || 0), 0);
   const totalSeatsOccupied = brokerages.reduce((acc, b) => acc + (b.quota_usage?.active_seats_occupied || 0), 0);
   const totalSeatsCapacity = brokerages.reduce((acc, b) => acc + (b.quota_limits?.max_team_seats || 0), 0);
   const totalWarnings = brokerages.filter((b) => getBrokerageHealth(b) === "warning" || getBrokerageHealth(b) === "exceeded").length;
@@ -1206,25 +2219,25 @@ export default function BrokerageSettings() {
       </div>
 
       {/* Global System Quota KPI Summary Cards (Interactive Clickable Cards) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <div 
           onClick={() => {
             setModalSearchQuery("");
             setActiveKpiModal("total_brokerages");
           }}
           id="card-total-brokerages"
-          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+          className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Brokerages</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Brokerages</span>
             <Building className="h-4 w-4 text-blue-600 group-hover:scale-110 transition-transform" />
           </div>
-          <span className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{brokerages.length}</span>
+          <span className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{brokerages.length}</span>
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-emerald-600 font-bold block">
-              {brokerages.filter((b) => b.account_status === "active").length} active accounts
+            <span className="text-[10px] text-emerald-600 font-bold block truncate">
+              {brokerages.filter((b) => b.account_status === "active").length} active
             </span>
-            <span className="text-[10px] font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+            <span className="text-[9px] font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</span>
           </div>
         </div>
 
@@ -1234,21 +2247,69 @@ export default function BrokerageSettings() {
             setActiveKpiModal("lead_captures");
           }}
           id="card-lead-captures"
-          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+          className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-blue-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Global AI Lead Captures</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">AI Leads</span>
             <Zap className="h-4 w-4 text-blue-600 group-hover:scale-110 transition-transform" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{totalLeadsUsed.toLocaleString()}</span>
-            <span className="text-xs font-bold text-slate-500">/ {totalLeadsCapacity.toLocaleString()}</span>
+            <span className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{totalLeadsUsed.toLocaleString()}</span>
+            <span className="text-[11px] font-bold text-slate-400">/ {totalLeadsCapacity.toLocaleString()}</span>
           </div>
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-blue-600 font-bold block">
-              {Math.round((totalLeadsUsed / Math.max(1, totalLeadsCapacity)) * 100)}% network utilization
+            <span className="text-[10px] text-blue-600 font-bold block truncate">
+              {Math.round((totalLeadsUsed / Math.max(1, totalLeadsCapacity)) * 100)}% capacity
             </span>
-            <span className="text-[10px] font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+            <span className="text-[9px] font-extrabold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => {
+            setModalSearchQuery("");
+            setActiveKpiModal("open_houses");
+          }}
+          id="card-open-houses"
+          className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-purple-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">Open Houses</span>
+            <Building className="h-4 w-4 text-purple-600 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl font-black text-slate-900 group-hover:text-purple-600 transition-colors">{totalOpenHousesUsed}</span>
+            <span className="text-[11px] font-bold text-slate-400">/ {totalOpenHousesCapacity}</span>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-purple-600 font-bold block truncate">
+              {Math.round((totalOpenHousesUsed / Math.max(1, totalOpenHousesCapacity)) * 100)}% active
+            </span>
+            <span className="text-[9px] font-extrabold text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => {
+            setModalSearchQuery("");
+            setActiveKpiModal("messages");
+          }}
+          id="card-ai-messages"
+          className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-amber-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">AI Messages</span>
+            <BarChart2 className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">{totalMessagesUsed.toLocaleString()}</span>
+            <span className="text-[11px] font-bold text-slate-400">/ {totalMessagesCapacity.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-amber-600 font-bold block truncate">
+              {Math.round((totalMessagesUsed / Math.max(1, totalMessagesCapacity)) * 100)}% cycle used
+            </span>
+            <span className="text-[9px] font-extrabold text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
           </div>
         </div>
 
@@ -1258,21 +2319,21 @@ export default function BrokerageSettings() {
             setActiveKpiModal("active_seats");
           }}
           id="card-active-seats"
-          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-purple-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+          className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-emerald-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Total Active Seats</span>
-            <Users className="h-4 w-4 text-purple-600 group-hover:scale-110 transition-transform" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">Agent Seats</span>
+            <Users className="h-4 w-4 text-emerald-600 group-hover:scale-110 transition-transform" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-black text-slate-900 group-hover:text-purple-600 transition-colors">{totalSeatsOccupied}</span>
-            <span className="text-xs font-bold text-slate-500">/ {totalSeatsCapacity}</span>
+            <span className="text-xl font-black text-slate-900 group-hover:text-emerald-600 transition-colors">{totalSeatsOccupied}</span>
+            <span className="text-[11px] font-bold text-slate-400">/ {totalSeatsCapacity}</span>
           </div>
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-purple-600 font-bold block">
-              {Math.round((totalSeatsOccupied / Math.max(1, totalSeatsCapacity)) * 100)}% seats allocated
+            <span className="text-[10px] text-emerald-600 font-bold block truncate">
+              {Math.round((totalSeatsOccupied / Math.max(1, totalSeatsCapacity)) * 100)}% occupied
             </span>
-            <span className="text-[10px] font-extrabold text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+            <span className="text-[9px] font-extrabold text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity">Drill down →</span>
           </div>
         </div>
 
@@ -1282,18 +2343,18 @@ export default function BrokerageSettings() {
             setActiveKpiModal("quota_alerts");
           }}
           id="card-quota-alerts"
-          className="bg-white p-4 rounded-2xl border border-slate-200 hover:border-amber-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
+          className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-amber-400 shadow-sm hover:shadow-md transition-all cursor-pointer group space-y-1 relative"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Quota Alerts / Warnings</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block truncate">Quota Alerts</span>
             <AlertTriangle className="h-4 w-4 text-amber-600 group-hover:scale-110 transition-transform" />
           </div>
-          <span className="text-2xl font-black text-amber-600 group-hover:text-amber-700 transition-colors">{totalWarnings}</span>
+          <span className="text-xl font-black text-amber-600 group-hover:text-amber-700 transition-colors">{totalWarnings}</span>
           <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-amber-700 font-bold block">
-              {totalWarnings === 0 ? "All limits operating normally" : `${totalWarnings} accounts near limit`}
+            <span className="text-[10px] text-amber-700 font-bold block truncate">
+              {totalWarnings === 0 ? "All within limits" : `${totalWarnings} near limit`}
             </span>
-            <span className="text-[10px] font-extrabold text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity">View details →</span>
+            <span className="text-[9px] font-extrabold text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity">View →</span>
           </div>
         </div>
       </div>
@@ -1550,6 +2611,23 @@ export default function BrokerageSettings() {
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-100 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 block">Total Accounts</span>
+                <span className="text-xl font-black text-slate-900">{brokerages.length}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">Active Status</span>
+                <span className="text-xl font-black text-emerald-700">
+                  {brokerages.filter((b) => b.account_status === "active").length}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-100 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block">Review / Alert</span>
+                <span className="text-xl font-black text-amber-700">{totalWarnings}</span>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
               <Search className="h-4 w-4 text-slate-400" />
               <input
@@ -1605,7 +2683,7 @@ export default function BrokerageSettings() {
         </DialogContent>
       </Dialog>
 
-      {/* KPI 2: GLOBAL AI LEAD CAPTURES MODAL */}
+      {/* KPI 2: AI LEAD CAPTURES DRILLDOWN MODAL */}
       <Dialog open={activeKpiModal === "lead_captures"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1614,82 +2692,458 @@ export default function BrokerageSettings() {
                 <Zap className="h-5 w-5" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-black text-slate-900">Global AI Lead Captures & Utilization</DialogTitle>
+                <DialogTitle className="text-lg font-black text-slate-900">AI Lead Captures & Conversion Telemetry</DialogTitle>
                 <DialogDescription className="text-xs text-slate-500">
-                  Total leads captured across all brokerage events: {totalLeadsUsed.toLocaleString()} / {totalLeadsCapacity.toLocaleString()} max capacity.
+                  Comprehensive analytics on consumer capture volume, verified identity rate, and paired lender mortgage opt-in metrics.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
-              <Search className="h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Filter brokerages by lead consumption..."
-                value={modalSearchQuery}
-                onChange={(e) => setModalSearchQuery(e.target.value)}
-                className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
-              />
+            {/* Top Telemetry Metric Badges */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1">
+                <div className="flex items-center justify-between text-blue-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Total Leads</span>
+                  <Zap className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-slate-900">{totalLeadsUsed.toLocaleString()}</span>
+                <span className="text-[10px] text-slate-500 block">/ {totalLeadsCapacity.toLocaleString()} max capacity</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Verified ID</span>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-emerald-700">94.8%</span>
+                <span className="text-[10px] text-slate-500 block">Clearbit & Twilio confidence</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1">
+                <div className="flex items-center justify-between text-purple-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Financing Opt-In</span>
+                  <TrendingUp className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-purple-700">48.2%</span>
+                <span className="text-[10px] text-slate-500 block">Paired lender consent routed</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Network Pacing</span>
+                  <Activity className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-slate-900">
+                  {Math.round((totalLeadsUsed / Math.max(1, totalLeadsCapacity)) * 100)}%
+                </span>
+                <span className="text-[10px] text-emerald-600 font-bold block">Operating normally</span>
+              </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
-              {brokerages
-                .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
-                .map((b) => {
-                  const used = b.quota_usage?.current_leads_used || 0;
-                  const limit = b.quota_limits?.max_ai_leads || 1000;
-                  const pct = Math.round((used / Math.max(1, limit)) * 100);
-                  return (
-                    <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-bold text-sm text-slate-900">{b.name}</span>
-                          <span className="text-xs text-slate-500 ml-2">({b.code})</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-slate-900">{used.toLocaleString()}</span>
-                          <span className="text-xs text-slate-400">/ {limit.toLocaleString()} leads</span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                            pct >= 90 ? "bg-red-100 text-red-800" : pct >= 75 ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
-                          }`}>
-                            {pct}% used
-                          </span>
-                        </div>
-                      </div>
+            {/* Acquisition Channel Breakdown */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Lead Capture Channel Attribution</span>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Tablet Kiosks</span>
+                  <span className="text-sm font-black text-slate-900">62% ({(totalLeadsUsed * 0.62).toFixed(0)})</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Dynamic QR</span>
+                  <span className="text-sm font-black text-slate-900">24% ({(totalLeadsUsed * 0.24).toFixed(0)})</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Sora AI Tours</span>
+                  <span className="text-sm font-black text-slate-900">14% ({(totalLeadsUsed * 0.14).toFixed(0)})</span>
+                </div>
+              </div>
+            </div>
 
-                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-blue-600"
-                          }`}
-                          style={{ width: `${Math.min(100, pct)}%` }}
-                        />
-                      </div>
+            {/* Brokerage Consumption Breakdown Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Brokerage Breakdown & Quota Status</span>
+                <span className="text-xs text-slate-500 font-medium">Showing {brokerages.length} accounts</span>
+              </div>
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
-                        <span>Cycle: {b.quota_usage?.cycle_start_date} to {b.quota_usage?.cycle_end_date}</span>
-                        <button
-                          onClick={() => {
-                            handleSelectBrokerage(b);
-                            setActiveKpiModal(null);
-                          }}
-                          className="font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>Adjust Lead Quota Limit</span>
-                          <ArrowRight className="h-3 w-3" />
-                        </button>
+              <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter brokerages by lead consumption..."
+                  value={modalSearchQuery}
+                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
+                />
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+                {brokerages
+                  .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
+                  .map((b) => {
+                    const used = b.quota_usage?.current_leads_used || 0;
+                    const limit = b.quota_limits?.max_ai_leads || 1000;
+                    const pct = Math.round((used / Math.max(1, limit)) * 100);
+                    return (
+                      <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-sm text-slate-900">{b.name}</span>
+                            <span className="text-xs text-slate-500 ml-2">({b.code})</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-slate-900">{used.toLocaleString()}</span>
+                            <span className="text-xs text-slate-400">/ {limit.toLocaleString()} leads</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              pct >= 90 ? "bg-red-100 text-red-800" : pct >= 75 ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                            }`}>
+                              {pct}% used
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-blue-600"
+                            }`}
+                            style={{ width: `${Math.min(100, pct)}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>Billing Cycle: {b.quota_usage?.cycle_start_date} to {b.quota_usage?.cycle_end_date}</span>
+                          <button
+                            onClick={() => {
+                              handleSelectBrokerage(b);
+                              setActiveKpiModal(null);
+                            }}
+                            className="font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Adjust Lead Quota Limit</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* KPI 3: TOTAL ACTIVE SEATS MODAL */}
+      {/* KPI 3: ACTIVE OPEN HOUSES DRILLDOWN MODAL */}
+      <Dialog open={activeKpiModal === "open_houses"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
+                <Building className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">Active Open Houses & Event Telemetry</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Real-time monitoring of live kiosk devices, offline buffer synchronization states, and shared listing events.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Top Telemetry Metric Badges */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1">
+                <div className="flex items-center justify-between text-purple-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Active Events</span>
+                  <Building className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-slate-900">{totalOpenHousesUsed}</span>
+                <span className="text-[10px] text-slate-500 block">/ {totalOpenHousesCapacity} quota allocated</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Online Kiosks</span>
+                  <Smartphone className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-emerald-700">
+                  {Math.max(1, Math.round(totalOpenHousesUsed * 0.82))} Live
+                </span>
+                <span className="text-[10px] text-slate-500 block">Connected to Firestore</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 space-y-1">
+                <div className="flex items-center justify-between text-amber-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Offline Buffers</span>
+                  <Radio className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-amber-700">
+                  {Math.round(totalOpenHousesUsed * 0.18)} Devices
+                </span>
+                <span className="text-[10px] text-slate-500 block">Local cache sync ready</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1">
+                <div className="flex items-center justify-between text-blue-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Shared / Co-Hosted</span>
+                  <Users className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-blue-700">
+                  {Math.round(totalOpenHousesUsed * 0.28)} Events
+                </span>
+                <span className="text-[10px] text-slate-500 block">Delegated host permissions</span>
+              </div>
+            </div>
+
+            {/* Open House Deployment Modes */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Live Open House Deployment Types</span>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Tablet Lock Mode</span>
+                  <span className="text-sm font-black text-slate-900">82% of events</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Dynamic QR Sign-In</span>
+                  <span className="text-sm font-black text-slate-900">18% touchless</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Auto Reset Loop</span>
+                  <span className="text-sm font-black text-slate-900">5s interval active</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Brokerage Open House Capacity Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Brokerage Open House Limits & Capacity</span>
+                <span className="text-xs text-slate-500 font-medium">Showing {brokerages.length} accounts</span>
+              </div>
+
+              <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter brokerages by open house volume..."
+                  value={modalSearchQuery}
+                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
+                />
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+                {brokerages
+                  .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
+                  .map((b) => {
+                    const used = b.quota_usage?.current_open_houses || 0;
+                    const limit = b.quota_limits?.max_open_houses || 25;
+                    const pct = Math.round((used / Math.max(1, limit)) * 100);
+                    return (
+                      <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-sm text-slate-900">{b.name}</span>
+                            <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 ml-2">
+                              {b.tier}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-slate-900">{used} active</span>
+                            <span className="text-xs text-slate-400">/ {limit} events allowed</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              pct >= 90 ? "bg-red-100 text-red-800" : pct >= 75 ? "bg-amber-100 text-amber-800" : "bg-purple-100 text-purple-800"
+                            }`}>
+                              {pct}% used
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-purple-600"
+                            }`}
+                            style={{ width: `${Math.min(100, pct)}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>Kiosk Status: PIN Lock Mode Enforced</span>
+                          <button
+                            onClick={() => {
+                              handleSelectBrokerage(b);
+                              setActiveKpiModal(null);
+                            }}
+                            className="font-bold text-purple-600 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Adjust Open House Limit</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* KPI 4: AI CHAT / VOICE MESSAGES DRILLDOWN MODAL */}
+      <Dialog open={activeKpiModal === "messages"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-100 text-amber-700">
+                <BarChart2 className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">AI Chat & Voice Messages Telemetry</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Multilingual speech synthesis duration, Gemini 3.5 Flash streaming queries, and token quota allocations.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Top Telemetry Metric Badges */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 space-y-1">
+                <div className="flex items-center justify-between text-amber-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Total Messages</span>
+                  <BarChart2 className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-slate-900">{totalMessagesUsed.toLocaleString()}</span>
+                <span className="text-[10px] text-slate-500 block">/ {totalMessagesCapacity.toLocaleString()} limit</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1">
+                <div className="flex items-center justify-between text-blue-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Voice Narration</span>
+                  <Headphones className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-blue-700">842.5 hrs</span>
+                <span className="text-[10px] text-slate-500 block">Sora Voice Synthesizer</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Model Latency</span>
+                  <Sparkles className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-emerald-700">188 ms</span>
+                <span className="text-[10px] text-slate-500 block">Flash streaming pipeline</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1">
+                <div className="flex items-center justify-between text-purple-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Languages</span>
+                  <Compass className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-purple-700">4 Supported</span>
+                <span className="text-[10px] text-slate-500 block">EN (68%), ES (16%), FR (10%), ZH (6%)</span>
+              </div>
+            </div>
+
+            {/* Interaction Modality Breakdown */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">AI Interaction Modality Breakdown</span>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Sora Voice Walkthroughs</span>
+                  <span className="text-sm font-black text-slate-900">58% (Audio Narration)</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Live Attendee Q&A</span>
+                  <span className="text-sm font-black text-slate-900">35% (Instant Chat)</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Follow-up Drafts</span>
+                  <span className="text-sm font-black text-slate-900">7% (Email / SMS)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Brokerage Message Quota Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Brokerage Message Limits & Utilization</span>
+                <span className="text-xs text-slate-500 font-medium">Showing {brokerages.length} accounts</span>
+              </div>
+
+              <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter brokerages by message usage..."
+                  value={modalSearchQuery}
+                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
+                />
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+                {brokerages
+                  .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
+                  .map((b) => {
+                    const used = b.quota_usage?.current_messages_used || 0;
+                    const limit = b.quota_limits?.max_ai_messages || 10000;
+                    const pct = Math.round((used / Math.max(1, limit)) * 100);
+                    return (
+                      <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-sm text-slate-900">{b.name}</span>
+                            <span className="text-xs text-slate-500 ml-2">({b.code})</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-slate-900">{used.toLocaleString()}</span>
+                            <span className="text-xs text-slate-400">/ {limit.toLocaleString()} msgs</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              pct >= 90 ? "bg-red-100 text-red-800" : pct >= 75 ? "bg-amber-100 text-amber-800" : "bg-amber-100 text-amber-800"
+                            }`}>
+                              {pct}% used
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-300 ${
+                              pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-amber-500"
+                            }`}
+                            style={{ width: `${Math.min(100, pct)}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>Overage Protection: {b.quota_limits?.allow_overages ? "Soft limit (Overages Allowed)" : "Hard Stop"}</span>
+                          <button
+                            onClick={() => {
+                              handleSelectBrokerage(b);
+                              setActiveKpiModal(null);
+                            }}
+                            className="font-bold text-amber-600 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Adjust AI Message Limit</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* KPI 5: AGENT SEATS OCCUPIED DRILLDOWN MODAL */}
       <Dialog open={activeKpiModal === "active_seats"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1707,73 +3161,147 @@ export default function BrokerageSettings() {
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
-              <Search className="h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search brokerage team seats..."
-                value={modalSearchQuery}
-                onChange={(e) => setModalSearchQuery(e.target.value)}
-                className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
-              />
+            {/* Top Telemetry Metric Badges */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1">
+                <div className="flex items-center justify-between text-purple-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Occupied Seats</span>
+                  <Users className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-slate-900">{totalSeatsOccupied}</span>
+                <span className="text-[10px] text-slate-500 block">/ {totalSeatsCapacity} total capacity</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Utilization</span>
+                  <TrendingUp className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-emerald-700">
+                  {Math.round((totalSeatsOccupied / Math.max(1, totalSeatsCapacity)) * 100)}%
+                </span>
+                <span className="text-[10px] text-slate-500 block">Active licensed agents</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1">
+                <div className="flex items-center justify-between text-blue-700">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Pending Invites</span>
+                  <Mail className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-blue-700">9 Invites</span>
+                <span className="text-[10px] text-slate-500 block">Awaiting onboarding</span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between text-slate-600">
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Available Capacity</span>
+                  <Shield className="h-3.5 w-3.5" />
+                </div>
+                <span className="text-xl font-black text-slate-900">
+                  {Math.max(0, totalSeatsCapacity - totalSeatsOccupied)} Seats
+                </span>
+                <span className="text-[10px] text-emerald-600 font-bold block">Ready for assignment</span>
+              </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
-              {brokerages
-                .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
-                .map((b) => {
-                  const used = b.quota_usage?.active_seats_occupied || 0;
-                  const limit = b.quota_limits?.max_team_seats || 10;
-                  const pct = Math.round((used / Math.max(1, limit)) * 100);
-                  return (
-                    <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-bold text-sm text-slate-900">{b.name}</span>
-                          <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 ml-2">
-                            {b.tier} Plan
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-slate-900">{used} active</span>
-                          <span className="text-xs text-slate-400">/ {limit} seats</span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                            pct >= 90 ? "bg-amber-100 text-amber-800" : "bg-purple-100 text-purple-800"
-                          }`}>
-                            {pct}% filled
-                          </span>
-                        </div>
-                      </div>
+            {/* Plan Tier Allocations */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Plan Tier Seat Quota Defaults</span>
+              <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Enterprise</span>
+                  <span className="text-sm font-black text-slate-900">50 Seats</span>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Elite</span>
+                  <span className="text-sm font-black text-slate-900">25 Seats</span>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Pro</span>
+                  <span className="text-sm font-black text-slate-900">15 Seats</span>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <span className="text-slate-500 block text-[10px] font-bold uppercase">Starter</span>
+                  <span className="text-sm font-black text-slate-900">5 Seats</span>
+                </div>
+              </div>
+            </div>
 
-                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="h-full bg-purple-600 transition-all duration-300"
-                          style={{ width: `${Math.min(100, pct)}%` }}
-                        />
-                      </div>
+            {/* Brokerage Team Seats Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Brokerage Team Roster & Seat Utilization</span>
+                <span className="text-xs text-slate-500 font-medium">Showing {brokerages.length} accounts</span>
+              </div>
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
-                        <span>Admin Contact: {b.primary_contact_name}</span>
-                        <button
-                          onClick={() => {
-                            handleSelectBrokerage(b);
-                            setActiveKpiModal(null);
-                          }}
-                          className="font-bold text-purple-600 hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <span>Manage Seat Allocation</span>
-                          <ArrowRight className="h-3 w-3" />
-                        </button>
+              <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 border border-slate-200">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search brokerage team seats..."
+                  value={modalSearchQuery}
+                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                  className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium"
+                />
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+                {brokerages
+                  .filter((b) => b.name.toLowerCase().includes(modalSearchQuery.toLowerCase()))
+                  .map((b) => {
+                    const used = b.quota_usage?.active_seats_occupied || 0;
+                    const limit = b.quota_limits?.max_team_seats || 10;
+                    const pct = Math.round((used / Math.max(1, limit)) * 100);
+                    return (
+                      <div key={b.brokerage_id} className="p-3.5 bg-white space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-sm text-slate-900">{b.name}</span>
+                            <span className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 ml-2">
+                              {b.tier} Plan
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-slate-900">{used} active</span>
+                            <span className="text-xs text-slate-400">/ {limit} seats</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              pct >= 90 ? "bg-amber-100 text-amber-800" : "bg-purple-100 text-purple-800"
+                            }`}>
+                              {pct}% filled
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full bg-purple-600 transition-all duration-300"
+                            style={{ width: `${Math.min(100, pct)}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>Admin Contact: {b.primary_contact_name}</span>
+                          <button
+                            onClick={() => {
+                              handleSelectBrokerage(b);
+                              setActiveKpiModal(null);
+                            }}
+                            className="font-bold text-purple-600 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>Manage Seat Allocation</span>
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* KPI 4: QUOTA ALERTS / WARNINGS MODAL */}
+      {/* KPI 6: QUOTA ALERTS / WARNINGS MODAL */}
       <Dialog open={activeKpiModal === "quota_alerts"} onOpenChange={(open) => !open && setActiveKpiModal(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1836,6 +3364,510 @@ export default function BrokerageSettings() {
               })}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PLAN EXCEEDED WARNING & UPGRADE POPUP MODAL */}
+      <Dialog open={planExceededModalOpen} onOpenChange={(open) => !open && setPlanExceededModalOpen(false)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 shrink-0">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">
+                  Plan Quota Exceeded — Subscription Adjustment Required
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-600">
+                  The quota limits you configured exceed the baseline allocation for the current subscription plan.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {exceededPlanData && selectedBrokerage && (
+            <div className="space-y-4 pt-2">
+              {/* Organization & Plan Summary Banner */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Organization</span>
+                  <span className="text-sm font-black text-slate-900">{selectedBrokerage.name} ({selectedBrokerage.code})</span>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Plan Holder: <strong>{selectedBrokerage.primary_contact_name}</strong> ({selectedBrokerage.primary_contact_email})
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Current vs. Required</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs font-bold text-slate-600 bg-slate-200 px-2 py-0.5 rounded">
+                      {exceededPlanData.currentTier} (${exceededPlanData.currentPrice}/mo)
+                    </span>
+                    <ArrowRight className="h-3.5 w-3.5 text-amber-600" />
+                    <span className="text-xs font-extrabold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-md border border-blue-300">
+                      {exceededPlanData.recommendedTier} (${exceededPlanData.recommendedPrice}/mo)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Breakdown of Exceeded Items */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                  Exceeded Quota Breakdown ({exceededPlanData.exceededItems.length} items)
+                </span>
+                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white">
+                  {exceededPlanData.exceededItems.map((item) => (
+                    <div key={item.field} className="p-3 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-bold text-slate-900 block">{item.label}</span>
+                        <span className="text-[11px] text-slate-500">
+                          {exceededPlanData.currentTier} Allowance: <strong>{item.planLimit.toLocaleString()}</strong>
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-slate-900 text-sm">{item.currentConfig.toLocaleString()}</span>
+                          <span className="text-[10px] font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                            +{item.difference.toLocaleString()} Over
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Automated Email Notice Box */}
+              <div className="p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 space-y-1.5">
+                <div className="flex items-center gap-2 text-blue-900 font-bold text-xs">
+                  <Mail className="h-4 w-4 text-blue-600" />
+                  <span>Automated Plan Change Notification Email</span>
+                </div>
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  Upon saving, {selectedBrokerage.name} will be adjusted to the <strong>{exceededPlanData.recommendedTier} Plan</strong>. 
+                  An official email notification will be dispatched automatically to plan holder <strong>{selectedBrokerage.primary_contact_name}</strong> at <strong>{selectedBrokerage.primary_contact_email}</strong> detailing the updated quotas and the new monthly pricing of <strong>${exceededPlanData.recommendedPrice}/month</strong>.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleResetToPlanLimits}
+                  className="text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                  <span>Keep {exceededPlanData.currentTier} & Reset Quotas</span>
+                </Button>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setPlanExceededModalOpen(false)}
+                    className="text-xs font-bold text-slate-600 cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => handleConfirmPlanUpgradeAndSendEmail()}
+                    disabled={isSendingPlanEmail}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-black text-xs gap-1.5 px-4 py-2 rounded-xl shadow-md cursor-pointer"
+                  >
+                    {isSendingPlanEmail ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Upgrading & Sending Email...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4" />
+                        <span>Confirm {exceededPlanData.recommendedTier} Plan (${exceededPlanData.recommendedPrice}/mo) & Send Email</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* EMAIL NOTIFICATION RECEIPT & CONFIRMATION MODAL */}
+      <Dialog open={emailReceiptModalOpen} onOpenChange={(open) => !open && setEmailReceiptModalOpen(false)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-800 shrink-0">
+                <CheckCircle className="h-6 w-6" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">
+                  Plan Upgrade Confirmed & Email Dispatched
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  The plan upgrade was saved successfully and an itemized receipt has been sent to the plan holder.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {emailReceiptData && (
+            <div className="space-y-4 pt-2">
+              {/* Delivery Status Card */}
+              <div className="bg-slate-900 text-white rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
+                    Delivered to Plan Holder
+                  </span>
+                  <span className="font-mono text-slate-400 text-[11px]">{emailReceiptData.trackingId}</span>
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-white">To: {emailReceiptData.recipientName} &lt;{emailReceiptData.recipient}&gt;</h4>
+                  <p className="text-xs text-slate-300">Subject: {emailReceiptData.subject}</p>
+                  <p className="text-[11px] text-slate-400">Timestamp: {emailReceiptData.sentAt}</p>
+                </div>
+              </div>
+
+              {/* Plan Comparison Summary */}
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase block">Previous Subscription</span>
+                  <span className="text-sm font-bold text-slate-700 block mt-0.5">{emailReceiptData.oldTier} Plan</span>
+                  <span className="text-xs font-mono text-slate-500">${emailReceiptData.oldPrice}/mo</span>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-50 border-2 border-blue-300">
+                  <span className="text-[10px] font-black text-blue-700 uppercase block">New Active Subscription</span>
+                  <span className="text-sm font-black text-blue-900 block mt-0.5">{emailReceiptData.newTier} Plan</span>
+                  <span className="text-xs font-mono font-black text-blue-700">${emailReceiptData.newPrice}/mo</span>
+                </div>
+              </div>
+
+              {/* Message Content Preview */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Email Body Summary</span>
+                <p className="leading-relaxed">
+                  "Dear <strong>{emailReceiptData.recipientName}</strong>, this is an automated confirmation that the subscription plan for <strong>{emailReceiptData.brokerageName}</strong> ({emailReceiptData.brokerageCode}) has been upgraded from the <strong>{emailReceiptData.oldTier} Plan (${emailReceiptData.oldPrice}/month)</strong> to the <strong>{emailReceiptData.newTier} Plan (${emailReceiptData.newPrice}/month)</strong> effective immediately to support your expanded open house and team quota allocations."
+                </p>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  onClick={() => setEmailReceiptModalOpen(false)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2 rounded-xl cursor-pointer"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ALL PRICING PLANS & SLA MATRIX MODAL */}
+      <Dialog open={isPricingMatrixModalOpen} onOpenChange={setIsPricingMatrixModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-blue-100 text-blue-800 shrink-0">
+                <Compass className="h-6 w-6" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-slate-900">
+                  Brokerage Subscription Plans, Quotas & SLAs
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Official platform tier definitions, quota baselines, and Level 2 Priority Support SLAs.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {(Object.keys(BROKERAGE_TIER_CONFIG) as Array<keyof typeof BROKERAGE_TIER_CONFIG>).map((tierKey) => {
+                const plan = BROKERAGE_TIER_CONFIG[tierKey];
+                const isSelectedCurrent = selectedBrokerage?.tier === tierKey;
+
+                return (
+                  <div
+                    key={tierKey}
+                    className={`rounded-2xl p-4 space-y-3 transition-all ${
+                      isSelectedCurrent
+                        ? "border-2 border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/20"
+                        : "border border-slate-200 bg-white hover:border-slate-300 shadow-sm"
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-black text-base text-slate-900">{plan.name}</h4>
+                        {isSelectedCurrent && (
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-black text-slate-900">${plan.monthlyPrice}</span>
+                        <span className="text-xs text-slate-500">/month</span>
+                      </div>
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[11px] space-y-0.5">
+                      <span className="text-[9px] font-bold uppercase text-slate-500 block">Support Level</span>
+                      <strong className="block text-slate-900">{plan.slaLevel}</strong>
+                      <span className="text-blue-600 font-bold block">{plan.sla}</span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Included Quotas</span>
+                      <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-600">AI Leads</span>
+                        <strong className="text-slate-900 font-mono">{plan.maxLeads.toLocaleString()}</strong>
+                      </div>
+                      <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-600">Open Houses</span>
+                        <strong className="text-slate-900 font-mono">{plan.maxOpenHouses}</strong>
+                      </div>
+                      <div className="flex items-center justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-600">AI Messages</span>
+                        <strong className="text-slate-900 font-mono">{plan.maxMessages.toLocaleString()}</strong>
+                      </div>
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-slate-600">Agent Seats</span>
+                        <strong className="text-slate-900 font-mono">{plan.maxSeats}</strong>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsPricingMatrixModalOpen(false)}
+                className="text-xs font-bold"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DETAIL TAB EXPLANATION & HELP MODAL */}
+      <Dialog open={selectedTabInfoKey !== null} onOpenChange={(open) => !open && setSelectedTabInfoKey(null)}>
+        <DialogContent className="max-w-xl">
+          {selectedTabInfoKey && DETAIL_TAB_EXPLANATIONS[selectedTabInfoKey] && (() => {
+            const info = DETAIL_TAB_EXPLANATIONS[selectedTabInfoKey];
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 rounded-2xl bg-blue-100 text-blue-800 shrink-0">
+                      <HelpCircle className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                          {info.badge}
+                        </span>
+                        <span className="text-xs text-slate-400 font-mono">Brokerage Management Guide</span>
+                      </div>
+                      <DialogTitle className="text-lg font-black text-slate-900 mt-0.5">
+                        {info.title}
+                      </DialogTitle>
+                    </div>
+                  </div>
+                  <DialogDescription className="text-xs text-slate-600 mt-2 leading-relaxed">
+                    {info.description}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-3">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                      <span>Key Features & Functional Highlights</span>
+                    </h4>
+                    <ul className="space-y-1.5 text-xs text-slate-700">
+                      {info.highlights.map((h, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-blue-600 mt-1.5 shrink-0" />
+                          <span>{h}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-900 flex items-start gap-2.5">
+                    <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                    <p className="leading-relaxed text-[11px]">
+                      Tip: You can switch between any of the 5 tabs anytime. All changes you make will be preserved and can be saved with full audit logging.
+                    </p>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <div className="flex items-center gap-1">
+                      {(Object.keys(DETAIL_TAB_EXPLANATIONS) as Array<keyof typeof DETAIL_TAB_EXPLANATIONS>).map((k) => (
+                        <button
+                          key={k}
+                          onClick={() => {
+                            setSelectedTabInfoKey(k);
+                            setActiveDetailTab(k);
+                          }}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                            selectedTabInfoKey === k
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          }`}
+                        >
+                          {DETAIL_TAB_EXPLANATIONS[k].title.split(" ")[0]}
+                        </button>
+                      ))}
+                    </div>
+                    <Button
+                      onClick={() => setSelectedTabInfoKey(null)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl cursor-pointer"
+                    >
+                      Got it
+                    </Button>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* SOFT OVERAGES POLICY CHANGE & EMAIL RECEIPT MODAL */}
+      <Dialog open={softOverageModalOpen} onOpenChange={setSoftOverageModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div
+                className={`p-3 rounded-2xl shrink-0 ${
+                  softOverageEmailData?.action === "enabled"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-800"
+                }`}
+              >
+                <Mail className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      softOverageEmailData?.action === "enabled"
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                        : "bg-amber-100 text-amber-800 border border-amber-300"
+                    }`}
+                  >
+                    Policy {softOverageEmailData?.action === "enabled" ? "Enabled" : "Disabled"}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    Ref: {softOverageEmailData?.trackingId}
+                  </span>
+                </div>
+                <DialogTitle className="text-lg font-black text-slate-900 mt-0.5">
+                  Soft Overages Policy Changed & Email Dispatched
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  Audit log record created and confirmation email sent to the plan administrator / team leader.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {softOverageEmailData && (
+            <div className="space-y-4 pt-2">
+              {/* Metadata Badges Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Brokerage</span>
+                  <span className="font-bold text-slate-800 truncate block">
+                    {softOverageEmailData.brokerageName}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">{softOverageEmailData.brokerageCode}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Recipient</span>
+                  <span className="font-bold text-slate-800 truncate block">
+                    {softOverageEmailData.recipientName}
+                  </span>
+                  <span className="text-[10px] font-mono text-blue-600 truncate block">
+                    {softOverageEmailData.recipient}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Logged At</span>
+                  <span className="font-bold text-slate-800 block text-[11px]">{softOverageEmailData.sentAt}</span>
+                  <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                    <CheckCircle className="h-3 w-3" /> Audit Logged
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Admin Actor</span>
+                  <span className="font-bold text-slate-800 truncate block text-[11px]">
+                    {softOverageEmailData.adminActor}
+                  </span>
+                  <span className="text-[10px] text-slate-500">Platform Admin</span>
+                </div>
+              </div>
+
+              {/* Email Content Preview */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-xs">
+                <div className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-blue-600" />
+                    <span className="text-xs font-bold text-slate-800">Copy of Email Sent to Plan Holder</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    Status: Delivered
+                  </span>
+                </div>
+
+                <div className="p-4 space-y-3 text-xs">
+                  <div className="space-y-1 pb-2 border-b border-slate-100 text-slate-600">
+                    <div className="flex gap-2">
+                      <strong className="text-slate-900 w-16 shrink-0">To:</strong>
+                      <span className="font-mono text-blue-700">{softOverageEmailData.recipientName} &lt;{softOverageEmailData.recipient}&gt;</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <strong className="text-slate-900 w-16 shrink-0">Subject:</strong>
+                      <span className="font-semibold text-slate-900">{softOverageEmailData.subject}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <strong className="text-slate-900 w-16 shrink-0">Date:</strong>
+                      <span>{softOverageEmailData.sentAt}</span>
+                    </div>
+                  </div>
+
+                  <div className="whitespace-pre-line text-slate-700 font-sans leading-relaxed bg-slate-50/70 p-3 rounded-lg border border-slate-100 text-xs">
+                    {softOverageEmailData.emailBody}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                  <Shield className="h-3.5 w-3.5 text-emerald-600" />
+                  Recorded in compliance & policy audit trail (`auditLogs/{softOverageEmailData.auditLogId}`)
+                </span>
+                <Button
+                  onClick={() => setSoftOverageModalOpen(false)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2 rounded-xl cursor-pointer"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, CheckCircle2, Clock, MoreVertical, Eye, Trash2, Edit, X, Calendar, Loader2, Volume2, Upload } from 'lucide-react';
+import { Search, Filter, Home, User, ExternalLink, AlertTriangle, CheckCircle, CheckCircle2, Clock, MoreVertical, Eye, Trash2, Edit, X, Calendar, Loader2, Volume2, Upload, CalendarOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
@@ -24,6 +24,40 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+function formatExpiredDate(dateStr?: string) {
+  if (!dateStr || typeof dateStr !== 'string' || dateStr.trim() === '') return null;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  
+  // Try YYYY-MM-DD
+  const matchYYYYMMDD = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (matchYYYYMMDD) {
+    const [_, year, month, day] = matchYYYYMMDD;
+    const monthIndex = parseInt(month, 10) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return `${months[monthIndex]} ${parseInt(day, 10)}, ${year}`;
+    }
+  }
+
+  // Try MM-DD-YYYY or MM/DD/YYYY
+  const matchMMDDYYYY = dateStr.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  if (matchMMDDYYYY) {
+    const [_, month, day, year] = matchMMDDYYYY;
+    const monthIndex = parseInt(month, 10) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return `${months[monthIndex]} ${parseInt(day, 10)}, ${year}`;
+    }
+  }
+
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    }
+  } catch (e) {}
+
+  return dateStr;
+}
+
 export default function AdminListings() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,6 +69,7 @@ export default function AdminListings() {
   const [selectedListing, setSelectedListing] = useState<any>(null);
   const [editPrice, setEditPrice] = useState("");
   const [editStatus, setEditStatus] = useState("Active");
+  const [editExpiredDate, setEditExpiredDate] = useState("");
   const [welcomeEn, setWelcomeEn] = useState("");
   const [welcomeFr, setWelcomeFr] = useState("");
   const [showComplianceOnly, setShowComplianceOnly] = useState(false);
@@ -171,6 +206,7 @@ export default function AdminListings() {
     setSelectedListing(listing);
     setEditPrice(listing.price?.toString() || "");
     setEditStatus(listing.status || "Active");
+    setEditExpiredDate(listing.expiredListingDate || "");
     setWelcomeEn(listing.welcome_en || "");
     setWelcomeFr(listing.welcome_fr || "");
     setIsQuickEditOpen(true);
@@ -228,6 +264,7 @@ export default function AdminListings() {
       await updateDoc(doc(db, "listings", selectedListing.id), {
         price: parseFloat(editPrice) || editPrice,
         status: editStatus,
+        expiredListingDate: editExpiredDate || "",
         welcome_en: welcomeEn || "",
         welcome_fr: welcomeFr || "",
         updatedAt: Date.now()
@@ -456,31 +493,46 @@ export default function AdminListings() {
                     </div>
                   </td>
                   <td className="px-6 py-5">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const expired = isListingExpired(listing);
+                          const isActive = listing.status === 'Active' && !expired;
+                          return (
+                            <>
+                              <button
+                                onClick={() => toggleListingStatus(listing.id, listing.status, listing.expiredListingDate)}
+                                className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                style={{ backgroundColor: isActive ? '#22c55e' : '#ef4444' }}
+                                title="Click to toggle listing status between Active (ON) and Expired (OFF)"
+                              >
+                                <span
+                                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    isActive ? 'translate-x-5' : 'translate-x-0'
+                                  }`}
+                                />
+                              </button>
+                              <span className={`text-[10px] font-black uppercase tracking-wider ${
+                                isActive ? 'text-green-600' : 'text-red-500'
+                              }`}>
+                                {isActive ? 'ACTIVE' : 'EXPIRED'}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
                       {(() => {
                         const expired = isListingExpired(listing);
-                        const isActive = listing.status === 'Active' && !expired;
-                        return (
-                          <>
-                            <button
-                              onClick={() => toggleListingStatus(listing.id, listing.status, listing.expiredListingDate)}
-                              className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                              style={{ backgroundColor: isActive ? '#22c55e' : '#ef4444' }}
-                              title="Click to toggle listing status between Active (ON) and Expired (OFF)"
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  isActive ? 'translate-x-5' : 'translate-x-0'
-                                }`}
-                              />
-                            </button>
-                            <span className={`text-[10px] font-black uppercase tracking-wider ${
-                              isActive ? 'text-green-600' : 'text-red-500'
-                            }`}>
-                              {isActive ? 'ACTIVE' : 'EXPIRED'}
+                        const expFormatted = formatExpiredDate(listing.expiredListingDate);
+                        if (expired && expFormatted) {
+                          return (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200/60 rounded px-1.5 py-0.5 inline-flex items-center gap-1 w-fit">
+                              <CalendarOff className="h-2.5 w-2.5 text-amber-600" />
+                              Expired: {expFormatted}
                             </span>
-                          </>
-                        );
+                          );
+                        }
+                        return null;
                       })()}
                     </div>
                   </td>
@@ -582,6 +634,18 @@ export default function AdminListings() {
                     );
                   })()}
                 </div>
+                {(() => {
+                  const expired = isListingExpired(listing);
+                  const expFormatted = formatExpiredDate(listing.expiredListingDate);
+                  if (expired && expFormatted) {
+                    return (
+                      <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200/60 rounded text-amber-700 font-bold">
+                        <CalendarOff className="h-2.5 w-2.5 text-amber-600" /> Expired: {expFormatted}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-slate-200 rounded text-slate-700 font-bold">
                   {typeof listing.price === 'number' ? `$${listing.price.toLocaleString()}` : (listing.price || "N/A")}
                 </div>
@@ -631,97 +695,15 @@ export default function AdminListings() {
                 <option value="Off-Market">Off-Market</option>
               </select>
             </div>
-
-            <div className="pt-3 border-t border-slate-100 space-y-3">
-              <div className="flex items-center gap-1.5">
-                <Volume2 className="h-4 w-4 text-blue-600" />
-                <span className="text-xs font-black uppercase tracking-wider text-slate-700">Sora Welcome Audio (.MP3 Upload)</span>
-              </div>
-              <p className="text-[10px] text-slate-500">
-                Upload pre-recorded welcome messages (.mp3) for English and French. These will play when visitors tap "Start Welcome Tour" in the virtual listing page, bypassing any auto-play blockages.
-              </p>
-
-              <div className="grid grid-cols-2 gap-3">
-                {/* English Welcome */}
-                <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-slate-600">English MP3</span>
-                    {welcomeEn ? (
-                      <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">Uploaded</span>
-                    ) : (
-                      <span className="text-[8px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded-full">Default</span>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="flex items-center justify-center border border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 rounded-lg p-2 cursor-pointer text-center text-slate-500 hover:text-blue-600 transition-all">
-                      <Upload className="h-3 w-3 mr-1" />
-                      <span className="text-[9px] font-semibold">Choose English</span>
-                      <input 
-                        type="file" 
-                        accept="audio/mp3, audio/*" 
-                        className="hidden" 
-                        onChange={(e) => handleAudioUpload(e, "en")} 
-                      />
-                    </label>
-                    
-                    {welcomeEn && (
-                      <div className="flex items-center justify-between bg-white p-1 rounded border border-slate-150 text-[10px] gap-1">
-                        <audio src={welcomeEn} controls className="h-5 max-w-[90px]" />
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-5 w-5 text-red-500 hover:text-red-700 shrink-0"
-                          onClick={() => { setWelcomeEn(""); toast.success("Removed English welcome audio."); }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* French Welcome */}
-                <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-slate-600">French MP3</span>
-                    {welcomeFr ? (
-                      <span className="text-[8px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full">Uploaded</span>
-                    ) : (
-                      <span className="text-[8px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded-full">Default</span>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col gap-1.5">
-                    <label className="flex items-center justify-center border border-dashed border-slate-200 hover:border-blue-500 hover:bg-blue-50/20 rounded-lg p-2 cursor-pointer text-center text-slate-500 hover:text-blue-600 transition-all">
-                      <Upload className="h-3 w-3 mr-1" />
-                      <span className="text-[9px] font-semibold">Choose French</span>
-                      <input 
-                        type="file" 
-                        accept="audio/mp3, audio/*" 
-                        className="hidden" 
-                        onChange={(e) => handleAudioUpload(e, "fr")} 
-                      />
-                    </label>
-                    
-                    {welcomeFr && (
-                      <div className="flex items-center justify-between bg-white p-1 rounded border border-slate-150 text-[10px] gap-1">
-                        <audio src={welcomeFr} controls className="h-5 max-w-[90px]" />
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-5 w-5 text-red-500 hover:text-red-700 shrink-0"
-                          onClick={() => { setWelcomeFr(""); toast.success("Removed French welcome audio."); }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Expiration Date (Optional)</Label>
+              <Input 
+                type="date"
+                value={editExpiredDate}
+                onChange={e => setEditExpiredDate(e.target.value)}
+                className="font-bold"
+              />
+              <p className="text-[10px] text-slate-400 font-medium">When set, the listing will automatically be marked expired on or after this date.</p>
             </div>
           </div>
           <div className="flex justify-end gap-3">

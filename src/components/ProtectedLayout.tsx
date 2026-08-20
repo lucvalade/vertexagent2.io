@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { collection, query, orderBy, limit, getDocs, where } from "firebase/firestore";
+import { adminAutosave } from "@/lib/adminAutosave";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -311,6 +312,20 @@ export default function ProtectedLayout() {
     }
   }, [user?.id]);
 
+  // Global Admin Autosave: Whenever admin navigates or route changes, save pending changes
+  useEffect(() => {
+    if (viewMode === 'ADMIN' || user?.role === 'ADMIN' || user?.email === 'luc.valade@gmail.com') {
+      adminAutosave.triggerAutosaveAll().then(({ savedCount }) => {
+        if (savedCount > 0) {
+          toast.success("Autosaved administrative changes", { 
+            description: "Your modifications have been preserved automatically.",
+            duration: 2500 
+          });
+        }
+      });
+    }
+  }, [location.pathname, location.search, viewMode]);
+
   if (loading) {
     return (
       <div className="flex flex-col h-screen w-full items-center justify-center gap-4">
@@ -332,6 +347,7 @@ export default function ProtectedLayout() {
       path: "/app/listings",
       subLinks: [
         { label: "Active Listings", path: "/app/listings?tab=active", icon: CheckCircle2 },
+        { label: "Listings Performance", path: "/app/agent-listings", icon: Activity },
         { label: "Expired Listings", path: "/app/listings?tab=expired", icon: Clock },
         { label: "Photo Enhancer / Declutter", path: "/app/listings/photo-enhancer", icon: Sparkles },
       ]
@@ -379,6 +395,7 @@ export default function ProtectedLayout() {
       path: "/app/admin/agent-360",
       subLinks: [
         { label: "Agent 360", path: "/app/admin/agent-360", icon: Activity },
+        { label: "Listings Performance", path: "/app/admin/agent-listings", icon: Building2 },
         { label: "All Listings", path: "/app/admin/listings", icon: List },
         { label: "Active Listings", path: "/app/admin/listings?tab=active", icon: CheckCircle2 },
         { label: "Expired Listings", path: "/app/admin/listings?tab=expired", icon: Clock },

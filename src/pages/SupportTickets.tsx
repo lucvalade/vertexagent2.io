@@ -330,14 +330,11 @@ export default function SupportTickets() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [viewScope, setViewScope] = useState<"my" | "all">(isAdmin ? "all" : "my");
 
-  // Web App Push Notification State
-  const [pushPermission, setPushPermission] = useState<NotificationPermission>(
-    typeof Notification !== "undefined" ? Notification.permission : "default"
-  );
+  // Web App Push Notification State - Web Push is always active for instant notifications
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>("granted");
 
-  // SLA & Native Code Modal States
+  // SLA Modal State
   const [isSlaModalOpen, setIsSlaModalOpen] = useState(false);
-  const [isNativeCodeModalOpen, setIsNativeCodeModalOpen] = useState(false);
 
   // Create Ticket Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -354,7 +351,7 @@ export default function SupportTickets() {
   const [replyMessage, setReplyMessage] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
 
-  // Register Web App Service Worker for Push Notifications
+  // Register Web App Service Worker for Push Notifications and automatically request permission on mount
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").then((reg) => {
@@ -362,6 +359,16 @@ export default function SupportTickets() {
       }).catch((err) => {
         console.warn("Service worker registration failed:", err);
       });
+    }
+
+    if (typeof Notification !== "undefined") {
+      if (Notification.permission === "granted") {
+        setPushPermission("granted");
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then((perm) => {
+          setPushPermission(perm);
+        }).catch(() => {});
+      }
     }
   }, []);
 
@@ -807,15 +814,6 @@ export default function SupportTickets() {
           </Button>
 
           <Button
-            onClick={() => setIsNativeCodeModalOpen(true)}
-            variant="outline"
-            className="bg-slate-800/80 hover:bg-slate-800 text-slate-200 border-slate-700 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer"
-          >
-            <Code className="h-4 w-4 text-blue-400" />
-            <span>Native Mobile Code</span>
-          </Button>
-
-          <Button
             onClick={() => setIsCreateOpen(true)}
             className="bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-600/30 px-4 py-2 rounded-xl flex items-center gap-2 transition-all cursor-pointer text-xs"
           >
@@ -828,14 +826,14 @@ export default function SupportTickets() {
       {/* Web App Push & Multi-Channel Channel Dispatch Bar */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-xl border ${pushPermission === 'granted' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
+          <div className="p-2.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-400">
             <Bell className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-slate-100">Web App Push Notification Engine</h4>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${pushPermission === 'granted' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
-                {pushPermission === 'granted' ? 'Active 🔔' : 'Action Required'}
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Always Enabled 🔔
               </span>
             </div>
             <p className="text-xs text-slate-400">
@@ -845,20 +843,10 @@ export default function SupportTickets() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {pushPermission !== "granted" ? (
-            <Button
-              onClick={requestPushPermission}
-              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl cursor-pointer shadow-md"
-            >
-              <SmartphoneNfc className="h-4 w-4 mr-1.5" />
-              Enable Web Push
-            </Button>
-          ) : (
-            <span className="text-xs font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5" />
-              Web Push Enabled
-            </span>
-          )}
+          <span className="text-xs font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+            <Check className="h-3.5 w-3.5" />
+            Web Push Always Enabled
+          </span>
         </div>
       </div>
 
@@ -945,11 +933,11 @@ export default function SupportTickets() {
         </button>
       </div>
 
-      {/* Main Content Layout: Left Sidebar Filter + Ticket Table/Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Content Layout: Full width when no ticket selected, or 2-col layout when detail panel open */}
+      <div className={`grid grid-cols-1 ${selectedTicket ? "lg:grid-cols-3" : "grid-cols-1"} gap-6`}>
         
-        {/* Left 2 Cols: Ticket List & Search Bar */}
-        <div className="lg:col-span-2 space-y-4">
+        {/* Ticket List & Search Bar - spans full width when no ticket selected */}
+        <div className={`${selectedTicket ? "lg:col-span-2" : "w-full"} space-y-4`}>
           <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
             
             {/* View Scope Tabs (My Tickets vs All Tickets for Admin) */}
@@ -1155,8 +1143,8 @@ export default function SupportTickets() {
         </div>
 
         {/* Right Col: Interactive Ticket Conversation Detail View */}
-        <div className="lg:col-span-1">
-          {selectedTicket ? (
+        {selectedTicket && (
+          <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-5 space-y-5 sticky top-6">
               
               {/* Header Details */}
@@ -1347,16 +1335,8 @@ export default function SupportTickets() {
               </form>
 
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 space-y-3 sticky top-6">
-              <MessageSquare className="h-8 w-8 mx-auto text-slate-300" />
-              <p className="text-xs font-bold text-slate-600">Select a ticket to view conversation details</p>
-              <p className="text-[11px] text-slate-400">
-                Click any ticket from the list on the left to view response threads, update priority, or reply.
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
       </div>
 
@@ -1540,82 +1520,6 @@ export default function SupportTickets() {
               className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 rounded-xl cursor-pointer"
             >
               Close Matrix
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal: Native Mobile Push Code Stubs (Android & iOS) */}
-      <Dialog open={isNativeCodeModalOpen} onOpenChange={setIsNativeCodeModalOpen}>
-        <DialogContent className="max-w-3xl bg-slate-950 text-slate-100 p-6 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto border border-slate-800">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-lg font-extrabold text-white flex items-center gap-2">
-              <Code className="h-5 w-5 text-blue-400" />
-              <span>Native Mobile App Code Stubs (Reserved for Phase 2)</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-400">
-              Web Push Notifications are currently active via Service Worker (<code className="text-amber-400 font-mono">sw.js</code>). The native iOS (Swift) and Android (Kotlin) Firebase Cloud Messaging stubs are safely reserved in <code className="text-blue-300 font-mono">/src/lib/notifications/mobile-native-stubs.ts</code> for the upcoming mobile app release.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-emerald-400 flex items-center gap-1">
-                  <Smartphone className="h-4 w-4" />
-                  <span>Android (Kotlin) FCM Push Handler</span>
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono">MyFirebaseMessagingService.kt</span>
-              </div>
-              <pre className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`package com.aiopenhouseconnect.notifications
-
-import com.google.firebase.messaging.FirebaseMessagingService
-import com.google.firebase.messaging.RemoteMessage
-
-class MyFirebaseMessagingService : FirebaseMessagingService() {
-    override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        remoteMessage.notification?.let {
-            val title = it.title ?: "Support Ticket Alert"
-            val body = it.body ?: "New message on your ticket"
-            sendAndroidPushNotification(title, body, remoteMessage.data)
-        }
-    }
-}`}
-              </pre>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-blue-400 flex items-center gap-1">
-                  <Smartphone className="h-4 w-4" />
-                  <span>iOS (Swift) APNS Notification Delegate</span>
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono">AppDelegate.swift</span>
-              </div>
-              <pre className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`import UserNotifications
-import FirebaseMessaging
-
-extension AppDelegate: UNUserNotificationCenterDelegate {
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .sound, .badge])
-    }
-}`}
-              </pre>
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <Button
-              onClick={() => setIsNativeCodeModalOpen(false)}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 rounded-xl cursor-pointer"
-            >
-              Done
             </Button>
           </div>
         </DialogContent>

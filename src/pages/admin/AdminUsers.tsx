@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, updateDoc } from "firebase/firestore";
 import { sendEmail } from "@/lib/api";
 import { toast } from "sonner";
 import Agent360Dashboard from "@/components/Agent360Dashboard";
@@ -74,6 +74,115 @@ export default function AdminUsers() {
     { id: '14', name: 'Charlotte Moore', email: 'charlotte.m@vertexrealty.ca', role: 'AGENT', status: 'Pending', listings: 0 },
     { id: '15', name: 'Noah Jackson', email: 'noah.j@vertexrealty.ca', role: 'AGENT', status: 'Active', listings: 6 },
   ];
+
+  const [statusOverrides, setStatusOverrides] = useState<{ [id: string]: string }>({});
+
+  const getAgentsList = () => {
+    // 1. Start with DUMMY_AGENTS
+    let base = DUMMY_AGENTS.map(agent => ({ ...agent }));
+
+    // 2. Overlay admin local storage custom status updates
+    try {
+      const customAgentsRaw = localStorage.getItem('aiopenhouseconnect_admin_agents');
+      if (customAgentsRaw) {
+        const customAgents = JSON.parse(customAgentsRaw);
+        customAgents.forEach((ca: any) => {
+          const idx = base.findIndex(a => a.id === ca.id || a.email?.toLowerCase() === ca.email?.toLowerCase());
+          if (idx >= 0) {
+            base[idx] = { ...base[idx], ...ca };
+          } else {
+            base.push(ca);
+          }
+        });
+      }
+
+      const teamRaw = localStorage.getItem('aiopenhouseconnect_team_data') || localStorage.getItem('vertex_team_data');
+      if (teamRaw) {
+        const teamMembers = JSON.parse(teamRaw);
+        teamMembers.forEach((tm: any) => {
+          const idx = base.findIndex(a => a.id === tm.id || a.email?.toLowerCase() === tm.email?.toLowerCase());
+          if (idx >= 0 && tm.status) {
+            base[idx].status = tm.status;
+          }
+        });
+      }
+    } catch (e) {}
+
+    // 3. Overlay Firestore real users if present
+    realUsers.forEach(ru => {
+      const idx = base.findIndex(a => a.id === ru.id || a.email?.toLowerCase() === ru.email?.toLowerCase());
+      const ruStatus = ru.status || (ru.active === false ? 'Inactive' : 'Active');
+      if (idx >= 0) {
+        base[idx].status = ruStatus;
+      } else {
+        base.unshift({
+          id: ru.id,
+          name: ru.name || 'Agent User',
+          email: ru.email || '',
+          role: ru.role || 'AGENT',
+          status: ruStatus,
+          listings: ru.listings || 0
+        });
+      }
+    });
+
+    // 4. Overlay in-session overrides
+    return base.map(agent => {
+      if (statusOverrides[agent.id]) {
+        return { ...agent, status: statusOverrides[agent.id] };
+      }
+      return agent;
+    });
+  };
+
+  const handleUpdateStatus = async (agent: any, newStatus: 'Active' | 'Inactive' | 'Pending') => {
+    setStatusOverrides(prev => ({ ...prev, [agent.id]: newStatus }));
+    
+    // Save to localStorage
+    try {
+      const customAgentsRaw = localStorage.getItem('aiopenhouseconnect_admin_agents');
+      let customAgents = customAgentsRaw ? JSON.parse(customAgentsRaw) : [];
+      const idx = customAgents.findIndex((a: any) => a.id === agent.id);
+      if (idx >= 0) {
+        customAgents[idx].status = newStatus;
+        customAgents[idx].active = newStatus === 'Active';
+      } else {
+        customAgents.push({
+          ...agent,
+          status: newStatus,
+          active: newStatus === 'Active'
+        });
+      }
+      localStorage.setItem('aiopenhouseconnect_admin_agents', JSON.stringify(customAgents));
+
+      const teamRaw = localStorage.getItem('aiopenhouseconnect_team_data');
+      if (teamRaw) {
+        let team = JSON.parse(teamRaw);
+        const tIdx = team.findIndex((a: any) => a.id === agent.id);
+        if (tIdx >= 0) {
+          team[tIdx].status = newStatus;
+          team[tIdx].active = newStatus === 'Active';
+          localStorage.setItem('aiopenhouseconnect_team_data', JSON.stringify(team));
+        }
+      }
+    } catch (e) {}
+
+    // Save to Firestore if it's a real user
+    try {
+      const userRef = doc(db, "users", agent.id);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        await updateDoc(userRef, {
+          status: newStatus,
+          active: newStatus === 'Active'
+        });
+      }
+    } catch (e) {}
+
+    toast.success(`Updated status for ${agent.name}`, {
+      description: `Member is now marked as ${newStatus}.`
+    });
+  };
 
   // Dynamic Trial Signups (14 Free Tier Group)
   const getTrialUsers = () => {
@@ -159,7 +268,8 @@ export default function AdminUsers() {
   // Filters based on active tab
   const getFilteredData = () => {
     if (activeTab === "directory") {
-      return DUMMY_AGENTS.filter(agent => 
+      const agents = getAgentsList();
+      return agents.filter(agent => 
         agent.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
         agent.email.toLowerCase().includes(searchTerm.toLowerCase())
       );
@@ -472,6 +582,17 @@ export default function AdminUsers() {
                                 <Mail className="h-4 w-4 text-blue-600" /> Send Message
                               </DropdownMenuItem>
                               <DropdownMenuSeparator className="my-1" />
+                              <div className="px-2 py-1 text-[10px] font-black uppercase text-slate-400 tracking-wider">Set Status</div>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(agent, 'Active')} className={`rounded-lg font-bold py-1.5 gap-2 text-xs ${agent.status === 'Active' ? 'bg-green-50 text-green-700 font-black' : 'text-slate-700'}`}>
+                                <span className="h-2 w-2 rounded-full bg-green-500" /> Active
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(agent, 'Inactive')} className={`rounded-lg font-bold py-1.5 gap-2 text-xs ${agent.status === 'Inactive' ? 'bg-slate-100 text-slate-900 font-black' : 'text-slate-700'}`}>
+                                <span className="h-2 w-2 rounded-full bg-slate-400" /> Inactive
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(agent, 'Pending')} className={`rounded-lg font-bold py-1.5 gap-2 text-xs ${agent.status === 'Pending' ? 'bg-amber-50 text-amber-800 font-black' : 'text-slate-700'}`}>
+                                <span className="h-2 w-2 rounded-full bg-amber-500" /> Pending
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="my-1" />
                               <DropdownMenuItem onClick={() => handleChangeRole(agent.name, 'Admin')} className="rounded-lg font-bold py-2 gap-2">
                                 <ShieldCheck className="h-4 w-4 text-amber-600" /> Make Admin
                               </DropdownMenuItem>
@@ -512,13 +633,25 @@ export default function AdminUsers() {
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       } />
-                      <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl border-slate-200">
+                      <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl border-slate-200 p-2">
                         <DropdownMenuItem onClick={() => navigate(`/app/team/${agent.id}/edit`)} className="font-bold gap-2">
-                          <Pencil className="h-4 w-4 text-blue-600" /> Edit
+                          <Pencil className="h-4 w-4 text-blue-600" /> Edit Member
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => { setSelectedAgent(agent); setIsMessageOpen(true); }} className="font-bold gap-2">
                           <Mail className="h-4 w-4 text-blue-600" /> Message
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator className="my-1" />
+                        <div className="px-2 py-1 text-[10px] font-black uppercase text-slate-400 tracking-wider">Set Status</div>
+                        <DropdownMenuItem onClick={() => handleUpdateStatus(agent, 'Active')} className={`rounded-lg font-bold py-1.5 gap-2 text-xs ${agent.status === 'Active' ? 'bg-green-50 text-green-700 font-black' : 'text-slate-700'}`}>
+                          <span className="h-2 w-2 rounded-full bg-green-500" /> Active
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleUpdateStatus(agent, 'Inactive')} className={`rounded-lg font-bold py-1.5 gap-2 text-xs ${agent.status === 'Inactive' ? 'bg-slate-100 text-slate-900 font-black' : 'text-slate-700'}`}>
+                          <span className="h-2 w-2 rounded-full bg-slate-400" /> Inactive
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleUpdateStatus(agent, 'Pending')} className={`rounded-lg font-bold py-1.5 gap-2 text-xs ${agent.status === 'Pending' ? 'bg-amber-50 text-amber-800 font-black' : 'text-slate-700'}`}>
+                          <span className="h-2 w-2 rounded-full bg-amber-500" /> Pending
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="my-1" />
                         <DropdownMenuItem onClick={() => handleDelete(agent)} className="font-bold text-red-600 focus:text-red-700 focus:bg-red-50 gap-2">
                           <Trash2 className="h-4 w-4" /> Deactivate
                         </DropdownMenuItem>

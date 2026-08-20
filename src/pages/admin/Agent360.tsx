@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
@@ -232,6 +233,7 @@ const RECENT_ACTIVITY = [
 
 export default function Agent360() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [agents, setAgents] = useState<AgentProfile[]>(MOCK_AGENTS);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -540,8 +542,8 @@ export default function Agent360() {
             </span>
           </div>
 
-          <div className="h-72 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-72 w-full min-w-0 relative pt-2">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
               <AreaChart data={MONTHLY_LEAD_DATA}>
                 <defs>
                   <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
@@ -582,8 +584,8 @@ export default function Agent360() {
             <p className="text-xs text-slate-500 mt-0.5">Distribution of lead capture touchpoints.</p>
           </div>
 
-          <div className="h-48 w-full relative flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-48 w-full min-w-0 relative flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={150}>
               <PieChart>
                 <Pie
                   data={SOURCE_DISTRIBUTION}
@@ -623,26 +625,27 @@ export default function Agent360() {
           <div>
             <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Building className="h-5 w-5 text-blue-600" />
-              <span>Top Agent Listings & Open House Performance</span>
+              <span>Top Agent Listings &amp; Open House Performance</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live lead capture and tour analytics per property listing.
+              Live lead capture and tour analytics per property listing with dedicated Mini Cards.
             </p>
           </div>
 
-          <a
-            href="/app/listings"
-            className="text-xs font-extrabold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+          <button
+            onClick={() => navigate(`/app/admin/agent-listings${selectedAgentId !== 'all' ? `?agentId=${selectedAgentId}` : ''}`)}
+            className="text-xs font-extrabold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition-colors"
           >
-            <span>View All Listings →</span>
-          </a>
+            <span>View All Listings ({totalListings}) →</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {AGENT_LISTINGS_MOCK.map((item) => (
             <div
               key={item.id}
-              className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition-all space-y-3 p-3 group"
+              onClick={() => navigate(`/app/admin/agent-listings?listingId=${item.id}`)}
+              className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg transition-all space-y-3 p-3 group cursor-pointer"
             >
               <div className="relative h-32 rounded-lg overflow-hidden">
                 <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
@@ -655,21 +658,34 @@ export default function Agent360() {
               </div>
 
               <div>
-                <h3 className="text-xs font-black text-slate-900 truncate">{item.title}</h3>
+                <h3 className="text-xs font-black text-slate-900 truncate group-hover:text-blue-600 transition-colors">{item.title}</h3>
               </div>
 
+              {/* MINI CARDS: LEADS, LISTENS, MORTGAGE */}
               <div className="grid grid-cols-3 gap-1 text-center text-[10px] pt-1 border-t border-slate-200/80">
-                <div className="bg-white p-1.5 rounded border border-slate-100">
-                  <span className="text-slate-400 block">Leads</span>
-                  <strong className="font-bold text-blue-600">{item.leadsCaptured}</strong>
+                <div 
+                  onClick={(e) => { e.stopPropagation(); navigate(`/app/leads?listingId=${item.id}`); }}
+                  className="bg-white hover:bg-blue-50 p-1.5 rounded-lg border border-slate-100 hover:border-blue-200 transition-colors cursor-pointer"
+                  title="Click to view captured leads"
+                >
+                  <span className="text-slate-400 block text-[9px] font-bold">Leads</span>
+                  <strong className="font-black text-blue-600 block text-xs">{item.leadsCaptured}</strong>
                 </div>
-                <div className="bg-white p-1.5 rounded border border-slate-100">
-                  <span className="text-slate-400 block">Listens</span>
-                  <strong className="font-bold text-purple-600">{item.tourListens}</strong>
+                <div 
+                  onClick={(e) => { e.stopPropagation(); navigate(`/app/listings/${item.id}`); }}
+                  className="bg-white hover:bg-purple-50 p-1.5 rounded-lg border border-slate-100 hover:border-purple-200 transition-colors cursor-pointer"
+                  title="Click to view Sora voice tour"
+                >
+                  <span className="text-slate-400 block text-[9px] font-bold">Listens</span>
+                  <strong className="font-black text-purple-600 block text-xs">{item.tourListens}</strong>
                 </div>
-                <div className="bg-white p-1.5 rounded border border-slate-100">
-                  <span className="text-slate-400 block">Mortgage</span>
-                  <strong className="font-bold text-emerald-600">{item.mortgageConsent}</strong>
+                <div 
+                  onClick={(e) => { e.stopPropagation(); navigate(`/app/lenders`); }}
+                  className="bg-white hover:bg-emerald-50 p-1.5 rounded-lg border border-slate-100 hover:border-emerald-200 transition-colors cursor-pointer"
+                  title="Click to view Mortgage financing opt-ins"
+                >
+                  <span className="text-slate-400 block text-[9px] font-bold">Mortgage</span>
+                  <strong className="font-black text-emerald-600 block text-xs">{item.mortgageConsent}</strong>
                 </div>
               </div>
             </div>

@@ -2925,32 +2925,35 @@ If the visitor says no:
 - End politely
 `;
 
-      const rawPrompt = `You are Sora, the intelligent AI Concierge for AI Open House Connect. You guide prospective buyers through property walkthroughs, answer in-depth listing questions, and provide visual demonstrations using AI-powered virtual staging and clean decluttering.
-### ACTIVE CONTEXT & MEDIA MANIFEST
-You are provided with:
-- Listing Details: Address, Price, Property Specs, Renovation Details, Taxes, Schools, Disclaimers.
-- Available Media Manifest: A list of verified photo keys available for this property (e.g., \`exterior_front\`, \`kitchen_base\`, \`kitchen_clean\`, \`livingroom_base\`, \`livingroom_staged_modern\`, \`backyard_patio\`).
-- Current Session State: \`currentVisibleMediaKey\`, \`turnId\`, \`activeBuyerLanguage\`.
-
-### YOUR CORE BEHAVIORS
-1. **Accurate Narration:** Never hallucinate property dimensions, boundaries, or features. Rely only on the listing data provided.
-2. **Visual Transformations on Demand:**
-   - If a buyer looks at a cluttered or vacant space and asks to see it clean, renovated, or furnished, invoke \`action: "transform"\` with the matching \`transformType\` (\`declutter\`, \`stage_modern\`, \`stage_luxury\`, \`stage_scandinavian\`).
-   - If the transformed photo already exists in the manifest (e.g., \`livingroom_staged_modern\`), switch to it immediately using \`action: "show"\`.
-3. **Conversational Compliance:**
-   - When presenting a virtually staged or decluttered photo, gently remind the buyer that this is an AI conceptual visualization to help them envision the home's potential.
-4. **Follow-Up & Financing Awareness:**
-   - If a buyer asks about renovations, staging costs, or structural modifications, answer concisely and offer to connect them with the listing agent or preferred lender for budget and pre-approval guidance.
-
-### OUTPUT FORMAT
-Output ONLY raw JSON complying with schemaVersion 2.1:
+      const rawPrompt = `You are Sora, the AI Property Concierge for AI Open House Connect powered by Gemini 3.5 Flash. You guide prospective buyers through property walkthroughs, execute real-time multi-style staging demonstrations, and manage exterior lighting transformations.
+### ACTIVE RUNTIME CONTEXT
+- Property Data: Address, specs, pricing, tax history, inclusions/exclusions, school districts.
+- Verified Media Manifest: Active list of registered photo keys (e.g., \`livingroom_base\`, \`kitchen_base\`, \`exterior_front_base\`).
+- Session State: \`currentVisibleMediaKey\`, \`turnId\`, \`activeBuyerLanguage\`.
+### OPERATIONAL DIRECTIVES
+1. **Accurate Grounding:** Provide factual listing answers strictly from provided property metadata. Never fabricate structural measurements or HOA terms.
+2. **Dynamic Visual Staging (Up to 3 Variants):**
+   - When a buyer asks to see a vacant/dated room staged or furnished, trigger \`action: "transform"\` with \`transformType: "stage_multi_variant"\` requesting up to 3 style presets (Modern, Scandinavian, Luxury).
+   - If a rendered variant already exists in the manifest, switch directly using \`action: "show"\`.
+3. **Day-to-Dusk & Exterior Lighting:**
+   - When viewing exterior shots, allow buyers to visualize sunset/dusk views by invoking \`transformType: "day_to_dusk"\` with presets \`sky_dusk\`, \`sky_golden\`, or \`sky_blue\`.
+4. **Follow-Up Video Integration:**
+   - Flag \`videoClipAction.generateReel: true\` when before-and-after transformations should be packaged into short video reels for the post-tour email summary.
+### MANDATORY OUTPUT FORMAT
+Return strictly raw JSON conforming to schemaVersion 2.2:
 {
-  "schemaVersion": "2.1",
-  "spokenReply": "Your concise, professional walkthrough answer here.",
+  "schemaVersion": "2.2",
+  "spokenReply": "Concise conversational walkthrough narration.",
   "mediaAction": {
     "action": "show" | "keep" | "transform",
     "key": "canonical_key_or_null",
-    "transformType": "declutter" | "stage_modern" | "stage_luxury" | "stage_scandinavian" | null
+    "transformType": "declutter" | "stage_multi_variant" | "day_to_dusk" | null,
+    "variantsRequested": 1 | 2 | 3,
+    "stylePresets": ["stage_modern", "stage_scandinavian", "stage_luxury"] | null
+  },
+  "videoClipAction": {
+    "generateReel": false,
+    "reelType": null
   }
 }
 ---
@@ -3091,13 +3094,15 @@ JSON MEDIA MANIFEST KEYS:
 
       const spokenReply = parsed?.spokenReply || result.text || "I'm here to help you explore the property!";
       const mediaAction = parsed?.mediaAction || { action: "keep", key: null };
+      const videoClipAction = parsed?.videoClipAction || { generateReel: false, reelType: null };
 
       res.json({ 
         success: true, 
         reply: spokenReply,
         spokenReply: spokenReply,
         mediaAction: mediaAction,
-        schemaVersion: parsed?.schemaVersion || "2.1",
+        videoClipAction: videoClipAction,
+        schemaVersion: parsed?.schemaVersion || "2.2",
         rawResponse: parsed 
       });
     } catch (err: any) {
@@ -4956,6 +4961,87 @@ Input Message:
       clothing_style: "business_professional",
       age_verified: true
     });
+  });
+
+  // POST endpoint for Schema 3.0 AI Agent Video Script Generation & HeyGen Queue
+  app.post("/api/heygen/generate-video-script", async (req, res) => {
+    try {
+      const ai = getAi();
+      const { agentProfile, listingData, userPrompt, targetPlatform, videoType, agentAvatarId } = req.body;
+      
+      const systemInstruction = `You are Sora, the AI Content Marketing Assistant for AI Open House Connect. Your job is to help Real Estate Agents automatically script and generate lifelike avatar videos for their marketing channels.
+
+### ACTIVE CONTEXT
+- Agent Profile: Name, Brokerage, Contact Info, agentAvatarId (HeyGen Avatar hash).
+- Active Property / Market Data: Real-time MLS data, price changes, neighborhood statistics, and available photo manifest keys.
+- User Request: The agent's prompt.
+
+### YOUR BEHAVIORS
+1. Scriptwriting: Write natural, conversational scripts meant to be spoken aloud by a human. Avoid complex jargon. Use short sentences. 
+2. Formatting: Structure the script with a strong Hook, Value-Driven Body, and a clear Call to Action (CTA).
+3. Media Syncing: Select the best 1 to 3 photo keys from the property's MEDIA_MANIFEST to display behind the agent's avatar during the video. 
+4. API Handoff: Package the script and media instructions into the videoGenerationAction payload so the backend can queue the HeyGen video render.
+
+### OUTPUT FORMAT
+Output ONLY raw JSON complying with schemaVersion 3.0:
+{
+  "schemaVersion": "3.0",
+  "videoGenerationAction": {
+    "action": "queue_render",
+    "videoType": "listing_spotlight",
+    "targetPlatform": "instagram_reel",
+    "agentAvatarId": "avatar_12345abc",
+    "scriptConfig": {
+      "hook": "Just listed in Hamilton and you won't believe this backyard.",
+      "body": "This 3-bed, 2-bath fully renovated bungalow features an open-concept kitchen and a massive deck perfect for summer. It's priced to move this weekend.",
+      "callToAction": "Tap the link in my bio to book a private showing before it's gone."
+    },
+    "backgroundMediaKeys": ["exterior_front_base", "kitchen_clean", "backyard_patio"]
+  },
+  "agentFeedback": "I've drafted a punchy 30-second script for Instagram Reels. Rendering has been queued and will be ready in your dashboard shortly!"
+}`;
+
+      const fullPrompt = `${systemInstruction}\n\nAgent Profile: ${JSON.stringify(agentProfile || {})}\nListing/Market Data: ${JSON.stringify(listingData || {})}\nTarget Platform: ${targetPlatform || "instagram_reel"}\nVideo Type: ${videoType || "listing_spotlight"}\nAgent Avatar ID: ${agentAvatarId || "avatar_12345abc"}\nAgent Request: "${userPrompt || "Create a 30-second Instagram Reel spotlighting this listing."}"`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: fullPrompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(response.text || "{}");
+      } catch (e) {
+        parsed = {
+          schemaVersion: "3.0",
+          videoGenerationAction: {
+            action: "queue_render",
+            videoType: videoType || "listing_spotlight",
+            targetPlatform: targetPlatform || "instagram_reel",
+            agentAvatarId: agentAvatarId || "avatar_12345abc",
+            scriptConfig: {
+              hook: "Just listed in your neighborhood and you need to see this.",
+              body: "This gorgeous property features high ceilings, custom millwork, and an incredible open-plan kitchen.",
+              callToAction: "DM me for exclusive showing details."
+            },
+            backgroundMediaKeys: ["exterior_front_base", "kitchen_clean"]
+          },
+          agentFeedback: "I've drafted a punchy script for your video. Rendering has been queued!"
+        };
+      }
+
+      res.json({
+        success: true,
+        schemaVersion: "3.0",
+        ...parsed
+      });
+    } catch (err: any) {
+      console.error("[HeyGen Video Script Gen Error]:", err);
+      res.status(500).json({ error: err?.message || "Failed to generate video script." });
+    }
   });
 
   // --- END OF SORA AI VIDEO AVATAR HEYGEN INTEGRATION PROXIES & SAFETY MIDDLEWARE ---

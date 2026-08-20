@@ -21,11 +21,22 @@ export default function EditMember() {
   const navigate = useNavigate();
 
   const DUMMY_AGENTS = [
-    { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Broker of Record / Admin", listings: 4, office: "AI Open House Connect Group" },
-    { id: "2", name: "Sarah Jenkins", email: "sarah.j@aiopenhouseconnect.com", role: "Agent", listings: 12, office: "AI Open House Connect Group" },
-    { id: "3", name: "Michael Chang", email: "m.chang@aiopenhouseconnect.com", role: "Agent", listings: 8, office: "AI Open House Connect Group" },
-    { id: "4", name: "Jessica Smith", email: "admin@aiopenhouseconnect.com", role: "Office Manager", listings: 0, office: "AI Open House Connect Group" },
-    { id: "inv_luc", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", listings: 0, office: "AI Open House Connect Group" }
+    { id: "1", name: "Luc Valade", email: "luc@vertexrealty.ca", role: "ADMIN", status: "Active", listings: 12, office: "AI Open House Connect Group" },
+    { id: "2", name: "Sarah Jenkins", email: "sarah@vertexrealty.ca", role: "AGENT", status: "Active", listings: 8, office: "AI Open House Connect Group" },
+    { id: "3", name: "Michael Chen", email: "mchen@vertexrealty.ca", role: "AGENT", status: "Pending", listings: 0, office: "AI Open House Connect Group" },
+    { id: "4", name: "Emma Watson", email: "emma@vertexrealty.ca", role: "AGENT", status: "Inactive", listings: 5, office: "AI Open House Connect Group" },
+    { id: "5", name: "David Miller", email: "dmiller@vertexrealty.ca", role: "AGENT", status: "Active", listings: 15, office: "AI Open House Connect Group" },
+    { id: "6", name: "Sophia Rodriguez", email: "sophia.r@vertexrealty.ca", role: "AGENT", status: "Active", listings: 4, office: "AI Open House Connect Group" },
+    { id: "7", name: "James Wilson", email: "james.w@vertexrealty.ca", role: "AGENT", status: "Active", listings: 9, office: "AI Open House Connect Group" },
+    { id: "8", name: "Olivia Brown", email: "olivia.b@vertexrealty.ca", role: "AGENT", status: "Pending", listings: 0, office: "AI Open House Connect Group" },
+    { id: "9", name: "Robert Taylor", email: "robert.t@vertexrealty.ca", role: "AGENT", status: "Active", listings: 22, office: "AI Open House Connect Group" },
+    { id: "10", name: "Isabella Garcia", email: "isabella.g@vertexrealty.ca", role: "AGENT", status: "Active", listings: 3, office: "AI Open House Connect Group" },
+    { id: "11", name: "William Martinez", email: "william.m@vertexrealty.ca", role: "AGENT", status: "Inactive", listings: 0, office: "AI Open House Connect Group" },
+    { id: "12", name: "Mia Anderson", email: "mia.a@vertexrealty.ca", role: "AGENT", status: "Active", listings: 11, office: "AI Open House Connect Group" },
+    { id: "13", name: "Ethan Thomas", email: "ethan.t@vertexrealty.ca", role: "AGENT", status: "Active", listings: 7, office: "AI Open House Connect Group" },
+    { id: "14", name: "Charlotte Moore", email: "charlotte.m@vertexrealty.ca", role: "AGENT", status: "Pending", listings: 0, office: "AI Open House Connect Group" },
+    { id: "15", name: "Noah Jackson", email: "noah.j@vertexrealty.ca", role: "AGENT", status: "Active", listings: 6, office: "AI Open House Connect Group" },
+    { id: "inv_luc", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", status: "Active", listings: 0, office: "AI Open House Connect Group" }
   ];
 
   const [formData, setFormData] = useState({
@@ -33,6 +44,7 @@ export default function EditMember() {
     email: "",
     office: "Main Office",
     role: "Agent (Standard)",
+    status: "Active" as "Active" | "Inactive" | "Pending",
     createdAtDate: "06/18/2026",
     hasReadOnboarding: false,
     onboardingReadAt: undefined as number | undefined,
@@ -61,6 +73,7 @@ export default function EditMember() {
             email: uData.email || "",
             office: uData.brokerage || "Main Office",
             role: uData.role || "Agent",
+            status: uData.status || (uData.active === false ? "Inactive" : "Active"),
             createdAtDate: uData.createdAtDate || (uData.createdAt ? new Date(uData.createdAt.toDate ? uData.createdAt.toDate() : uData.createdAt).toLocaleDateString() : "06/18/2026"),
             hasReadOnboarding: uData.hasReadOnboarding || false,
             onboardingReadAt: uData.onboardingReadAt,
@@ -84,6 +97,7 @@ export default function EditMember() {
             email: iData.email || "",
             office: iData.brokerage || "Main Office",
             role: iData.role || "Agent",
+            status: iData.status || "Pending",
             createdAtDate: iData.createdAtDate || (iData.createdAt ? new Date(iData.createdAt.toDate ? iData.createdAt.toDate() : iData.createdAt).toLocaleDateString() : "06/18/2026"),
             hasReadOnboarding: false,
             onboardingReadAt: undefined,
@@ -96,18 +110,27 @@ export default function EditMember() {
         console.error("Error fetching Firestore invite details:", err);
       }
 
-      // 3. Check localStorage first
+      // 3. Check custom admin agents cache or team data in localStorage
+      const customAgentsRaw = localStorage.getItem('aiopenhouseconnect_admin_agents');
+      let customAgent = null;
+      if (customAgentsRaw) {
+        try {
+          const customList = JSON.parse(customAgentsRaw);
+          customAgent = customList.find((m: any) => m.id === memberId || m.name?.toLowerCase().replace(/\s+/g, '-') === memberId);
+        } catch (e) {}
+      }
+
       const savedMembers = localStorage.getItem('aiopenhouseconnect_team_data') || localStorage.getItem('vertex_team_data');
-      let foundMember = null;
+      let foundMember = customAgent;
       
-      if (savedMembers) {
+      if (!foundMember && savedMembers) {
         const team = JSON.parse(savedMembers);
-        foundMember = team.find((m: any) => m.id === memberId || m.name.toLowerCase().replace(' ', '-') === memberId);
+        foundMember = team.find((m: any) => m.id === memberId || m.name?.toLowerCase().replace(/\s+/g, '-') === memberId);
       }
       
       // 4. Fallback to synced dummy data
       if (!foundMember) {
-        foundMember = DUMMY_AGENTS.find(m => m.id === memberId || m.name.toLowerCase().replace(' ', '-') === memberId);
+        foundMember = DUMMY_AGENTS.find(m => m.id === memberId || m.name?.toLowerCase().replace(/\s+/g, '-') === memberId);
       }
 
       if (foundMember) {
@@ -116,6 +139,7 @@ export default function EditMember() {
           email: foundMember.email,
           office: (foundMember as any).office || (foundMember as any).brokerage || "Main Office",
           role: (foundMember as any).role || "Agent",
+          status: (foundMember as any).status || ((foundMember as any).active === false ? "Inactive" : "Active"),
           createdAtDate: (foundMember as any).createdAtDate || "06/18/2026",
           hasReadOnboarding: (foundMember as any).hasReadOnboarding || (foundMember.email === "luc.valade@gmail.com" ? true : false),
           onboardingReadAt: (foundMember as any).onboardingReadAt || (foundMember.email === "luc.valade@gmail.com" ? Date.now() : undefined),
@@ -187,6 +211,8 @@ export default function EditMember() {
           email: formData.email,
           brokerage: formData.office,
           role: formData.role,
+          status: formData.status,
+          active: formData.status === "Active",
           createdAtDate: formData.createdAtDate
         });
       } else {
@@ -199,44 +225,72 @@ export default function EditMember() {
             email: formData.email,
             brokerage: formData.office,
             role: formData.role,
+            status: formData.status,
             createdAtDate: formData.createdAtDate
           });
-        } else {
-          // Persist to localStorage to simulate a database update for dummy/offline members
-          const savedMembers = localStorage.getItem('aiopenhouseconnect_team_data') || localStorage.getItem('vertex_team_data');
-          let team = savedMembers ? JSON.parse(savedMembers) : [
-            { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 4, joinedAt: "06/18/2026 03:02 PM", hasAccepted: true, createdAtDate: "06/18/2026" },
-            { id: "2", name: "Sarah Jenkins", email: "sarah.j@aiopenhouseconnect.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 12, createdAtDate: "12/10/2025" },
-            { id: "3", name: "Michael Chang", email: "m.chang@aiopenhouseconnect.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 8, createdAtDate: "01/22/2026" },
-            { id: "4", name: "Jessica Smith", email: "admin@aiopenhouseconnect.com", role: "Office Manager", brokerage: "AI Open House Connect Agent Group", listings: 0, createdAtDate: "09/14/2024" },
-          ];
-
-          const memberIdx = team.findIndex((m: any) => m.id === memberId);
-          const updatedMember = {
-            id: memberId,
-            ...formData,
-            active: true,
-            listings: memberIdx >= 0 ? team[memberIdx].listings : 0
-          };
-
-          if (memberIdx >= 0) {
-            team[memberIdx] = updatedMember;
-          } else {
-            team.push(updatedMember);
-          }
-
-          localStorage.setItem('aiopenhouseconnect_team_data', JSON.stringify(team));
-          localStorage.setItem('vertex_team_data', JSON.stringify(team));
         }
       }
+
+      // Update in custom admin agents storage
+      const customAgentsRaw = localStorage.getItem('aiopenhouseconnect_admin_agents');
+      let customAgents = customAgentsRaw ? JSON.parse(customAgentsRaw) : [];
+      const adminIdx = customAgents.findIndex((m: any) => m.id === memberId || m.name?.toLowerCase().replace(/\s+/g, '-') === memberId);
+      if (adminIdx >= 0) {
+        customAgents[adminIdx] = {
+          ...customAgents[adminIdx],
+          name: formData.name,
+          email: formData.email,
+          role: formData.role.toUpperCase().includes('ADMIN') ? 'ADMIN' : 'AGENT',
+          status: formData.status,
+          active: formData.status === "Active"
+        };
+      } else {
+        customAgents.push({
+          id: memberId,
+          name: formData.name,
+          email: formData.email,
+          role: formData.role.toUpperCase().includes('ADMIN') ? 'ADMIN' : 'AGENT',
+          status: formData.status,
+          active: formData.status === "Active",
+          listings: 0
+        });
+      }
+      localStorage.setItem('aiopenhouseconnect_admin_agents', JSON.stringify(customAgents));
+
+      // Persist to localStorage to simulate a database update for dummy/offline members
+      const savedMembers = localStorage.getItem('aiopenhouseconnect_team_data') || localStorage.getItem('vertex_team_data');
+      let team = savedMembers ? JSON.parse(savedMembers) : [
+        { id: "1", name: "Luc Valade", email: "luc.valade@gmail.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 4, joinedAt: "06/18/2026 03:02 PM", hasAccepted: true, status: "Active", createdAtDate: "06/18/2026" },
+        { id: "2", name: "Sarah Jenkins", email: "sarah.j@aiopenhouseconnect.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 12, status: "Active", createdAtDate: "12/10/2025" },
+        { id: "3", name: "Michael Chang", email: "m.chang@aiopenhouseconnect.com", role: "Agent", brokerage: "AI Open House Connect Agent Group", listings: 8, status: "Pending", createdAtDate: "01/22/2026" },
+        { id: "4", name: "Jessica Smith", email: "admin@aiopenhouseconnect.com", role: "Office Manager", brokerage: "AI Open House Connect Agent Group", listings: 0, status: "Inactive", createdAtDate: "09/14/2024" },
+      ];
+
+      const memberIdx = team.findIndex((m: any) => m.id === memberId || m.name?.toLowerCase().replace(/\s+/g, '-') === memberId);
+      const updatedMember = {
+        id: memberId,
+        ...formData,
+        status: formData.status,
+        active: formData.status === "Active",
+        listings: memberIdx >= 0 ? team[memberIdx].listings : 0
+      };
+
+      if (memberIdx >= 0) {
+        team[memberIdx] = updatedMember;
+      } else {
+        team.push(updatedMember);
+      }
+
+      localStorage.setItem('aiopenhouseconnect_team_data', JSON.stringify(team));
+      localStorage.setItem('vertex_team_data', JSON.stringify(team));
       
       setTimeout(() => {
         setIsSaving(false);
         toast.success("Member details saved successfully", {
-          description: `Account for ${formData.name} was updated.`
+          description: `Account for ${formData.name} is now ${formData.status}.`
         });
-        navigate("/app/team");
-      }, 800);
+        navigate(-1);
+      }, 600);
     } catch (err) {
       setIsSaving(false);
       toast.error("Failed to save changes");
@@ -252,7 +306,7 @@ export default function EditMember() {
           </button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Edit Member</h1>
-            <p className="text-slate-500 mt-1 text-sm font-medium">Update agent details and permissions.</p>
+            <p className="text-slate-500 mt-1 text-sm font-medium">Update agent details, status, and permissions.</p>
           </div>
         </div>
       </div>
@@ -303,7 +357,7 @@ export default function EditMember() {
           </div>
         </div>
         
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid md:grid-cols-3 gap-6">
           <div className="space-y-2">
             <Label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <Building2 className="h-3 w-3" /> Office / Team
@@ -317,7 +371,7 @@ export default function EditMember() {
               <option>Downtown Team</option>
               <option>Luxury Division</option>
             </select>
-            <p className="text-[9px] text-slate-400 font-medium">Verify the correct branch for lead routing.</p>
+            <p className="text-[9px] text-slate-400 font-medium">Branch for routing.</p>
           </div>
           <div className="space-y-2">
             <Label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -332,6 +386,28 @@ export default function EditMember() {
               <option>Office Manager</option>
               <option>Brokerage Admin</option>
             </select>
+            <p className="text-[9px] text-slate-400 font-medium">Access tier.</p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <div className={`h-2 w-2 rounded-full ${formData.status === 'Active' ? 'bg-green-500' : formData.status === 'Pending' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+              Member Status
+            </Label>
+            <select 
+              id="member-status-select"
+              className="flex h-11 w-full rounded-md border-2 border-blue-500/60 bg-blue-50/20 px-3 py-2 text-sm font-black text-slate-900 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 cursor-pointer shadow-xs"
+              value={formData.status}
+              onChange={e => setFormData(prev => ({ ...prev, status: e.target.value as "Active" | "Inactive" | "Pending" }))}
+            >
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Pending">Pending</option>
+            </select>
+            <p className="text-[9px] text-slate-500 font-bold">
+              {formData.status === 'Active' && <span className="text-green-600 font-extrabold">● Account is Active</span>}
+              {formData.status === 'Inactive' && <span className="text-slate-600 font-extrabold">● Account is Inactive</span>}
+              {formData.status === 'Pending' && <span className="text-amber-600 font-extrabold">● Account is Pending</span>}
+            </p>
           </div>
         </div>
 

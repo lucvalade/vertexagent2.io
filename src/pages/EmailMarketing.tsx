@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Mail, Sparkles, Users, Send, BarChart2, ShieldCheck, RefreshCw, Plus, 
   CheckCircle2, AlertTriangle, Layers, Clock, Settings, Search, Filter, 
   ChevronRight, ArrowRight, Eye, Edit3, Copy, Trash2, Zap, Calendar, MessageSquare, 
   Tag, Download, ExternalLink, HelpCircle, Check, Play, Pause, RefreshCcw, Building2, UserCheck, Briefcase,
-  Info, Lock, Shield, X, XCircle, FileText, Activity, CheckSquare, CornerDownRight, Ban
+  Info, Lock, Shield, X, XCircle, FileText, Activity, CheckSquare, CornerDownRight, Ban, Volume2, Home, QrCode
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,7 @@ const formatRateBadge = (rateStr: string, type: "open" | "click") => {
 
 export default function EmailMarketing() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"campaigns" | "ai-generator" | "audience" | "automations" | "weekly-ideas" | "tracking-physics" | "brand" | "deliverability">("campaigns");
 
   // Admin Verification (Exclusively for Luc Valade / Platform Admin)
@@ -115,6 +117,11 @@ export default function EmailMarketing() {
   // Modal State for Campaign Analytics & View (Requirement 2 & Requirement 4)
   const [selectedCampaignForView, setSelectedCampaignForView] = useState<any | null>(null);
   const [isViewCampaignModalOpen, setIsViewCampaignModalOpen] = useState(false);
+
+  // Modal State for Platform Dashboard & Launch Tour (Interactive Launchpad)
+  const [isTourLaunchpadOpen, setIsTourLaunchpadOpen] = useState(false);
+  const [activeTourRoom, setActiveTourRoom] = useState<string>("livingroom_base");
+  const [isPlayingSoraAudio, setIsPlayingSoraAudio] = useState(false);
 
   // Modal State for Unsubscribe Re-activation Confirmation Copy Preview (Requirement 1)
   const [selectedUnsubForReactivate, setSelectedUnsubForReactivate] = useState<any | null>(null);
@@ -1919,42 +1926,23 @@ export default function EmailMarketing() {
                   Send Direct Broadcast
                 </Button>
               </div>
-
-              {/* Export JSON Feature Explanation Box */}
-              <div className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-200/80 text-[11px] space-y-1">
-                <span className="font-black text-amber-900 flex items-center gap-1.5 uppercase tracking-wide">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-amber-600" /> Purpose of the Export JSON Button
-                </span>
-                <p className="text-slate-700 leading-relaxed">
-                  The <strong className="text-black font-extrabold">Export JSON</strong> button downloads a structured, machine-readable snapshot of this contact record (including verification scores, campaign engagement history, and co-branding metadata). This enables seamless data portability for external CRMs (such as Follow Up Boss), offline backups, and regulatory compliance audit trails for platform administrators.
-                </p>
-              </div>
             </div>
           )}
 
-          <DialogFooter className="flex justify-between items-center sm:justify-between pt-2 border-t border-slate-100">
+          <DialogFooter className="flex justify-end gap-2 pt-2 border-t border-slate-100">
             <Button 
-              onClick={() => handleExportContactRecord(contactEditForm)}
-              variant="outline" 
-              className="text-xs font-bold text-slate-800 border-slate-300 hover:bg-slate-50"
+              onClick={() => setIsContactModalOpen(false)}
+              variant="ghost" 
+              className="text-xs font-bold text-slate-700"
             >
-              <Download className="h-3.5 w-3.5 mr-1 text-slate-600" /> Export JSON
+              Cancel
             </Button>
-            <div className="flex gap-2">
-              <Button 
-                onClick={() => setIsContactModalOpen(false)}
-                variant="ghost" 
-                className="text-xs font-bold text-slate-700"
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleSaveContactEdit}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
-              >
-                Save Profile Changes
-              </Button>
-            </div>
+            <Button 
+              onClick={handleSaveContactEdit}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
+            >
+              Save Profile Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2406,9 +2394,21 @@ export default function EmailMarketing() {
                     </ul>
                   </div>
 
-                  <div className="text-center py-3">
-                    <Button className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-6 py-2.5 rounded-xl shadow-md">
-                      Access Platform Dashboard & Launch Tour →
+                  <div className="text-center py-3 flex flex-col sm:flex-row items-center justify-center gap-2">
+                    <Button 
+                      onClick={() => {
+                        setIsTourLaunchpadOpen(true);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs px-6 py-2.5 rounded-xl shadow-md flex items-center gap-1.5"
+                    >
+                      <Sparkles className="h-4 w-4 text-amber-300" /> Access Platform Dashboard & Launch Tour →
+                    </Button>
+                    <Button
+                      onClick={() => navigate("/app/overview")}
+                      variant="outline"
+                      className="text-xs font-bold text-slate-700 hover:bg-slate-50 border-slate-300"
+                    >
+                      Go to Dashboard
                     </Button>
                   </div>
 
@@ -2572,6 +2572,330 @@ export default function EmailMarketing() {
             >
               Send Confirmation Email & Re-activate Contact
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 5: Platform Dashboard & Sora AI Property Tour Launchpad */}
+      <Dialog open={isTourLaunchpadOpen} onOpenChange={setIsTourLaunchpadOpen}>
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0 border border-slate-200 shadow-2xl rounded-2xl">
+          <div className="bg-gradient-to-r from-blue-900 via-slate-900 to-indigo-950 p-6 text-white border-b border-blue-800/40">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-extrabold text-[10px] tracking-wider uppercase border border-blue-400/30 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-amber-300" /> Sora AI Voice Tour & Hub
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-400/30">
+                    Schema 2.2 Synchronized
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-white tracking-tight">
+                  Platform Dashboard & AI Property Tour Launchpad
+                </h3>
+                <p className="text-xs text-blue-200/90 font-medium mt-0.5">
+                  Live interactive preview of Sora AI guided walkthrough, media manifest photo binding, and quick access to platform modules.
+                </p>
+              </div>
+              <Button 
+                onClick={() => setIsTourLaunchpadOpen(false)}
+                variant="ghost" 
+                size="sm" 
+                className="text-slate-300 hover:text-white hover:bg-white/10 rounded-full h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6 bg-slate-50/50">
+            {/* Live Interactive Sora AI Tour Preview Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 bg-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-xs shadow">
+                    AI
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-white">742 Evergreen Terrace — Live Sora Guided Tour</h4>
+                    <p className="text-[10px] text-slate-400 font-medium">Canonical Manifest Key: <span className="font-mono text-blue-300">{activeTourRoom}</span></p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={() => {
+                      setIsPlayingSoraAudio(!isPlayingSoraAudio);
+                      if (!isPlayingSoraAudio) {
+                        toast.success("Sora AI audio narration started with synchronized photo lock.");
+                      }
+                    }}
+                    size="sm"
+                    className={isPlayingSoraAudio ? "bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs h-8" : "bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-8"}
+                  >
+                    {isPlayingSoraAudio ? (
+                      <>
+                        <Pause className="h-3.5 w-3.5 mr-1" /> Pause Sora Voice
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5 mr-1 fill-white" /> Play Sora Voice Guide
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Room Selector Pills */}
+              <div className="px-4 py-2.5 bg-slate-100/90 border-b border-slate-200 flex flex-wrap gap-1.5 items-center">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Select Room:</span>
+                {[
+                  { key: "livingroom_base", label: "Living Room (Base)" },
+                  { key: "livingroom_staged_modern", label: "Modern Staging ✨" },
+                  { key: "kitchen_chef_island", label: "Chef's Kitchen" },
+                  { key: "primary_suite_luxury", label: "Primary Suite" },
+                  { key: "exterior_front_dusk", label: "Twilight Dusk Sky 🌇" },
+                ].map((room) => (
+                  <button
+                    key={room.key}
+                    onClick={() => {
+                      setActiveTourRoom(room.key);
+                      toast.info(`Photo synchronized to "${room.label}". Render acknowledged.`);
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                      activeTourRoom === room.key 
+                        ? "bg-blue-600 text-white shadow-sm" 
+                        : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {room.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Photo & Audio Player Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-0">
+                {/* Photo Display */}
+                <div className="md:col-span-7 relative bg-slate-950 flex items-center justify-center min-h-[260px] overflow-hidden">
+                  <img 
+                    src={
+                      activeTourRoom === "livingroom_base" ? "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80" :
+                      activeTourRoom === "livingroom_staged_modern" ? "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=80" :
+                      activeTourRoom === "kitchen_chef_island" ? "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=1200&q=80" :
+                      activeTourRoom === "primary_suite_luxury" ? "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=1200&q=80" :
+                      "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80"
+                    }
+                    alt="Active Tour Media"
+                    className="w-full h-full object-cover max-h-[300px]"
+                  />
+                  <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] text-white font-mono flex items-center gap-1.5 border border-white/20">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                    <span>key: {activeTourRoom}</span>
+                  </div>
+                  <div className="absolute bottom-2 right-2 bg-blue-900/80 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] text-blue-200 font-bold border border-blue-400/30">
+                    renderAcknowledged: OK
+                  </div>
+                </div>
+
+                {/* Narration & Voice Status */}
+                <div className="md:col-span-5 p-5 flex flex-col justify-between space-y-3 bg-white border-l border-slate-100">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <Volume2 className="h-3.5 w-3.5 text-blue-600" /> Sora Voice Transcript
+                      </span>
+                      {isPlayingSoraAudio && (
+                        <div className="flex items-center gap-1">
+                          <span className="h-2 w-0.5 bg-blue-600 animate-pulse rounded-full" />
+                          <span className="h-3.5 w-0.5 bg-blue-600 animate-pulse delay-75 rounded-full" />
+                          <span className="h-2.5 w-0.5 bg-blue-600 animate-pulse delay-150 rounded-full" />
+                          <span className="h-4 w-0.5 bg-blue-600 animate-pulse delay-100 rounded-full" />
+                          <span className="text-[10px] text-blue-600 font-black ml-1">Speaking</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed font-medium">
+                      {activeTourRoom === "livingroom_base" && 
+                        "\"Welcome to 742 Evergreen Terrace. This sun-drenched formal living room features 10-foot ceilings, custom white oak millwork, gas fireplace, and seamless flow into the courtyard.\""}
+                      {activeTourRoom === "livingroom_staged_modern" && 
+                        "\"Here is our modern virtual staging representation showing clean Italian minimalist leather seating, brushed brass lighting fixtures, and low-profile gallery shelving.\""}
+                      {activeTourRoom === "kitchen_chef_island" && 
+                        "\"Step into the gourmet chef's kitchen, appointed with double quartz waterfall islands, Sub-Zero refrigeration, Wolf 6-burner gas range, and a discreet butler's pantry.\""}
+                      {activeTourRoom === "primary_suite_luxury" && 
+                        "\"The private upper-level primary suite includes floor-to-ceiling glass balconies, dual bespoke dressing rooms, and a spa-caliber 5-piece heated marble bath.\""}
+                      {activeTourRoom === "exterior_front_dusk" && 
+                        "\"Here is our twilight sky transformation highlighting architectural facade uplighting, illuminated walkway grounds, and refined evening presence.\""}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                    <span>Language: English (US)</span>
+                    <span className="font-bold text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" /> Voice & Photo In-Sync
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Hub - Navigation Links to Core Platform Screens */}
+            <div>
+              <h4 className="text-xs font-black text-black uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-blue-600" /> Platform Dashboards & Workspaces
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* 1. AI Tours */}
+                <div 
+                  onClick={() => {
+                    setIsTourLaunchpadOpen(false);
+                    navigate("/app/ai-tours");
+                  }}
+                  className="p-4 bg-white hover:bg-blue-50/60 rounded-xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-blue-100 group-hover:bg-blue-600 text-blue-700 group-hover:text-white flex items-center justify-center transition-colors">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                  </div>
+                  <h5 className="font-black text-xs text-black group-hover:text-blue-900">AI Guided Tours Studio</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                    Create & manage multilingual Sora audio walkthroughs with photo sync.
+                  </p>
+                </div>
+
+                {/* 2. Platform Overview */}
+                <div 
+                  onClick={() => {
+                    setIsTourLaunchpadOpen(false);
+                    navigate("/app/overview");
+                  }}
+                  className="p-4 bg-white hover:bg-blue-50/60 rounded-xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-indigo-100 group-hover:bg-indigo-600 text-indigo-700 group-hover:text-white flex items-center justify-center transition-colors">
+                      <BarChart2 className="h-4 w-4" />
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                  </div>
+                  <h5 className="font-black text-xs text-black group-hover:text-indigo-900">Platform Analytics Dashboard</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                    Executive overview of event attendance, conversion metrics, and system logs.
+                  </p>
+                </div>
+
+                {/* 3. Open Houses Kiosk */}
+                <div 
+                  onClick={() => {
+                    setIsTourLaunchpadOpen(false);
+                    navigate("/app/open-houses");
+                  }}
+                  className="p-4 bg-white hover:bg-blue-50/60 rounded-xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-100 group-hover:bg-emerald-600 text-emerald-700 group-hover:text-white flex items-center justify-center transition-colors">
+                      <QrCode className="h-4 w-4" />
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-emerald-600 transition-colors" />
+                  </div>
+                  <h5 className="font-black text-xs text-black group-hover:text-emerald-900">Open House Kiosk & QR Studio</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                    Configure tablet lock PIN, offline sync buffer, and touchless sign-in forms.
+                  </p>
+                </div>
+
+                {/* 4. Paired Lenders */}
+                <div 
+                  onClick={() => {
+                    setIsTourLaunchpadOpen(false);
+                    navigate("/app/lenders");
+                  }}
+                  className="p-4 bg-white hover:bg-blue-50/60 rounded-xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-purple-100 group-hover:bg-purple-600 text-purple-700 group-hover:text-white flex items-center justify-center transition-colors">
+                      <Building2 className="h-4 w-4" />
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-purple-600 transition-colors" />
+                  </div>
+                  <h5 className="font-black text-xs text-black group-hover:text-purple-900">Paired Lender Network</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                    Consent-based borrower routing, paired agent seats, and B2B subscriptions.
+                  </p>
+                </div>
+
+                {/* 5. Brokerage Inventory */}
+                <div 
+                  onClick={() => {
+                    setIsTourLaunchpadOpen(false);
+                    navigate("/app/listings");
+                  }}
+                  className="p-4 bg-white hover:bg-blue-50/60 rounded-xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-amber-100 group-hover:bg-amber-600 text-amber-700 group-hover:text-white flex items-center justify-center transition-colors">
+                      <Home className="h-4 w-4" />
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-amber-600 transition-colors" />
+                  </div>
+                  <h5 className="font-black text-xs text-black group-hover:text-amber-900">Property Listings & Staging</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                    Manage MLS listings, cross-hosting delegations, and AI staging variations.
+                  </p>
+                </div>
+
+                {/* 6. Leads & Follow Up Boss */}
+                <div 
+                  onClick={() => {
+                    setIsTourLaunchpadOpen(false);
+                    navigate("/app/leads");
+                  }}
+                  className="p-4 bg-white hover:bg-blue-50/60 rounded-xl border border-slate-200 hover:border-blue-300 transition-all cursor-pointer shadow-sm group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-lg bg-rose-100 group-hover:bg-rose-600 text-rose-700 group-hover:text-white flex items-center justify-center transition-colors">
+                      <Users className="h-4 w-4" />
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-400 group-hover:text-rose-600 transition-colors" />
+                  </div>
+                  <h5 className="font-black text-xs text-black group-hover:text-rose-900">Lead Pipeline & CRM Sync</h5>
+                  <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                    Verified guest leads, compliance consent logs, and Follow Up Boss mapping.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="p-4 bg-white border-t border-slate-200 flex justify-between items-center sm:justify-between">
+            <Button 
+              onClick={() => setIsTourLaunchpadOpen(false)}
+              variant="outline" 
+              className="text-xs font-bold text-slate-700 border-slate-300 hover:bg-slate-50"
+            >
+              Close Launchpad
+            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => {
+                  setIsTourLaunchpadOpen(false);
+                  navigate("/app/overview");
+                }}
+                variant="outline"
+                className="text-xs font-bold text-blue-700 border-blue-200 hover:bg-blue-50"
+              >
+                Go to Dashboard →
+              </Button>
+              <Button 
+                onClick={() => {
+                  setIsTourLaunchpadOpen(false);
+                  navigate("/app/ai-tours");
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow"
+              >
+                Launch AI Tour Studio →
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
