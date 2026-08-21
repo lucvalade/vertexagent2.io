@@ -239,6 +239,118 @@ export default function Flyers() {
   const [lenderCta, setLenderCta] = useState("Get Pre-approved");
 
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [lastSavedTime, setLastSavedTime] = useState<string>("");
+  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoadRef = useRef<boolean>(true);
+
+  // Autosave function for seamless background synchronization
+  const saveFlyerData = async (silent: boolean = true) => {
+    if (!selectedListing) return;
+    try {
+      setAutosaveStatus("saving");
+      const payload: Partial<Listing> & Record<string, any> = {
+        flyerHeroImage: selectedHeroImage,
+        excludedPhotos: excludedPhotos,
+        flyerHeadline: customHeadline,
+        flyerSubHeadline: customSubHeadline,
+        flyerDescription: customDescription,
+        flyerCta: customCta,
+        flyerTemplate: template,
+        flyerAccentColor: accentColor,
+        flyerOrientation: orientation,
+        flyerQrDest: qrDest,
+        flyerQrBrandingOption: qrBrandingOption,
+        flyerTitleFont: titleFont,
+        flyerTitleSize: titleSize,
+        flyerTitleBold: titleBold,
+        flyerSubtitleFont: subtitleFont,
+        flyerSubtitleSize: subtitleSize,
+        flyerSubtitleBold: subtitleBold,
+        flyerAgentName: agentNameOverride,
+        flyerAgentPhone: agentPhoneOverride,
+        flyerAgentEmail: agentEmailOverride,
+        flyerBrokerageName: brokerageNameOverride,
+        flyerSecondaryPhotos: showSecondaryPhotos,
+        flyerIncludeLender: includeLenderBlock,
+        flyerLenderName: lenderName,
+        flyerLenderCta: lenderCta,
+        flyerStatusBadge: statusBadgeText,
+        flyerOpenHouseTime: openHouseTime
+      };
+
+      await updateListing(selectedListing.id, payload);
+
+      try {
+        localStorage.setItem(`flyer_autosave_${selectedListing.id}`, JSON.stringify({
+          ...payload,
+          savedAt: new Date().toISOString()
+        }));
+      } catch (_) {}
+
+      // Update local state
+      setListings(prev => prev.map(l => l.id === selectedListing.id ? { ...l, ...payload } : l));
+      setSelectedListing(prev => prev ? { ...prev, ...payload } : null);
+
+      setAutosaveStatus("saved");
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastSavedTime(timeStr);
+
+      if (!silent) {
+        toast.success("✨ Flyer settings saved successfully!");
+      }
+    } catch (err) {
+      console.error("Autosave error:", err);
+      setAutosaveStatus("error");
+      if (!silent) {
+        toast.error("Failed to save flyer settings.");
+      }
+    }
+  };
+
+  // Debounced autosave whenever any flyer field is modified
+  useEffect(() => {
+    if (!selectedListing) return;
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      return;
+    }
+    if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
+    autosaveTimeoutRef.current = setTimeout(() => {
+      saveFlyerData(true);
+    }, 1200);
+    return () => {
+      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
+    };
+  }, [
+    customHeadline,
+    customSubHeadline,
+    customDescription,
+    customCta,
+    selectedHeroImage,
+    excludedPhotos,
+    template,
+    accentColor,
+    orientation,
+    qrDest,
+    qrBrandingOption,
+    titleFont,
+    titleSize,
+    titleBold,
+    subtitleFont,
+    subtitleSize,
+    subtitleBold,
+    agentNameOverride,
+    agentPhoneOverride,
+    agentEmailOverride,
+    brokerageNameOverride,
+    showSecondaryPhotos,
+    includeLenderBlock,
+    lenderName,
+    lenderCta,
+    statusBadgeText,
+    openHouseTime
+  ]);
 
   useEffect(() => {
     async function loadAgentBranding() {
@@ -386,7 +498,7 @@ export default function Flyers() {
   };
 
   // AI copywriting generator with realistic responses related to AI Open House Connect models
-  const runAiGenText = async (type: "headline" | "description" | "cta") => {
+  const runAiGenText = async (type: "headline" | "subtitle" | "description" | "cta") => {
     if (!selectedListing) {
       toast.error("Please select a listing first.");
       return;
@@ -404,6 +516,17 @@ export default function Flyers() {
         const picked = hList[Math.floor(Math.random() * hList.length)].toUpperCase().slice(0, 80);
         setCustomHeadline(picked);
         toast.success("✨ Generated elegant luxury headline.");
+      } else if (type === "subtitle") {
+        const sList = [
+          `Architectural mastery framing floor-to-ceiling glass and select natural oak finishes`,
+          `A signature residence crafted with bespoke millwork and expansive entertainer suites`,
+          `Bespoke finishes, soaring natural light, and state-of-the-art smart home integration`,
+          `Exclusive presentation framework paired with high-contrast luxury architectural details`,
+          `A tranquil sanctuary featuring custom chef's kitchen, marble accents, and private outdoor oasis`
+        ];
+        const pickedSub = sList[Math.floor(Math.random() * sList.length)].slice(0, 120);
+        setCustomSubHeadline(pickedSub);
+        toast.success("✨ Generated elegant marketing subtitle.");
       } else if (type === "description") {
         const address = selectedListing.address || "this magnificent residence";
         const beds = selectedListing.beds ? `${selectedListing.beds} beds` : "";
@@ -470,18 +593,12 @@ export default function Flyers() {
   };
 
   const handlePrint = () => {
-    const printableElement = document.getElementById("flyer-printable-canvas");
-    if (!printableElement) {
-      toast.error("Printable flyer element not found.");
+    if (!selectedListing) {
+      toast.error("Please select a listing first.");
       return;
     }
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      // Fallback if popup blocker is active
-      window.print();
-      return;
-    }
+    toast.info("Preparing high-resolution flyer print layout...");
 
     // Determine exact hex color palettes corresponding to chosen UI state
     const primaryColorHex = 
@@ -1646,48 +1763,232 @@ export default function Flyers() {
       `;
     }
 
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    // Execution: Bulletproof print method using hidden iframe (works within sandboxed iframes & popups) with window fallback
+    try {
+      const existingFrame = document.getElementById("flyer-hidden-print-frame");
+      if (existingFrame && existingFrame.parentNode) {
+        existingFrame.parentNode.removeChild(existingFrame);
+      }
+
+      const printIframe = document.createElement("iframe");
+      printIframe.id = "flyer-hidden-print-frame";
+      printIframe.style.position = "fixed";
+      printIframe.style.right = "0";
+      printIframe.style.bottom = "0";
+      printIframe.style.width = "0";
+      printIframe.style.height = "0";
+      printIframe.style.border = "0";
+      printIframe.style.visibility = "hidden";
+      document.body.appendChild(printIframe);
+
+      const frameDoc = printIframe.contentWindow?.document || printIframe.contentDocument;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(htmlContent);
+        frameDoc.close();
+
+        setTimeout(() => {
+          try {
+            printIframe.contentWindow?.focus();
+            printIframe.contentWindow?.print();
+            toast.success("✨ Print dialog opened! Select 'Save as PDF' to save your high-resolution flyer.");
+          } catch (iframeErr) {
+            console.warn("Iframe print error, falling back to window.open:", iframeErr);
+            const printWindow = window.open("", "_blank");
+            if (printWindow) {
+              printWindow.document.open();
+              printWindow.document.write(htmlContent);
+              printWindow.document.close();
+              setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+              }, 500);
+            } else {
+              window.print();
+            }
+          }
+        }, 500);
+      } else {
+        throw new Error("Unable to access print frame document");
+      }
+    } catch (err) {
+      console.error("Print error:", err);
+      const printWindow = window.open("", "_blank");
+      if (printWindow) {
+        printWindow.document.open();
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        setTimeout(() => {
+          printWindow.focus();
+          printWindow.print();
+        }, 500);
+      } else {
+        window.print();
+      }
+    }
   };
 
-  const handleDownloadQrCode = () => {
+  const handleDownloadQrCode = async () => {
     try {
+      toast.info("Generating high-resolution QR code...");
+      const url = getQrUrl();
+      const safeAddress = (selectedListing?.address || "listing")
+        .replace(/[^a-zA-Z0-9]/g, "");
+
+      // Helper function to download canvas as PNG
+      const downloadCanvas = (canvas: HTMLCanvasElement) => {
+        const png = canvas.toDataURL("image/png");
+        const dlLink = document.createElement("a");
+        dlLink.download = `${safeAddress || "property"}_qrcode.png`;
+        dlLink.href = png;
+        document.body.appendChild(dlLink);
+        dlLink.click();
+        document.body.removeChild(dlLink);
+        toast.success(`✨ High-res QR Code downloaded successfully!`);
+      };
+
+      // Strategy 1: Check for active QR svg in DOM
       const qrg = document.getElementById("active-qr-svg");
       if (qrg) {
-        const svgString = new XMLSerializer().serializeToString(qrg);
-        const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-        const blobURL = (window.URL || (window as any).webkitURL).createObjectURL(svgBlob);
-        const image = new Image();
-        image.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = 500;
-          canvas.height = 500;
-          const context = canvas.getContext("2d");
-          if (context) {
-            context.fillStyle = "#FFFFFF";
-            context.fillRect(0, 0, 500, 500);
-            context.drawImage(image, 25, 25, 450, 450);
-            const png = canvas.toDataURL("image/png");
-            
-            const safeAddress = (selectedListing?.address || "listing")
-              .replace(/[^a-zA-Z0-9]/g, ""); // IE: 77ElfordCresHamilton
+        try {
+          const svgString = new XMLSerializer().serializeToString(qrg);
+          const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+          const blobURL = URL.createObjectURL(svgBlob);
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => {
+              try {
+                const canvas = document.createElement("canvas");
+                canvas.width = 1000;
+                canvas.height = 1000;
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                  ctx.fillStyle = "#FFFFFF";
+                  ctx.fillRect(0, 0, 1000, 1000);
+                  ctx.drawImage(img, 50, 50, 900, 900);
+                  downloadCanvas(canvas);
+                  URL.revokeObjectURL(blobURL);
+                  resolve();
+                  return;
+                }
+              } catch (err) {
+                reject(err);
+              }
+            };
+            img.onerror = reject;
+            img.src = blobURL;
+          });
+          return;
+        } catch (domErr) {
+          console.warn("DOM SVG export fallback:", domErr);
+        }
+      }
 
-            const dlLink = document.createElement("a");
-            dlLink.download = `${safeAddress}.png`;
-            dlLink.href = png;
-            document.body.appendChild(dlLink);
-            dlLink.click();
-            document.body.removeChild(dlLink);
-            toast.success(`✨ Dynamic tracking QR code downloaded as high-res PNG (${safeAddress}.png)!`);
+      // Strategy 2: Direct High-Res Canvas Rendering via QR Server API + Brand Overlay
+      const qrImg = new Image();
+      qrImg.crossOrigin = "anonymous";
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(url)}&format=png`;
+
+      await new Promise<void>((resolve, reject) => {
+        qrImg.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = 1000;
+            canvas.height = 1000;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.fillStyle = "#FFFFFF";
+              ctx.fillRect(0, 0, 1000, 1000);
+              ctx.drawImage(qrImg, 50, 50, 900, 900);
+
+              // Optional brand overlay in center
+              const brandingImgUrl = (qrBrandingOption === "logo" && brokerageLogo) || (qrBrandingOption === "photo" && agentPhoto) ? (qrBrandingOption === "logo" ? brokerageLogo : agentPhoto) : null;
+
+              if (brandingImgUrl) {
+                const overlayImg = new Image();
+                overlayImg.crossOrigin = "anonymous";
+                overlayImg.onload = () => {
+                  const overlaySize = 180;
+                  const overlayX = (1000 - overlaySize) / 2;
+                  const overlayY = (1000 - overlaySize) / 2;
+                  
+                  ctx.fillStyle = "#FFFFFF";
+                  ctx.beginPath();
+                  if (qrBrandingOption === "photo") {
+                    ctx.arc(500, 500, overlaySize / 2 + 10, 0, Math.PI * 2);
+                  } else {
+                    ctx.roundRect(overlayX - 8, overlayY - 8, overlaySize + 16, overlaySize + 16, 16);
+                  }
+                  ctx.fill();
+                  ctx.lineWidth = 4;
+                  ctx.strokeStyle = "#E2E8F0";
+                  ctx.stroke();
+
+                  ctx.save();
+                  ctx.beginPath();
+                  if (qrBrandingOption === "photo") {
+                    ctx.arc(500, 500, overlaySize / 2, 0, Math.PI * 2);
+                  } else {
+                    ctx.roundRect(overlayX, overlayY, overlaySize, overlaySize, 12);
+                  }
+                  ctx.clip();
+                  ctx.drawImage(overlayImg, overlayX, overlayY, overlaySize, overlaySize);
+                  ctx.restore();
+
+                  downloadCanvas(canvas);
+                  resolve();
+                };
+                overlayImg.onerror = () => {
+                  downloadCanvas(canvas);
+                  resolve();
+                };
+                overlayImg.src = brandingImgUrl;
+              } else {
+                downloadCanvas(canvas);
+                resolve();
+              }
+            } else {
+              reject(new Error("Canvas context unavailable"));
+            }
+          } catch (canvasErr) {
+            reject(canvasErr);
           }
         };
-        image.src = blobURL;
-      } else {
-        toast.error("Unable to extract QR graphic reference.");
-      }
+        qrImg.onerror = () => {
+          // Ultimate fallback: direct anchor link download
+          const dlLink = document.createElement("a");
+          dlLink.target = "_blank";
+          dlLink.download = `${safeAddress || "property"}_qrcode.png`;
+          dlLink.href = qrApiUrl;
+          document.body.appendChild(dlLink);
+          dlLink.click();
+          document.body.removeChild(dlLink);
+          toast.success("✨ QR Code downloaded successfully!");
+          resolve();
+        };
+        qrImg.src = qrApiUrl;
+      });
+
     } catch (e) {
-      console.error(e);
-      toast.error("Error creating QR raster stream download.");
+      console.error("QR Code download error:", e);
+      // Failsafe direct download link
+      try {
+        const url = getQrUrl();
+        const safeAddress = (selectedListing?.address || "listing").replace(/[^a-zA-Z0-9]/g, "");
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=800x800&data=${encodeURIComponent(url)}&format=png`;
+        const dlLink = document.createElement("a");
+        dlLink.target = "_blank";
+        dlLink.download = `${safeAddress || "property"}_qrcode.png`;
+        dlLink.href = qrApiUrl;
+        document.body.appendChild(dlLink);
+        dlLink.click();
+        document.body.removeChild(dlLink);
+        toast.success("✨ QR Code downloaded successfully!");
+      } catch (fallbackErr) {
+        toast.error("Error creating QR Code download.");
+      }
     }
   };
 
@@ -1876,7 +2177,7 @@ export default function Flyers() {
               className="bg-[#155dfc] hover:bg-[#155dfc]/90 text-white font-extrabold gap-2 rounded-xl h-11 px-4 text-xs cursor-pointer flex-1 sm:flex-none"
             >
               <QrCode className="h-4 w-4 active:text-blue-900 text-white" />
-              Download QR Only
+              Download QR Code
             </Button>
           </div>
         )}
@@ -1900,9 +2201,35 @@ export default function Flyers() {
           {/* Left Edit Controls column */}
           <div className="lg:col-span-5 space-y-6">
             <Card className="mx-auto max-w-[calc(100%-15px)] lg:max-w-none lg:mx-0 rounded-2xl border-blue-900/40 shadow-sm overflow-hidden text-left bg-[#155dfc] text-white">
+              {/* Autosave Status Feedback Bar */}
+              <div className="bg-blue-950/70 px-4 py-1.5 flex items-center justify-between text-[9px] border-b border-white/10">
+                <span className="text-blue-200 font-semibold flex items-center gap-1">
+                  <Sparkles className="h-3 w-3 text-amber-300" />
+                  Auto-Save Active
+                </span>
+                <span className="font-mono text-blue-100 flex items-center gap-1.5">
+                  {autosaveStatus === "saving" ? (
+                    <>
+                      <RefreshCw className="h-2.5 w-2.5 animate-spin text-amber-300" />
+                      <span className="text-amber-200 font-bold">Autosaving...</span>
+                    </>
+                  ) : autosaveStatus === "saved" ? (
+                    <>
+                      <CheckCircle className="h-2.5 w-2.5 text-emerald-400" />
+                      <span className="text-emerald-300 font-bold">Autosaved {lastSavedTime ? `at ${lastSavedTime}` : "to Firestore"}</span>
+                    </>
+                  ) : (
+                    <span>Ready & Synced</span>
+                  )}
+                </span>
+              </div>
+
               <div className="border-b-2 border-white bg-white/10 flex">
                 <button
-                  onClick={() => setActiveTab("edit")}
+                  onClick={() => {
+                    saveFlyerData(true);
+                    setActiveTab("edit");
+                  }}
                   className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
                     activeTab === "edit" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
                   }`}
@@ -1910,7 +2237,10 @@ export default function Flyers() {
                   1. Content
                 </button>
                 <button
-                  onClick={() => setActiveTab("settings")}
+                  onClick={() => {
+                    saveFlyerData(true);
+                    setActiveTab("settings");
+                  }}
                   className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
                     activeTab === "settings" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
                   }`}
@@ -1918,7 +2248,10 @@ export default function Flyers() {
                   2. Aesthetics
                 </button>
                 <button
-                  onClick={() => setActiveTab("typography")}
+                  onClick={() => {
+                    saveFlyerData(true);
+                    setActiveTab("typography");
+                  }}
                   className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
                     activeTab === "typography" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
                   }`}
@@ -1926,7 +2259,10 @@ export default function Flyers() {
                   3. Typography
                 </button>
                 <button
-                  onClick={() => setActiveTab("qr_code")}
+                  onClick={() => {
+                    saveFlyerData(true);
+                    setActiveTab("qr_code");
+                  }}
                   className={`flex-1 py-3 text-center text-[10px] font-black uppercase tracking-wider border-b-2 transition-all ${
                     activeTab === "qr_code" ? "border-white text-white" : "border-transparent text-blue-100 hover:text-white"
                   }`}
@@ -1961,7 +2297,10 @@ export default function Flyers() {
                       </div>
                       <select
                         value={selectedListing?.id || ""}
-                        onChange={(e) => handleListingChange(e.target.value)}
+                        onChange={(e) => {
+                          saveFlyerData(true);
+                          handleListingChange(e.target.value);
+                        }}
                         className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800"
                       >
                         {listings.map((l) => (
@@ -2041,9 +2380,20 @@ export default function Flyers() {
                             <HelpCircle className="h-3.5 w-3.5 transition-all" strokeWidth={activeHelpPopup?.title === "Marketing Subtitle" ? 3.5 : 2} />
                           </button>
                         </div>
-                        <span className={`text-[9px] font-mono font-bold ${customSubHeadline.length >= 90 ? 'text-amber-300' : 'text-white'}`}>
-                          {customSubHeadline.length}/120 {customSubHeadline.length >= 90 && <span className="animate-pulse font-normal">(75% Reached)</span>}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[9px] font-mono font-bold ${customSubHeadline.length >= 90 ? 'text-amber-300' : 'text-white'}`}>
+                            {customSubHeadline.length}/120 {customSubHeadline.length >= 90 && <span className="animate-pulse font-normal">({Math.min(100, Math.round((customSubHeadline.length / 120) * 100))}% Reached)</span>}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => runAiGenText("subtitle")}
+                            disabled={isGeneratingAi}
+                            className="text-[9px] font-extrabold text-white hover:text-slate-200 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          >
+                            <Sparkles className="h-3 w-3 text-white" />
+                            AI Subtitle Builder
+                          </button>
+                        </div>
                       </div>
                       <Input 
                         value={customSubHeadline}
@@ -2166,10 +2516,15 @@ export default function Flyers() {
                           const isHero = selectedHeroImage === url;
                           const isExcluded = excludedPhotos.includes(url);
                           return (
-                            <div key={url} className={`relative group/thumb rounded-xl p-1 bg-slate-800/40 border transition-all h-fit self-start ${isHero ? 'border-blue-500 bg-blue-500/5 mt-5' : 'border-slate-700 mt-5'}`}>
+                            <div key={url} className={`relative group/thumb rounded-xl p-1 bg-slate-800/40 border transition-all h-fit self-start ${isHero ? 'border-blue-500 bg-blue-500/5 mt-7' : 'border-slate-700 mt-7'}`}>
                               {isHero && (
-                                <div className="absolute -top-4.5 left-0 right-0 text-[7px] text-blue-300 font-extrabold uppercase text-center tracking-wider truncate">
-                                  ★ Header Image for Flyer
+                                <div className="absolute -top-6 left-0 right-0 flex flex-col items-center justify-center text-center leading-tight">
+                                  <span className="text-[7.5px] text-blue-300 font-black uppercase tracking-wider truncate">
+                                    ★ Header Image for Flyer
+                                  </span>
+                                  <span className="text-[7px] text-amber-300 font-extrabold uppercase tracking-widest">
+                                    - THUMBNAIL
+                                  </span>
                                 </div>
                               )}
                               <div className="relative rounded-lg overflow-hidden border transition-all block h-14 bg-black/20">
@@ -3060,7 +3415,7 @@ export default function Flyers() {
                   }`}
                 >
                   <QrCode className="h-3.5 w-3.5" />
-                  QR Scan Grounding
+                  QR Scan Grounding %
                 </button>
               </div>
 
@@ -3408,65 +3763,95 @@ export default function Flyers() {
                   </div>
 
                   {/* Screen Content Overlay */}
-                  <div className="z-10 flex flex-col justify-between h-full pt-6 text-left text-white">
+                  <div className="z-10 flex flex-col justify-between h-full pt-6 pb-1 text-left text-white gap-2">
                     
                     {/* Header */}
-                    <div className="flex justify-between items-center bg-black/40 backdrop-blur-md p-2 rounded-xl">
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-5 w-5 rounded bg-blue-600 text-white font-mono text-[8px] font-black flex items-center justify-center">VA</div>
-                        <div>
-                          <p className="text-[7.5px] font-black tracking-wide leading-none">{brokerageNameOverride || legalName || "PINNACLE GROUP"}</p>
-                          <p className="text-[6.5px] text-zinc-300 pointer-events-none mt-0.5 font-mono">Live Interactive Walkthrough</p>
+                    <div className="flex justify-between items-center bg-black/50 backdrop-blur-md p-2 rounded-xl border border-white/10 shrink-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="h-5 w-5 rounded bg-blue-600 text-white font-mono text-[8px] font-black flex items-center justify-center shrink-0">VA</div>
+                        <div className="min-w-0">
+                          <p className="text-[7.5px] font-black tracking-wide leading-none truncate">{brokerageNameOverride || legalName || "PINNACLE GROUP"}</p>
+                          <p className="text-[6.5px] text-zinc-300 pointer-events-none mt-0.5 font-mono truncate">Live Interactive Walkthrough</p>
                         </div>
                       </div>
-                      <span className="px-1.5 py-0.5 rounded text-[6px] font-black bg-blue-500">REAL-TIME</span>
+                      <span className="px-1.5 py-0.5 rounded text-[6px] font-black bg-blue-500 shrink-0">REAL-TIME</span>
                     </div>
 
-                    {/* Central Pitch Block and Large Prompts */}
-                    <div className="space-y-2 mt-6">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-black tracking-wide font-mono ${activeColor.bg}`}>
-                        ${(selectedListing.price || 5000000).toLocaleString()}
-                      </span>
-                      <h3 className={`text-base font-black tracking-tight leading-none uppercase text-amber-300`}>
+                    {/* Central Pitch Block */}
+                    <div className="space-y-1.5 mt-0.5 shrink-0">
+                      <div className="flex items-center justify-between">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-black tracking-wide font-mono ${activeColor.bg}`}>
+                          ${(selectedListing.price || 5000000).toLocaleString()}
+                        </span>
+                        <span className="text-[7px] text-amber-300 font-bold uppercase tracking-wider bg-black/40 px-1.5 py-0.5 rounded border border-amber-300/30">
+                          Open House Ready
+                        </span>
+                      </div>
+                      <h3 className="text-xs sm:text-sm font-black tracking-tight leading-tight uppercase text-amber-300 line-clamp-2">
                         {customHeadline}
                       </h3>
-                      <p className="text-[9px] text-zinc-200 leading-snug">
-                        {customDescription.slice(0, 150)}...
+                      {customSubHeadline && (
+                        <p className="text-[8px] text-blue-200 font-semibold leading-tight line-clamp-1">
+                          {customSubHeadline}
+                        </p>
+                      )}
+                      <p className="text-[8.5px] text-zinc-200 leading-snug line-clamp-2">
+                        {customDescription.slice(0, 140)}...
                       </p>
                     </div>
 
+                    {/* Unblurred Property Showcase Card with Specs and Sora Tour badge */}
+                    <div className="relative rounded-2xl overflow-hidden border border-white/20 shadow-xl bg-black/60 aspect-16/10 flex flex-col justify-end p-2 shrink-0">
+                      <img 
+                        src={selectedHeroImage || fallbackImg} 
+                        alt="Featured Property Showcase" 
+                        className="absolute inset-0 w-full h-full object-cover brightness-95 contrast-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                      
+                      <div className="relative z-10 flex items-center justify-between">
+                        <span className="bg-blue-600/95 backdrop-blur-xs text-white text-[7.5px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                          <Sparkles className="h-2.5 w-2.5 text-amber-300" /> Sora AI Voice Tour
+                        </span>
+                        <div className="flex items-center gap-1 text-[7.5px] font-bold text-white bg-black/70 backdrop-blur-xs px-2 py-0.5 rounded-full">
+                          <span>{selectedListing.beds || 4} Beds</span> • <span>{selectedListing.baths || 2} Baths</span>
+                          {selectedListing.sqft ? <span> • {selectedListing.sqft.toLocaleString()} SqFt</span> : ""}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Footer Scan with QR code and live voice companion callout */}
-                    <div className="space-y-2.5 mt-auto bg-black/70 backdrop-blur-md p-3.5 rounded-2xl border border-white/10">
-                      <div className="flex items-center gap-3">
+                    <div className="space-y-2 bg-black/80 backdrop-blur-md p-3 rounded-2xl border border-white/10 shrink-0 mt-auto">
+                      <div className="flex items-center gap-2.5">
                         <div className="p-1 bg-white rounded-lg shrink-0 select-none">
                           <QRCodeSVG 
                             value={getQrUrl()} 
-                            size={56}
+                            size={50}
                             level="H"
                             imageSettings={
                               (qrBrandingOption === "logo" && brokerageLogo) || (qrBrandingOption === "photo" && agentPhoto) ? {
                                 src: qrBrandingOption === "logo" ? brokerageLogo : agentPhoto,
                                 x: undefined,
                                 y: undefined,
-                                height: 16,
-                                width: 16,
+                                height: 14,
+                                width: 14,
                                 excavate: true,
                               } : undefined
                             }
                           />
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-[8px] text-zinc-300 font-mono uppercase tracking-wider font-semibold">Buyer Action Required</p>
-                          <p className="text-[9.5px] font-bold text-white uppercase tracking-tight leading-tight">
-                            {customCta.slice(0, 75)}...
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-[7.5px] text-blue-300 font-mono uppercase tracking-wider font-bold">Audio Tour / Sign-In</p>
+                          <p className="text-[8.5px] font-extrabold text-white uppercase tracking-tight leading-tight line-clamp-2">
+                            {customCta.slice(0, 70)}...
                           </p>
                         </div>
                       </div>
 
                       {/* Agent brand indicators */}
-                      <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[7px] text-zinc-400">
-                        <span>Agent: <strong>{agentNameOverride}</strong></span>
-                        <span>Tel: {agentPhoneOverride}</span>
+                      <div className="border-t border-white/10 pt-1.5 flex items-center justify-between text-[7px] text-zinc-300">
+                        <span className="truncate">Agent: <strong>{agentNameOverride}</strong></span>
+                        <span className="shrink-0">Tel: {agentPhoneOverride}</span>
                       </div>
                     </div>
 

@@ -82,6 +82,40 @@ function formatDate(dateStr: string) {
   return dateStr;
 }
 
+function formatExpiredDateShort(dateStr?: string) {
+  if (!dateStr || typeof dateStr !== 'string' || dateStr.trim() === '') return 'Aug/1/2026';
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  
+  // Try YYYY-MM-DD
+  const matchYYYYMMDD = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (matchYYYYMMDD) {
+    const [_, year, month, day] = matchYYYYMMDD;
+    const monthIndex = parseInt(month, 10) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return `${months[monthIndex]}/${parseInt(day, 10)}/${year}`;
+    }
+  }
+
+  // Try MM-DD-YYYY or MM/DD/YYYY
+  const matchMMDDYYYY = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (matchMMDDYYYY) {
+    const [_, month, day, year] = matchMMDDYYYY;
+    const monthIndex = parseInt(month, 10) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return `${months[monthIndex]}/${parseInt(day, 10)}/${year}`;
+    }
+  }
+
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return `${months[d.getMonth()]}/${d.getDate()}/${d.getFullYear()}`;
+    }
+  } catch (e) {}
+
+  return 'Aug/1/2026';
+}
+
 function formatTime12h(timeStr: string) {
   if (!timeStr) return "";
   let match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
@@ -583,7 +617,12 @@ export default function Dashboard() {
                       >
                         {isListingExpired(listing) && (
                           <div className="absolute top-3 left-3 z-10 bg-rose-600 text-white font-black text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md shadow-md border border-rose-400">
-                            Expired
+                            EXPIRED {formatExpiredDateShort(listing.expiredListingDate)}
+                          </div>
+                        )}
+                        {(listing.isDummyData || listing.title?.includes("[SAMPLE") || listing.address?.includes("Demo")) && (
+                          <div className={`absolute ${isListingExpired(listing) ? 'top-10' : 'top-3'} left-3 z-10 bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md shadow-md border border-amber-300 flex items-center gap-1`}>
+                            <Sparkles className="h-3 w-3" /> Dummy / Sample Data
                           </div>
                         )}
                         {listing.images && listing.images.length > 0 ? (

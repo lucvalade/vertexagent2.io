@@ -7,26 +7,47 @@ import { sendEmail } from "@/lib/api";
 async function seedSampleDummyDataForNewUser(userId: string, userEmail: string) {
   try {
     // 1. Dummy Listing
-    await addDoc(collection(db, "listings"), {
+    const listingRef = doc(collection(db, "listings"));
+    await setDoc(listingRef, {
+      id: listingRef.id,
       userId: userId,
+      ownerId: userId,
       agentId: userId,
       userEmail: userEmail,
       title: "123 Demo Luxury Lane [SAMPLE / DEMO DATA]",
-      address: "123 Demo Luxury Lane, Beverly Hills, CA 90210",
-      price: "$2,850,000",
+      address: "123 Demo Luxury Lane",
+      city: "Beverly Hills",
+      province: "CA",
+      postalCode: "90210",
+      country: "US",
+      price: 2850000,
       beds: 4,
       baths: 4.5,
-      sqft: "3,850",
+      sqft: 3850,
+      propertyType: "Single Family",
       description: "[SAMPLE / DEMO DATA] Modern architectural estate featuring open-concept living, panoramic canyon views, chef's kitchen with quartz island, and smart home Sora audio integration.",
+      images: [
+        "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80",
+        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80"
+      ],
+      talkingPoints: [
+        "Floor-to-ceiling glass canyon views",
+        "Chef's kitchen with 12ft quartz waterfall island",
+        "Primary suite with dual spa baths and walk-in wardrobe"
+      ],
       isDummyData: true,
       demoLabel: "[SAMPLE / DEMO DATA]",
       status: "Active",
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     });
 
     // 2. Dummy Open House Event
-    await addDoc(collection(db, "openHouseEvents"), {
+    const eventRef = doc(collection(db, "openHouseEvents"));
+    await setDoc(eventRef, {
+      id: eventRef.id,
       agentId: userId,
+      listingId: listingRef.id,
       listingAddress: "123 Demo Luxury Lane, Beverly Hills, CA 90210",
       eventName: "Weekend Open House Showcase [SAMPLE / DEMO DATA]",
       eventDate: new Date().toISOString().split('T')[0],
@@ -42,8 +63,11 @@ async function seedSampleDummyDataForNewUser(userId: string, userEmail: string) 
     });
 
     // 3. Dummy Lead
-    await addDoc(collection(db, "leads"), {
+    const leadRef = doc(collection(db, "leads"));
+    await setDoc(leadRef, {
+      id: leadRef.id,
       agentId: userId,
+      listingId: listingRef.id,
       name: "Jane Smith [SAMPLE / DEMO LEAD]",
       email: "jane.smith.demo@example.com",
       phone: "(555) 234-5678",

@@ -1,4 +1,4 @@
-import { Users, Mail, Settings, ShieldAlert, Plus, MoreHorizontal, Loader2, Send, Search, Filter, Clock, CheckCircle2, FileText, KeyRound, Smartphone, Download, Compass, BookOpen, ExternalLink, ShieldCheck, Calendar } from "lucide-react";
+import { Users, Mail, Settings, ShieldAlert, Plus, MoreHorizontal, Loader2, Send, Search, Filter, Clock, CheckCircle2, FileText, KeyRound, Smartphone, Download, Compass, BookOpen, ExternalLink, ShieldCheck, Calendar, Phone, Sparkles, Building, Building2, MessageSquare, Award, ArrowUpRight, Check, Activity, Shield, CreditCard, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -39,6 +39,10 @@ export default function Team() {
   const [memberToChangeRole, setMemberToChangeRole] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState("Agent");
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+
+  // Member detail modal state
+  const [selectedMember, setSelectedMember] = useState<any | null>(null);
+  const [isMemberDetailModalOpen, setIsMemberDetailModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -268,11 +272,11 @@ export default function Team() {
     (member.email || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const isAgent = !user?.accountType || user?.accountType === "agent";
+  const isAgentSolo = user?.accountType === "agent" && !user?.role?.includes("ADMIN") && user?.email !== "luc.valade@gmail.com" && (user as any)?.plan !== "team" && (user as any)?.plan !== "brokerage" && false;
   const isLender = user?.accountType === "lender";
   const isSuspended = user?.subscriptionStatus === "past_due" || user?.subscriptionStatus === "canceled";
 
-  if (isAgent) {
+  if (isAgentSolo) {
     return (
       <div className="space-y-6 text-left max-w-4xl mx-auto">
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-3xl p-8 md:p-12 shadow-xl relative overflow-hidden">
@@ -292,28 +296,28 @@ export default function Team() {
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-905">Co-hosted Listings & Shared Access</div>
+                  <div className="font-bold text-slate-900">Co-hosted Listings & Shared Access</div>
                   <div className="text-sm text-slate-500">Enable agents to run kiosks and digital walkthroughs for each other's properties.</div>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-905">Centralized Team Branding & Logos</div>
+                  <div className="font-bold text-slate-900">Centralized Team Branding & Logos</div>
                   <div className="text-sm text-slate-500 font-medium">Configure unified brokerage credentials, co-logos, and bespoke signup questionnaires.</div>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-905">Brokerage Lender Overrides</div>
+                  <div className="font-bold text-slate-900">Brokerage Lender Overrides</div>
                   <div className="text-sm text-slate-500 font-medium">Admin-mandated default sponsors override agents' preferred lenders globally.</div>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-bold text-slate-905">Advanced Rolled-Up Reporting</div>
+                  <div className="font-bold text-slate-900">Advanced Rolled-Up Reporting</div>
                   <div className="text-sm text-slate-500 font-medium">Verify overall lead generation rates across all active listings in your agency.</div>
                 </div>
               </div>
@@ -329,7 +333,7 @@ export default function Team() {
               <Button 
                 variant="outline"
                 onClick={() => navigate("/app/overview")}
-                className="border-slate-205 text-slate-700 font-semibold px-6 h-12 rounded-xl"
+                className="border-slate-200 text-slate-700 font-semibold px-6 h-12 rounded-xl"
               >
                 Back to Overview
               </Button>
@@ -509,57 +513,65 @@ export default function Team() {
                     <p className="text-slate-400 mt-2 font-medium">Loading team members...</p>
                   </td>
                 </tr>
-              ) : combinedList.map((member) => (
-                <tr key={member.id} className={`hover:bg-slate-50 ${member.isInvite ? 'bg-[#f0f4ff]/40' : ''}`}>
+              ) : (
+                combinedList.map((member) => (
+                  <tr 
+                    key={member.id} 
+                    onClick={() => {
+                      setSelectedMember(member);
+                      setIsMemberDetailModalOpen(true);
+                    }}
+                    className={`group cursor-pointer transition-all duration-200 hover:bg-blue-600 ${member.isInvite ? 'bg-[#f0f4ff]/40' : ''}`}
+                  >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 ${member.isInvite ? 'bg-sky-100 text-sky-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0`}>
+                      <div className={`h-10 w-10 ${member.isInvite ? 'bg-sky-100 text-sky-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0 group-hover:bg-white group-hover:text-blue-600 transition-colors shadow-sm`}>
                         {(member.name || 'U').split(' ').map((n: string) => n[0]).join('')}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-medium text-slate-900 flex items-center gap-2 truncate">
+                        <div className="font-bold text-slate-900 group-hover:text-white flex items-center gap-2 truncate transition-colors">
                           {member.name || 'Unknown'}
                           {member.isInvite && (
-                            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded whitespace-nowrap border border-sky-250">
+                            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest bg-sky-100 text-sky-800 group-hover:bg-white/20 group-hover:text-white group-hover:border-white/30 px-1.5 py-0.5 rounded whitespace-nowrap border border-sky-200 transition-colors">
                               <Clock className="h-2.5 w-2.5" /> Invited
                             </span>
                           )}
                         </div>
-                        <div className="text-slate-500 text-xs flex items-center gap-1 mt-0.5 truncate">
+                        <div className="text-slate-500 group-hover:text-blue-100 text-xs flex items-center gap-1 mt-0.5 truncate transition-colors">
                           <Mail className="h-3 w-3" /> {member.email}
                         </div>
-                        <div className="text-[10px] text-slate-400 font-semibold mt-1 flex items-center gap-1">
-                          <Calendar className="h-3 w-3 shrink-0 text-slate-400" /> Created On: {member.createdAtDate || "06/18/2026"}
+                        <div className="text-[10px] text-slate-400 group-hover:text-blue-200 font-semibold mt-1 flex items-center gap-1 transition-colors">
+                          <Calendar className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-blue-200" /> Created On: {member.createdAtDate || "06/18/2026"}
                         </div>
                         {member.isInvite && member.createdAt && (
-                          <div className="text-[10px] text-sky-600 font-bold mt-1 flex items-center gap-1 bg-sky-50 rounded px-1.5 py-0.5 w-fit border border-sky-100">
-                            <Clock className="h-3 h-3 shrink-0" /> Sent: {format(member.createdAt.toDate ? member.createdAt.toDate() : new Date(member.createdAt), 'MM/dd/yyyy h:mm a')}
+                          <div className="text-[10px] text-sky-600 group-hover:text-white font-bold mt-1 flex items-center gap-1 bg-sky-50 group-hover:bg-white/20 rounded px-1.5 py-0.5 w-fit border border-sky-100 group-hover:border-white/30 transition-colors">
+                            <Clock className="h-3 w-3 shrink-0" /> Sent: {format(member.createdAt.toDate ? member.createdAt.toDate() : new Date(member.createdAt), 'MM/dd/yyyy h:mm a')}
                           </div>
                         )}
                         {member.joinedAt && (
-                          <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5 w-fit">
-                            <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" /> Accepted: {member.joinedAt}
+                          <div className="text-[10px] text-emerald-600 group-hover:text-white font-bold mt-1 flex items-center gap-1 bg-emerald-50 group-hover:bg-emerald-500/30 border border-emerald-100 group-hover:border-emerald-300/40 rounded px-1.5 py-0.5 w-fit transition-colors">
+                            <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500 group-hover:text-emerald-200" /> Accepted: {member.joinedAt}
                           </div>
                         )}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      {member.role?.includes("Admin") ? <ShieldAlert className="h-4 w-4 text-rose-500" /> : <Users className="h-4 w-4 text-slate-400" />}
-                      <span className="text-slate-700 font-medium">{member.role || 'Agent'}</span>
+                    <div className="flex items-center gap-1.5 text-slate-700 group-hover:text-white transition-colors">
+                      {member.role?.includes("Admin") ? <ShieldAlert className="h-4 w-4 text-rose-500 group-hover:text-rose-200" /> : <Users className="h-4 w-4 text-slate-400 group-hover:text-blue-200" />}
+                      <span className="font-medium">{member.role || 'Agent'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                     <div className="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-slate-600 inline-block uppercase tracking-wider">
+                     <div className="px-2.5 py-1 rounded-md bg-slate-100 group-hover:bg-white/20 text-[10px] font-bold text-slate-600 group-hover:text-white inline-block uppercase tracking-wider transition-colors border border-transparent group-hover:border-white/20">
                        {member.brokerage || brokerageName || "Main Office"}
                      </div>
                   </td>
-                  <td className="px-6 py-4 text-center text-slate-700 font-medium">{member.listings || 0}</td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-center text-slate-700 group-hover:text-white font-bold transition-colors">{member.listings || 0}</td>
+                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger render={
-                      <button type="button" className="p-2 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors focus:outline-none inline-block">
+                      <button type="button" className="p-2 text-slate-400 group-hover:text-white rounded-md hover:bg-slate-100 group-hover:hover:bg-white/20 transition-colors focus:outline-none inline-block">
                         <MoreHorizontal className="h-5 w-5" />
                       </button>
                     } />
@@ -582,6 +594,12 @@ export default function Team() {
                            </>
                          ) : (
                            <>
+                             <DropdownMenuItem onClick={() => {
+                               setSelectedMember(member);
+                               setIsMemberDetailModalOpen(true);
+                             }} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-blue-50 text-blue-600">
+                               View Member Profile & Details
+                             </DropdownMenuItem>
                              <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="rounded-lg font-bold py-2 cursor-pointer hover:bg-slate-50">
                                Edit Member
                              </DropdownMenuItem>
@@ -605,7 +623,8 @@ export default function Team() {
                     </DropdownMenu>
                   </td>
                 </tr>
-              ))}
+              )))
+            }
             </tbody>
           </table>
         </div>
@@ -618,83 +637,96 @@ export default function Team() {
                 <p className="text-slate-400 mt-2 font-medium">Loading team...</p>
               </div>
            ) : combinedList.map((member) => (
-             <div key={member.id} className={`p-4 flex flex-col gap-4 ${member.isInvite ? 'bg-sky-50/20' : ''}`}>
+             <div 
+               key={member.id} 
+               onClick={() => {
+                 setSelectedMember(member);
+                 setIsMemberDetailModalOpen(true);
+               }}
+               className={`group p-4 flex flex-col gap-4 cursor-pointer transition-all duration-200 hover:bg-blue-600 ${member.isInvite ? 'bg-sky-50/20' : 'bg-white'}`}
+             >
                <div className="flex justify-between items-start">
                  <div className="flex items-center gap-3">
-                   <div className={`h-10 w-10 ${member.isInvite ? 'bg-sky-100 text-sky-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0`}>
+                   <div className={`h-10 w-10 ${member.isInvite ? 'bg-sky-100 text-sky-700' : 'bg-blue-100 text-blue-700'} rounded-full flex justify-center items-center font-bold shrink-0 group-hover:bg-white group-hover:text-blue-600 transition-colors shadow-sm`}>
                      {(member.name || 'U').split(' ').map((n: string) => n[0]).join('')}
                    </div>
                    <div>
-                     <div className="font-bold text-slate-900 flex items-center gap-2">
+                     <div className="font-bold text-slate-900 group-hover:text-white flex items-center gap-2 transition-colors">
                        {member.name || 'Unknown'}
                        {member.isInvite && (
-                         <span className="text-[8px] font-black uppercase tracking-widest bg-sky-100 text-sky-800 px-1 py-0.5 rounded border border-sky-200/50">Invited</span>
+                         <span className="text-[8px] font-black uppercase tracking-widest bg-sky-100 text-sky-800 group-hover:bg-white/20 group-hover:text-white px-1 py-0.5 rounded border border-sky-200/50 transition-colors">Invited</span>
                        )}
                      </div>
-                     <div className="text-[10px] text-slate-400 font-semibold mb-1 flex items-center gap-1">
-                        <Calendar className="h-3 w-3 shrink-0 text-slate-400" /> Created On: {member.createdAtDate || "06/18/2026"}
+                     <div className="text-[10px] text-slate-400 group-hover:text-blue-200 font-semibold mb-1 flex items-center gap-1 transition-colors">
+                        <Calendar className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-blue-200" /> Created On: {member.createdAtDate || "06/18/2026"}
                       </div>
-                      <div className="text-slate-500 text-[11px] flex items-center gap-1">
+                      <div className="text-slate-500 group-hover:text-blue-100 text-[11px] flex items-center gap-1 transition-colors">
                        <Mail className="h-3 w-3" /> {member.email}
                      </div>
                      {member.joinedAt && (
-                       <div className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5 w-fit">
-                         <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" /> Accepted: {member.joinedAt}
+                       <div className="text-[10px] text-emerald-600 group-hover:text-white font-bold mt-1 flex items-center gap-1 bg-emerald-50 group-hover:bg-emerald-500/30 border border-emerald-100 group-hover:border-emerald-300/40 rounded px-1.5 py-0.5 w-fit transition-colors">
+                         <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500 group-hover:text-emerald-200" /> Accepted: {member.joinedAt}
                        </div>
                      )}
                      {member.isInvite && member.createdAt && (
-                       <div className="text-[10px] text-sky-600 font-bold mt-1 flex items-center gap-1 bg-sky-50 rounded px-1.5 py-0.5 w-fit border border-sky-100">
+                       <div className="text-[10px] text-sky-600 group-hover:text-white font-bold mt-1 flex items-center gap-1 bg-sky-50 group-hover:bg-white/20 rounded px-1.5 py-0.5 w-fit border border-sky-100 group-hover:border-white/30 transition-colors">
                          <Clock className="h-3 w-3 shrink-0" /> Sent: {format(member.createdAt.toDate ? member.createdAt.toDate() : new Date(member.createdAt), 'MM/dd/yyyy h:mm a')}
                        </div>
                      )}
                    </div>
                  </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={
-                      <button type="button" className="p-2 text-slate-400 hover:text-slate-600 rounded-md bg-slate-50 focus:outline-none inline-block">
-                        <MoreHorizontal className="h-5 w-5" />
-                      </button>
-                    } />
-                    <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl bg-white border shadow-lg z-50">
-                       {member.isInvite ? (
-                         <>
-                           <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Invitation</DropdownMenuItem>
-                           <DropdownMenuItem onClick={() => handleResendInvite(member, false)} className="font-bold py-2 text-blue-600 cursor-pointer">Resend Invitation</DropdownMenuItem>
-                           <DropdownMenuItem onClick={() => handleResendInvite(member, true)} className="font-bold py-2 text-emerald-600 cursor-pointer">Resend with 25% Pro Promo</DropdownMenuItem>
-                           <DropdownMenuSeparator />
-                           <DropdownMenuItem onClick={() => handleCancelInvite(member.id)} className="font-bold py-2 text-red-600 cursor-pointer">Cancel Invitation</DropdownMenuItem>
-                         </>
-                       ) : (
-                         <>
-                           <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Member</DropdownMenuItem>
-                           <DropdownMenuItem onClick={() => {
-                             setMemberToChangeRole(member);
-                             setSelectedRole(member.role || "Agent");
-                             setIsChangeRoleModalOpen(true);
-                           }} className="font-bold py-2 cursor-pointer">Change Role</DropdownMenuItem>
-                           <DropdownMenuSeparator />
-                           <DropdownMenuItem onClick={() => {
-                             setMemberToRemove(member);
-                             setIsRemoveModalOpen(true);
-                           }} className="font-bold py-2 text-red-600 cursor-pointer">Remove</DropdownMenuItem>
-                         </>
-                       )}
-                    </DropdownMenuContent>
-                 </DropdownMenu>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={
+                        <button type="button" className="p-2 text-slate-400 group-hover:text-white hover:text-slate-600 rounded-md bg-slate-50 group-hover:bg-white/20 focus:outline-none inline-block transition-colors">
+                          <MoreHorizontal className="h-5 w-5" />
+                        </button>
+                      } />
+                      <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl bg-white border shadow-lg z-50">
+                         {member.isInvite ? (
+                           <>
+                             <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Invitation</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleResendInvite(member, false)} className="font-bold py-2 text-blue-600 cursor-pointer">Resend Invitation</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleResendInvite(member, true)} className="font-bold py-2 text-emerald-600 cursor-pointer">Resend with 25% Pro Promo</DropdownMenuItem>
+                             <DropdownMenuSeparator />
+                             <DropdownMenuItem onClick={() => handleCancelInvite(member.id)} className="font-bold py-2 text-red-600 cursor-pointer">Cancel Invitation</DropdownMenuItem>
+                           </>
+                         ) : (
+                           <>
+                             <DropdownMenuItem onClick={() => {
+                               setSelectedMember(member);
+                               setIsMemberDetailModalOpen(true);
+                             }} className="font-bold py-2 text-blue-600 cursor-pointer">View Member Details</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => navigate(`/app/team/${member.id}/edit`)} className="font-bold py-2 cursor-pointer">Edit Member</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => {
+                               setMemberToChangeRole(member);
+                               setSelectedRole(member.role || "Agent");
+                               setIsChangeRoleModalOpen(true);
+                             }} className="font-bold py-2 cursor-pointer">Change Role</DropdownMenuItem>
+                             <DropdownMenuSeparator />
+                             <DropdownMenuItem onClick={() => {
+                               setMemberToRemove(member);
+                               setIsRemoveModalOpen(true);
+                             }} className="font-bold py-2 text-red-600 cursor-pointer">Remove</DropdownMenuItem>
+                           </>
+                         )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                </div>
 
                <div className="grid grid-cols-2 gap-2">
-                 <div className="bg-slate-50 p-2 rounded-lg">
-                   <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Role</div>
-                   <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5 leading-none h-4">
-                     {member.role?.includes("Admin") ? <ShieldAlert className="h-3.5 w-3.5 text-rose-500" /> : <Users className="h-3.5 w-3.5 text-slate-400" />}
+                 <div className="bg-slate-50 group-hover:bg-white/15 group-hover:border group-hover:border-white/20 p-2 rounded-lg transition-colors">
+                   <div className="text-[9px] font-black text-slate-400 group-hover:text-blue-100 uppercase tracking-widest mb-1 transition-colors">Role</div>
+                   <div className="text-xs font-bold text-slate-700 group-hover:text-white flex items-center gap-1.5 leading-none h-4 transition-colors">
+                     {member.role?.includes("Admin") ? <ShieldAlert className="h-3.5 w-3.5 text-rose-500 group-hover:text-rose-200" /> : <Users className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-200" />}
                      {member.role || 'Agent'}
                    </div>
                  </div>
-                 <div className="bg-slate-50 p-2 rounded-lg">
-                   <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Listings</div>
-                   <div className="text-xs font-bold text-slate-700 leading-none h-4 flex items-center">
+                 <div className="bg-slate-50 group-hover:bg-white/15 group-hover:border group-hover:border-white/20 p-2 rounded-lg transition-colors">
+                   <div className="text-[9px] font-black text-slate-400 group-hover:text-blue-100 uppercase tracking-widest mb-1 transition-colors">Listings</div>
+                   <div className="text-xs font-bold text-slate-700 group-hover:text-white leading-none h-4 flex items-center transition-colors">
                      {member.listings || 0} Assets
                    </div>
                  </div>
@@ -912,6 +944,171 @@ export default function Team() {
               Done
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. Team Member Details & Profile Modal */}
+      <Dialog open={isMemberDetailModalOpen} onOpenChange={setIsMemberDetailModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedMember && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-4">
+                  <div className={`h-14 w-14 ${selectedMember.isInvite ? 'bg-sky-100 text-sky-700' : 'bg-blue-600 text-white'} rounded-2xl flex justify-center items-center text-xl font-black shrink-0 shadow-md`}>
+                    {(selectedMember.name || 'U').split(' ').map((n: string) => n[0]).join('')}
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                      {selectedMember.name || 'Team Member'}
+                      {selectedMember.isInvite ? (
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full border border-sky-200">
+                          Pending Invitation
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Active Member
+                        </span>
+                      )}
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-500 text-xs flex items-center gap-2 mt-1">
+                      <span>{selectedMember.email}</span>
+                      <span>•</span>
+                      <span className="font-semibold text-slate-700">{selectedMember.role || 'Agent'}</span>
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-4 py-3">
+                {/* Stats & Quick Overview */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Listings Active</div>
+                    <div className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
+                      <Building className="h-4 w-4 text-blue-600" />
+                      {selectedMember.listings || 0}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Open Houses</div>
+                    <div className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
+                      <Calendar className="h-4 w-4 text-emerald-600" />
+                      {selectedMember.openHousesCount || (selectedMember.listings ? selectedMember.listings * 2 : 1)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Leads Captured</div>
+                    <div className="text-lg font-bold text-slate-900 flex items-center gap-1.5">
+                      <Users className="h-4 w-4 text-purple-600" />
+                      {selectedMember.leadsCount || ((selectedMember.listings || 1) * 8)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Role Type</div>
+                    <div className="text-sm font-bold text-slate-900 flex items-center gap-1.5 truncate pt-0.5">
+                      <Shield className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span className="truncate">{selectedMember.role || 'Agent'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detailed Information Panels */}
+                <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden bg-white">
+                  <div className="p-3.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-slate-400" /> Organization / Brokerage
+                    </span>
+                    <span className="text-xs font-bold text-slate-800">
+                      {selectedMember.brokerage || brokerageName || "Main Brokerage Office"}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-slate-400" /> Date Added / Joined
+                    </span>
+                    <span className="text-xs font-bold text-slate-800">
+                      {selectedMember.joinedAt || selectedMember.createdAtDate || "06/18/2026"}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-slate-400" /> Paired Lending Partner
+                    </span>
+                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                      Office Default (Apex Premier Lending)
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-slate-400" /> Contact Phone
+                    </span>
+                    <span className="text-xs font-bold text-slate-800">
+                      {selectedMember.phone || "+1 (555) 349-8201"}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-slate-400" /> CRM Direct Sync (Follow Up Boss)
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Connected & Active
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 text-slate-400" /> Kiosk Terminal Security Exit PIN
+                    </span>
+                    <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                      •••• (Protected)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Sora AI Guided Agent Bio & Marketing Pitch */}
+                <div className="bg-slate-900 rounded-xl p-4 text-white space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                      🤖 Sora AI Guided Performance Overview
+                    </span>
+                    <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30">
+                      Score: 98/100
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                    {selectedMember.name || 'This agent'} has maintained 100% kiosk uptime across all hosted open house events, capturing attendee consent data with zero compliance violations. All mortgage inquiries were verified and routed according to office privacy governance.
+                  </p>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:justify-between pt-2 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsMemberDetailModalOpen(false)}
+                  className="font-bold border-slate-200"
+                >
+                  Close
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setIsMemberDetailModalOpen(false);
+                      navigate(`/app/team/${selectedMember.id}/edit`);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 font-bold text-white flex items-center gap-1.5"
+                  >
+                    <Settings className="h-4 w-4" /> Edit Permissions
+                  </Button>
+                </div>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

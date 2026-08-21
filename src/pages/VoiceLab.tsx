@@ -1,5 +1,6 @@
-import { Mic2, Play, Pause, Download, Plus, RefreshCw, Star, MoreVertical, Pencil, Trash2, Save, X, Volume2, Music, CheckCircle2, Upload, Loader2, Zap, MessageSquare, StopCircle } from "lucide-react";
+import { Mic2, Play, Pause, Download, Plus, RefreshCw, Star, MoreVertical, Pencil, Trash2, Save, X, Volume2, Music, CheckCircle2, Upload, Loader2, Zap, MessageSquare, StopCircle, ArrowUpRight } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, setDoc, getDocs } from "firebase/firestore";
@@ -40,7 +41,7 @@ const INITIAL_VOICES: Voice[] = [
   { id: "v3", name: "AI Tour Intro (Aoede)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 202, tags: ["Female", "Tour Guide", "Expressive"] },
   { id: "v4", name: "Lender Handoff (Sora)", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 78, tags: ["Female", "High-Trust", "Financing"] },
   { id: "v5", name: "Follow-Up Message (Sora)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 147, tags: ["Female", "Refined", "Nurture"] },
-  { id: "2", name: "Professional Female Synthetic (Sora)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 45, tags: ["Female", "Professional", "Sora"] },
+  { id: "2", name: "Professional Female Slower Pitch (Sora)", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 45, tags: ["Female", "Professional", "Sora"] },
   { id: "5", name: "Executive British (Female) Synthetic", status: "Active", type: "Synthetic", rating: 4.8, ratingCount: 22, tags: ["Female", "British", "Executive", "Zephyr"] },
   { id: "7", name: "Dynamic Storyteller (British Female) Synthetic", status: "Active", type: "Synthetic", rating: 4.9, ratingCount: 56, tags: ["Female", "British", "Expressive", "Aoede"] },
   { id: "3", name: "Warm Energetic Male Synthetic (Puck)", status: "Active", type: "Synthetic", rating: 4.7, ratingCount: 32, tags: ["Male", "Warm", "Energetic", "Puck"] },
@@ -1031,7 +1032,16 @@ Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora
 
         <div className="flex flex-col md:flex-row md:items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
           <div className="space-y-1.5 flex-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Selected Voice Model</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Selected Voice Model</label>
+              <Link 
+                to="/pricing" 
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
+              >
+                <span>Team & Brokerage Plan Voices</span>
+                <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </div>
             <select
               value={welcomeVoiceId}
               onChange={(e) => {
@@ -1243,7 +1253,19 @@ Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora
                 {voice.name}
                 {(voice.isDefault || voice.id === user?.defaultVoiceId) && <span className="ml-2 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded uppercase font-black tracking-tighter">Default</span>}
               </h3>
-              <p className="text-sm font-medium text-slate-500 mb-4">{voice.type} Voice Model</p>
+              <p className="text-sm font-medium text-slate-500 mb-2">{voice.type} Voice Model</p>
+
+              {voice.name.includes("Professional Female Slower Pitch") && (
+                <div className="mb-3">
+                  <Link
+                    to="/pricing"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100/80 border border-blue-200/60 px-2.5 py-1 rounded-lg transition-all"
+                  >
+                    <span>Included in Team or Brokerage Plan</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              )}
               
               {voice.rating > 0 && (
                 <div className="flex items-center gap-1 text-amber-500 mb-4">
@@ -1266,7 +1288,7 @@ Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora
                       onClick={() => startLiveSession(voice)}
                       className="flex-1 bg-blue-50 border border-blue-100 text-blue-600 hover:bg-blue-100 gap-2 shadow-none"
                     >
-                      <MessageSquare className="h-4 w-4" /> Live
+                      <MessageSquare className="h-4 w-4" /> Voice Session
                     </Button>
                   </>
                ) : voice.status === "Inactive" ? (
@@ -1287,7 +1309,7 @@ Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora
 
       </div>
 
-      {/* Live Agent Session Dialog */}
+      {/* Voice Agent Session Dialog */}
       <Dialog open={isLiveOpen} onOpenChange={(val) => {
         if (!val && isLiveActive) {
           stopLiveSession();
@@ -1302,7 +1324,7 @@ Director's Notes: Deliver with a smooth, warm, client-friendly female tone (Sora
             <DialogHeader className="relative z-10">
               <div className="flex items-center gap-3">
                 <div className={`h-3 w-3 rounded-full ${isLiveActive ? 'bg-green-500 animate-pulse' : 'bg-slate-500'}`} />
-                <DialogTitle className="text-xl">Live Conversation: {activeVoice?.name}</DialogTitle>
+                <DialogTitle className="text-xl">Voice Conversation: {activeVoice?.name}</DialogTitle>
               </div>
               <DialogDescription className="text-slate-400">
                 You are talking directly to your AI Listing agent.

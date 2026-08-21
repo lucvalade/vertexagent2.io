@@ -17,6 +17,39 @@ export default function AdminWelcomeMessages() {
   // Audio state
   const [uploadingEn, setUploadingEn] = useState(false);
   const [uploadingFr, setUploadingFr] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveListingGreetings = async () => {
+    if (!selectedListing) return;
+    setIsSaving(true);
+    const toastId = toast.loading("Saving welcome message configurations...");
+    try {
+      await updateDoc(doc(db, "listings", selectedListing.id), {
+        welcome_en: selectedListing.welcome_en || "",
+        welcome_fr: selectedListing.welcome_fr || "",
+        updatedAt: Date.now()
+      });
+
+      await addDoc(collection(db, "system_logs"), {
+        type: "ACTION",
+        message: `Admin saved welcome message configuration for ${selectedListing.address || selectedListing.title}`,
+        timestamp: serverTimestamp(),
+        userEmail: user?.email,
+        details: {
+          listingId: selectedListing.id,
+          hasEn: !!selectedListing.welcome_en,
+          hasFr: !!selectedListing.welcome_fr
+        }
+      });
+
+      toast.success("Welcome message changes saved successfully!", { id: toastId });
+    } catch (err) {
+      console.error("Failed to save welcome messages:", err);
+      toast.error("Failed to save changes. Please try again.", { id: toastId });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   useEffect(() => {
     const q = query(collection(db, "listings"), orderBy("createdAt", "desc"));
@@ -254,6 +287,7 @@ export default function AdminWelcomeMessages() {
                   const hasEn = !!l.welcome_en;
                   const hasFr = !!l.welcome_fr;
                   const isSelected = selectedListing?.id === l.id;
+                  const displayAddress = l.address || l.title || 'Property Address';
 
                   return (
                     <button
@@ -264,10 +298,13 @@ export default function AdminWelcomeMessages() {
                       }`}
                     >
                       <div className="space-y-1 pr-2 truncate">
-                        <h4 className="font-bold text-slate-800 text-sm truncate">{l.title || l.address || 'Untitled Listing'}</h4>
-                        <p className="text-xs text-slate-500 flex items-center gap-1">
+                        <h4 className="font-bold text-slate-800 text-sm truncate">{displayAddress}</h4>
+                        {l.title && l.title !== l.address && (
+                          <p className="text-xs text-slate-500 truncate">{l.title}</p>
+                        )}
+                        <p className="text-xs text-slate-400 flex items-center gap-1">
                           <Building className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{l.address || 'No address specified'}</span>
+                          <span className="truncate">{l.city ? `${l.city}, ${l.state || l.province || ''}` : 'Active Property'}</span>
                         </p>
                         {l.agentName && (
                           <span className="inline-block text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-extrabold uppercase">
@@ -300,19 +337,34 @@ export default function AdminWelcomeMessages() {
         <div className="lg:col-span-7">
           {selectedListing ? (
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden text-left p-6 space-y-6">
-              <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-slate-100 pb-4">
                 <div className="space-y-1">
                   <span className="text-[10px] font-black bg-blue-50 text-blue-600 border border-blue-100 rounded-full px-2.5 py-0.5 uppercase tracking-widest">
                     ACTIVE PROPERTY SELECTION
                   </span>
-                  <h2 className="text-xl font-bold text-slate-800">{selectedListing.title || 'Untitled Property'}</h2>
-                  <p className="text-xs text-slate-500">{selectedListing.address}</p>
+                  <h2 className="text-xl font-bold text-slate-900">
+                    {selectedListing.address || selectedListing.title || 'Selected Property Address'}
+                  </h2>
+                  {selectedListing.title && selectedListing.title !== selectedListing.address && (
+                    <p className="text-xs text-slate-500 font-medium">{selectedListing.title}</p>
+                  )}
                 </div>
-                {selectedListing.price && (
-                  <span className="text-sm font-black text-slate-800 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
-                    {selectedListing.price}
-                  </span>
-                )}
+                
+                <div className="flex items-center gap-2 shrink-0">
+                  {selectedListing.price && (
+                    <span className="text-sm font-black text-slate-800 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+                      {selectedListing.price}
+                    </span>
+                  )}
+                  <Button
+                    onClick={handleSaveListingGreetings}
+                    disabled={isSaving}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase px-4 py-2 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    <span>{isSaving ? "Saving..." : "Save Welcome Messages"}</span>
+                  </Button>
+                </div>
               </div>
 
               {/* English Welcome Greeting Panel */}
@@ -343,7 +395,7 @@ export default function AdminWelcomeMessages() {
                           variant="ghost"
                           size="icon"
                           onClick={() => removeAudio("en")}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0 cursor-pointer"
                           title="Delete Greeting"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -406,7 +458,7 @@ export default function AdminWelcomeMessages() {
                           variant="ghost"
                           size="icon"
                           onClick={() => removeAudio("fr")}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0 cursor-pointer"
                           title="Delete Greeting"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -439,6 +491,22 @@ export default function AdminWelcomeMessages() {
                     </label>
                   </div>
                 </div>
+              </div>
+
+              {/* Bottom Action Footer with SAVE Button */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span>Audio files are cached and synced with Sora AI Tour visitors automatically.</span>
+                </span>
+                <Button
+                  onClick={handleSaveListingGreetings}
+                  disabled={isSaving}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase px-5 py-2.5 rounded-xl shadow-sm cursor-pointer flex items-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  <span>{isSaving ? "Saving Configuration..." : "Save Welcome Messages"}</span>
+                </Button>
               </div>
             </div>
           ) : (

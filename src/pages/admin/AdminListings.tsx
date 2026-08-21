@@ -28,34 +28,39 @@ function formatExpiredDate(dateStr?: string) {
   if (!dateStr || typeof dateStr !== 'string' || dateStr.trim() === '') return null;
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   
-  // Try YYYY-MM-DD
-  const matchYYYYMMDD = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  // Try YYYY-MM-DD (or with time)
+  const matchYYYYMMDD = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (matchYYYYMMDD) {
     const [_, year, month, day] = matchYYYYMMDD;
     const monthIndex = parseInt(month, 10) - 1;
     if (monthIndex >= 0 && monthIndex < 12) {
-      return `${months[monthIndex]} ${parseInt(day, 10)}, ${year}`;
+      return `${months[monthIndex]}/${parseInt(day, 10)}/${year}`;
     }
   }
 
   // Try MM-DD-YYYY or MM/DD/YYYY
-  const matchMMDDYYYY = dateStr.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+  const matchMMDDYYYY = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
   if (matchMMDDYYYY) {
     const [_, month, day, year] = matchMMDDYYYY;
     const monthIndex = parseInt(month, 10) - 1;
     if (monthIndex >= 0 && monthIndex < 12) {
-      return `${months[monthIndex]} ${parseInt(day, 10)}, ${year}`;
+      return `${months[monthIndex]}/${parseInt(day, 10)}/${year}`;
     }
   }
 
   try {
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) {
-      return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+      return `${months[d.getMonth()]}/${d.getDate()}/${d.getFullYear()}`;
     }
   } catch (e) {}
 
   return dateStr;
+}
+
+function formatExpiredDateShort(dateStr?: string) {
+  const formatted = formatExpiredDate(dateStr);
+  return formatted || 'Aug/1/2026';
 }
 
 export default function AdminListings() {
@@ -515,7 +520,7 @@ export default function AdminListings() {
                               <span className={`text-[10px] font-black uppercase tracking-wider ${
                                 isActive ? 'text-green-600' : 'text-red-500'
                               }`}>
-                                {isActive ? 'ACTIVE' : 'EXPIRED'}
+                                {isActive ? 'ACTIVE' : `EXPIRED ${formatExpiredDateShort(listing.expiredListingDate)}`}
                               </span>
                             </>
                           );
@@ -628,7 +633,7 @@ export default function AdminListings() {
                         <span className={`text-[9px] font-black uppercase tracking-wider ${
                           isActive ? 'text-green-600' : 'text-red-500'
                         }`}>
-                          {isActive ? 'ACTIVE' : 'EXPIRED'}
+                          {isActive ? 'ACTIVE' : `EXPIRED ${formatExpiredDateShort(listing.expiredListingDate)}`}
                         </span>
                       </>
                     );

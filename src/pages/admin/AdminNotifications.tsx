@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from "firebase
 import { db, handleFirestoreError, OperationType } from "@/lib/firebase";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
-import { Bell, Trash2, Mail, Phone, User, Users, Search, Loader2, ExternalLink, ChevronRight, X, Square, CheckSquare, Send, Check } from "lucide-react";
+import { Bell, Trash2, Mail, Phone, User, Users, Search, Loader2, ExternalLink, ChevronRight, X, Square, CheckSquare, Send, Check, HelpCircle, Info, Sparkles, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +44,7 @@ export default function AdminNotifications() {
   const [emailSubject, setEmailSubject] = useState("AI Open House Connect: Connect with us");
   const [emailBody, setEmailBody] = useState("Hi there,\n\nThanks for your interest in AI Open House Connect! We'd love to chat more about how our AI can help your brokerage or real estate practice.\n\nBest regards,\nThe AI Open House Connect Team\n\nWebsite: AI Open House Connect (https://aiopenhouseconnect.com)\nBook a Demo: https://calendly.com/aiopenhouseconnect-demo");
   const [isSending, setIsSending] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
   const trackInteraction = async (type: string, detail: any) => {
     try {
@@ -255,8 +256,18 @@ export default function AdminNotifications() {
     <div className="space-y-8">
       <div className="flex justify-between items-center text-left">
         <div>
-          <h1 className="text-3xl font-black tracking-tighter text-slate-900 italic uppercase">Launch Notifications FREE Plan</h1>
-          <p className="text-slate-500 font-medium">Manage and review potential leads from the landing page interstitial.</p>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-3xl font-black tracking-tighter text-slate-900 italic uppercase">Launch Notifications FREE Plan</h1>
+            <button
+              type="button"
+              onClick={() => setIsInfoModalOpen(true)}
+              className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 hover:border-blue-600 transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400"
+              title="Click for overview and guide on Launch Notifications FREE Plan"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-slate-500 font-medium mt-0.5">Manage, review, and follow up with potential agent leads from the landing page interstitial and free starter tier waitlist.</p>
         </div>
         <div className="bg-blue-600 text-white rounded-full px-4 py-2 text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-200">
           {notifications.length} Total Signups
@@ -627,6 +638,115 @@ export default function AdminNotifications() {
               className="bg-red-600 hover:bg-red-50 text-white font-bold px-6 shadow-lg shadow-red-100"
             >
               Delete {selectedIds.length} Records
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* What this section does - Information Modal */}
+      <Dialog open={isInfoModalOpen} onOpenChange={setIsInfoModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="text-left pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-black">
+                <Info className="h-4 w-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black tracking-tight text-slate-900 uppercase italic">
+                  Launch Notifications FREE Plan Guide
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 font-medium">
+                  Understanding inbound lead capture, waitlists, and onboarding outreach
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="py-4 space-y-5 text-left text-sm text-slate-700 leading-relaxed">
+            {/* Section 1: Overview */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50/40 p-4 rounded-2xl border border-blue-100 space-y-2">
+              <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
+                <Sparkles className="h-4 w-4 text-blue-600" />
+                <span>What is the "Launch Notifications FREE Plan" Module?</span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                This administrative telemetry console aggregates, organizes, and manages all prospective real estate agents, team leaders, and brokerages who have requested early access, free starter tier activations, or signed up through our public marketing interstitials.
+              </p>
+            </div>
+
+            {/* Section 2: Key Capabilities */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">Core Features & Workflow</h4>
+              
+              <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Inbound Lead Ingestion</span>
+                  </div>
+                  <p className="text-slate-500 text-[11px] leading-normal">
+                    Automatically captures name, email, phone number, and origin source from the landing page waitlist modal and touchless sign-in modals.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5 text-indigo-600" />
+                    <span>Colleague & Partner Referrals</span>
+                  </div>
+                  <p className="text-slate-500 text-[11px] leading-normal">
+                    Inspects nested peer referrals submitted by applicants (e.g. fellow agents, mortgage partners, or brokerage admins) for network expansion.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Mail className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Batch Outreach & Invitations</span>
+                  </div>
+                  <p className="text-slate-500 text-[11px] leading-normal">
+                    Select individual or batch candidates to dispatch personalized onboarding emails, demo scheduling links, or platform welcome passes.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5 text-amber-600" />
+                    <span>Conversion Pipeline & SLA</span>
+                  </div>
+                  <p className="text-slate-500 text-[11px] leading-normal">
+                    Filter by date range and search by keyword to prioritize leads who registered during recent campaigns or open house tour events.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Recommended Admin Actions */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">How to Use This Screen</h4>
+              <ul className="space-y-2 text-xs text-slate-600">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span><strong>Filter & Search:</strong> Use the search bar to locate prospects by name or email, or set <em>From</em> and <em>To</em> dates to examine signups during specific promotional windows.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span><strong>Select Records:</strong> Click individual cards or use <em>Select All Records</em> to activate the batch action bar at the bottom.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <span><strong>Send Personalized Outreach:</strong> Click <em>Contact Selected</em> to open the email dispatch composer and schedule demo calls or send activation credentials.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-100">
+            <Button
+              onClick={() => setIsInfoModalOpen(false)}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl py-2.5 shadow-sm"
+            >
+              Got It, Close Guide
             </Button>
           </DialogFooter>
         </DialogContent>

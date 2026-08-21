@@ -78,31 +78,12 @@ function HelpTooltip({
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
-
-  const alignClasses = {
-    center: "left-1/2 -translate-x-1/2",
-    left: "left-0",
-    right: "right-0"
-  }[align];
-
-  const arrowAlignClasses = {
-    center: "left-1/2 -translate-x-1/2",
-    left: "left-3",
-    right: "right-3"
-  }[align];
-
-  const posClasses = position === "top" ? "bottom-full mb-2" : "top-full mt-2";
-  const arrowPosClasses = position === "top" 
-    ? "-bottom-1 border-r border-b" 
-    : "-top-1 border-l border-t";
 
   return (
     <div className="relative inline-flex items-center shrink-0 z-30" ref={ref}>
@@ -112,41 +93,73 @@ function HelpTooltip({
           e.stopPropagation();
           setIsOpen(!isOpen);
         }}
-        onMouseEnter={() => setIsOpen(true)}
-        className="p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer focus:outline-none shrink-0"
-        title="Click for information"
+        className="p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/20 transition-colors cursor-pointer focus:outline-none shrink-0 inline-flex items-center"
+        title="Click for details"
         aria-label="Information"
       >
         <HelpCircle className={iconClassName} />
       </button>
 
+      {/* Floating mini window popup that pops up OVER the card with backdrop */}
       {isOpen && (
         <div 
-          onClick={(e) => e.stopPropagation()}
-          className={`absolute ${posClasses} ${alignClasses} w-64 sm:w-72 p-3.5 rounded-xl shadow-2xl text-xs z-50 animate-fade-in border pointer-events-auto ${
-            darkTheme 
-              ? "bg-slate-900 text-slate-100 border-slate-700 shadow-black/80" 
-              : "bg-stone-900 text-stone-100 border-stone-700 shadow-2xl"
-          }`}
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(false);
+          }}
         >
-          <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-white/10">
-            <span className="font-bold flex items-center gap-1.5 text-[11px] text-amber-400">
-              <Info className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-              {title || "Information"}
-            </span>
-            <button 
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsOpen(false);
-              }}
-              className="text-stone-400 hover:text-white transition-colors cursor-pointer"
-            >
-              <X className="h-3 w-3" />
-            </button>
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-sm sm:max-w-md p-5 rounded-2xl shadow-2xl border space-y-3.5 animate-scale-in text-left ${
+              darkTheme 
+                ? "bg-slate-900 text-slate-100 border-slate-700 shadow-black/80" 
+                : "bg-stone-900 text-stone-100 border-stone-700 shadow-2xl"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400">
+                  <Info className="h-4 w-4 shrink-0" />
+                </div>
+                <span className="font-bold text-sm text-white">
+                  {title || "Information Guide"}
+                </span>
+              </div>
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <p className="text-xs leading-relaxed text-stone-200 font-normal opacity-95">
+              {content}
+            </p>
+
+            <div className="pt-2 flex items-center justify-between border-t border-white/10 text-[11px] text-stone-400">
+              <span className="flex items-center gap-1 text-[10px] text-amber-400 font-semibold uppercase tracking-wider">
+                <Sparkles className="h-3 w-3" /> AI Open House Connect
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs h-8 px-4 rounded-lg cursor-pointer shadow-xs"
+              >
+                Understood
+              </Button>
+            </div>
           </div>
-          <p className="text-[11px] leading-relaxed opacity-90 font-normal">{content}</p>
-          <div className={`absolute ${arrowPosClasses} ${arrowAlignClasses} w-2.5 h-2.5 ${darkTheme ? 'bg-slate-900 border-slate-700' : 'bg-stone-900 border-stone-700'} rotate-45`} />
         </div>
       )}
     </div>
@@ -200,6 +213,50 @@ function formatTime12h(timeStr: string) {
   return timeStr;
 }
 
+const MONTHS_LIST = [
+  { key: "ALL", label: "All Months", short: "All" },
+  { key: "01", label: "January", short: "Jan" },
+  { key: "02", label: "February", short: "Feb" },
+  { key: "03", label: "March", short: "Mar" },
+  { key: "04", label: "April", short: "Apr" },
+  { key: "05", label: "May", short: "May" },
+  { key: "06", label: "June", short: "Jun" },
+  { key: "07", label: "July", short: "Jul" },
+  { key: "08", label: "August", short: "Aug" },
+  { key: "09", label: "September", short: "Sep" },
+  { key: "10", label: "October", short: "Oct" },
+  { key: "11", label: "November", short: "Nov" },
+  { key: "12", label: "December", short: "Dec" },
+];
+
+function getStandardDateStr(dateStr: string) {
+  if (!dateStr) return "";
+  const cleaned = dateStr.trim();
+  // Check MM-DD-YYYY or MM/DD/YYYY
+  const matchMMDDYYYY = cleaned.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (matchMMDDYYYY) {
+    const [_, month, day, year] = matchMMDDYYYY;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  // Check YYYY-MM-DD or YYYY/MM/DD
+  const matchYYYYMMDD = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (matchYYYYMMDD) {
+    const [_, year, month, day] = matchYYYYMMDD;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  // Check textual date like "Aug/22/2026", "Aug 22, 2026", "August 22 2026"
+  try {
+    const d = new Date(cleaned.replace(/\//g, " "));
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dVal = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dVal}`;
+    }
+  } catch (e) {}
+  return cleaned;
+}
+
 export default function Overview() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -216,6 +273,39 @@ export default function Overview() {
   const [flyerCount, setFlyerCount] = useState(4); // default flyer templates
   const [tourMinutesWatched, setTourMinutesWatched] = useState(185); // simulated tracker metric
   
+  // Month Calendar Filter States
+  const [pastEventsSelectedMonth, setPastEventsSelectedMonth] = useState<string>("ALL");
+  const [leadsSelectedMonth, setLeadsSelectedMonth] = useState<string>("ALL");
+
+  // Dynamic Recent Flyer Scans with Auto-expansion
+  const [flyerScans, setFlyerScans] = useState<any[]>([
+    { id: "scan_1", title: "Luxury QR Scan - flyer_888", subtitle: "Sora Guided walking tour", time: "Just now", property: "888 Bel Air Rd" },
+    { id: "scan_2", title: "Exhibition Entry scan - stand_91", subtitle: "Tablet kiosk prompt", time: "28 mins ago", property: "120 Ocean Ave" }
+  ]);
+
+  const handleSimulateFlyerScan = () => {
+    const properties = ["888 Bel Air Rd", "120 Ocean Ave", "450 Mountain View Dr", "742 Evergreen Terrace"];
+    const scanTypes = [
+      { title: "Window Flyer QR Scan", subtitle: "Mobile AI Voice Tour Launch" },
+      { title: "Yard Sign NFC Tap", subtitle: "Instant Showing Request" },
+      { title: "Open House Handout Scan", subtitle: "Digital Brochure Download" },
+      { title: "Postcard QR Entry", subtitle: "Touchless Sign-In Flow" }
+    ];
+    const randomProp = properties[Math.floor(Math.random() * properties.length)];
+    const randomType = scanTypes[Math.floor(Math.random() * scanTypes.length)];
+    
+    const newScan = {
+      id: `scan_${Date.now()}`,
+      title: `${randomType.title} - ${randomProp.split(" ")[0].toLowerCase()}_qr`,
+      subtitle: randomType.subtitle,
+      time: "Just now",
+      property: randomProp
+    };
+
+    setFlyerScans(prev => [newScan, ...prev]);
+    toast.success(`✨ New flyer scan registered for ${randomProp}! Card auto-expanded.`);
+  };
+
   // Onboarding Package States and Actions
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
 
@@ -564,75 +654,151 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
         setActiveTourCount(5);
       });
 
-      // Realtime listener for Open House events
-      const ohEventsQuery = collection(db, "openHouseEvents");
-      // Fallback local mock events seed
-      const savedEvents = localStorage.getItem("open_house_events");
-      let allEvents: any[] = [];
-      if (savedEvents) {
-        allEvents = JSON.parse(savedEvents);
-      } else {
-        allEvents = [
-          {
-            id: "event_1",
-            eventName: "Elite Autumn Open Exhibition",
-            listingAddress: "888 Bel Air Rd, Los Angeles",
-            eventDate: "2026-06-15",
-            startTime: "13:00",
-            endTime: "16:00",
-            hostAgent: user.name || "Sarah Connor"
-          },
-          {
-            id: "event_2",
-            eventName: "Luxury Bel Air Modern Tour",
-            listingAddress: "888 Bel Air Rd, Los Angeles",
-            eventDate: "2026-07-10",
-            startTime: "11:00",
-            endTime: "15:00",
-            hostAgent: user.name || "Sarah Connor"
-          }
-        ];
-        localStorage.setItem("open_house_events", JSON.stringify(allEvents));
-      }
-
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      const todayStr = `${yyyy}-${mm}-${dd}`;
-
-      const getStandardDateStr = (dateStr: string) => {
-        if (!dateStr) return "";
-        const matchMMDDYYYY = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-        if (matchMMDDYYYY) {
-          const [_, month, day, year] = matchMMDDYYYY;
-          return `${year}-${month}-${day}`;
-        }
-        const matchYYYYMMDD = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (matchYYYYMMDD) {
-          const [_, year, month, day] = matchYYYYMMDD;
-          return `${year}-${month}-${day}`;
-        }
+      // Function to refresh and merge all events from Firestore and local stores
+      const refreshEvents = async () => {
         try {
-          const d = new Date(dateStr);
-          if (!isNaN(d.getTime())) {
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, "0");
-            const dVal = String(d.getDate()).padStart(2, "0");
-            return `${y}-${m}-${dVal}`;
+          const today = new Date();
+          const yyyy = today.getFullYear();
+          const mm = String(today.getMonth() + 1).padStart(2, "0");
+          const dd = String(today.getDate()).padStart(2, "0");
+          const todayStr = `${yyyy}-${mm}-${dd}`;
+
+          let combinedMap: { [key: string]: any } = {};
+
+          // Default fallback seed
+          const seedEvents = [
+            {
+              id: "event_1",
+              eventName: "Elite Autumn Open Exhibition",
+              listingAddress: "888 Bel Air Rd, Los Angeles",
+              eventDate: "2026-06-15",
+              startTime: "13:00",
+              endTime: "16:00",
+              hostAgent: user.name || "Sarah Connor"
+            },
+            {
+              id: "event_2",
+              eventName: "Luxury Bel Air Modern Tour",
+              listingAddress: "888 Bel Air Rd, Los Angeles",
+              eventDate: "2026-07-10",
+              startTime: "11:00",
+              endTime: "15:00",
+              hostAgent: user.name || "Sarah Connor"
+            }
+          ];
+          seedEvents.forEach(evt => { combinedMap[evt.id] = evt; });
+
+          // Check localStorage open_house_events
+          const localSaved = localStorage.getItem("open_house_events");
+          if (localSaved) {
+            try {
+              const parsed = JSON.parse(localSaved);
+              if (Array.isArray(parsed)) {
+                parsed.forEach(evt => { if (evt && evt.id) combinedMap[evt.id] = evt; });
+              }
+            } catch (e) {}
           }
-        } catch (e) {}
-        return dateStr;
+
+          // Check localStorage open_house_sessions
+          const localSessions = localStorage.getItem("open_house_sessions");
+          if (localSessions) {
+            try {
+              const parsed = JSON.parse(localSessions);
+              if (Array.isArray(parsed)) {
+                parsed.forEach(sess => {
+                  if (sess && sess.date) {
+                    const sessId = sess.id || `sess_${sess.listingId || 'l'}_${sess.date}`;
+                    combinedMap[sessId] = {
+                      id: sessId,
+                      eventName: sess.eventName || `Open House Session · ${sess.listingAddress || 'Featured Listing'}`,
+                      listingAddress: sess.listingAddress || "888 Bel Air Rd, Los Angeles",
+                      eventDate: sess.date,
+                      startTime: sess.startTime || "09:00",
+                      endTime: sess.endTime || "12:00",
+                      hostAgent: sess.hostAgent || user.name || "Sarah Connor",
+                      listingId: sess.listingId
+                    };
+                  }
+                });
+              }
+            } catch (e) {}
+          }
+
+          // Load from Firestore openHouseEvents
+          try {
+            const ohSnap = await getDocs(collection(db, "openHouseEvents"));
+            ohSnap.docs.forEach(doc => {
+              const d = doc.data();
+              combinedMap[doc.id] = { id: doc.id, ...d };
+            });
+          } catch (e) {}
+
+          // Load from Firestore open_house_sessions
+          try {
+            const sessSnap = await getDocs(collection(db, "open_house_sessions"));
+            sessSnap.docs.forEach(doc => {
+              const d = doc.data();
+              if (d && (d.date || d.eventDate)) {
+                combinedMap[doc.id] = {
+                  id: doc.id,
+                  eventName: d.eventName || `Open House Session · ${d.listingAddress || 'Featured Property'}`,
+                  listingAddress: d.listingAddress || "888 Bel Air Rd, Los Angeles",
+                  eventDate: d.date || d.eventDate,
+                  startTime: d.startTime || "09:00",
+                  endTime: d.endTime || "12:00",
+                  hostAgent: d.hostAgent || user.name || "Sarah Connor",
+                  listingId: d.listingId
+                };
+              }
+            });
+          } catch (e) {}
+
+          const allEventsList = Object.values(combinedMap);
+          const upcoming = allEventsList
+            .filter(evt => getStandardDateStr(evt.eventDate) >= todayStr)
+            .sort((a, b) => getStandardDateStr(a.eventDate).localeCompare(getStandardDateStr(b.eventDate)));
+
+          const past = allEventsList
+            .filter(evt => getStandardDateStr(evt.eventDate) < todayStr)
+            .sort((a, b) => getStandardDateStr(b.eventDate).localeCompare(getStandardDateStr(a.eventDate)));
+
+          setUpcomingEvents(upcoming);
+          setPastEvents(past);
+        } catch (err) {
+          console.error("Error refreshing events in Overview:", err);
+        }
       };
 
-      const upcoming = allEvents.filter(evt => getStandardDateStr(evt.eventDate) >= todayStr);
-      const past = allEvents.filter(evt => getStandardDateStr(evt.eventDate) < todayStr);
-      setUpcomingEvents(upcoming.slice(0, 3));
-      setPastEvents(past);
+      // Call refresh immediately
+      refreshEvents();
+
+      // Realtime listener for Open House events collection
+      const unsubOhEvents = onSnapshot(collection(db, "openHouseEvents"), () => {
+        refreshEvents();
+      }, () => {});
+
+      // Realtime listener for open_house_sessions collection
+      const unsubOhSessions = onSnapshot(collection(db, "open_house_sessions"), () => {
+        refreshEvents();
+      }, () => {});
+
+      // Listen for window custom events dispatched from EditListing.tsx or storage changes
+      const handleWindowEvents = () => {
+        refreshEvents();
+      };
+
+      window.addEventListener("openHouseEventsUpdated", handleWindowEvents);
+      window.addEventListener("storage", handleWindowEvents);
+      window.addEventListener("focus", handleWindowEvents);
 
       return () => {
         unsubConvos();
         unsubLeads();
+        unsubOhEvents();
+        unsubOhSessions();
+        window.removeEventListener("openHouseEventsUpdated", handleWindowEvents);
+        window.removeEventListener("storage", handleWindowEvents);
+        window.removeEventListener("focus", handleWindowEvents);
       };
     } else if (user === null) {
       setListingCount(0);
@@ -723,13 +889,13 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
         <Card 
           className="border-0 shadow-sm rounded-xl cursor-pointer text-white hover:scale-[1.02] active:scale-95 transition-all duration-200 select-none"
           style={{ backgroundColor: '#50a2ff' }}
-          onClick={() => navigate("/app/analytics")}
+          onClick={() => navigate("/app/analytics?focus=tour-minutes&scope=agent")}
         >
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-[10px] font-black uppercase text-blue-100 tracking-wider">Tour Minutes Listened</p>
               <h3 className="text-2xl font-black text-white mt-1">{tourMinutesWatched}m</h3>
-              <p className="text-[10px] text-blue-50/90 mt-0.5">Average 4.2m per guest</p>
+              <p className="text-[10px] text-blue-50/90 mt-0.5">Average 4.2m per guest (Agent Scope)</p>
             </div>
             <div className="p-3 bg-white/20 text-white rounded-lg border border-white/20">
               <TrendingUp className="h-5 w-5" />
@@ -793,103 +959,144 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           {/* Past Open House Events & Results */}
           <Card className="border-stone-200 shadow-sm rounded-2xl bg-white overflow-hidden">
             <CardHeader className="pb-3 border-b border-light-divider bg-stone-50/50">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-base font-bold text-stone-900">Past Open House Events & Results</CardTitle>
                   <CardDescription className="text-xs text-stone-500">Track registration analytics, QR check-ins, and guest tour performance metrics.</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  {pastEvents.length > 2 && (
-                    <span className="text-[9px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                      Scroll for all {pastEvents.length} events
-                    </span>
-                  )}
                   <div className="p-1.5 bg-stone-100 text-stone-600 rounded-lg border border-stone-200 text-[10px] font-black font-mono">
                     HISTORICAL RECORDS
                   </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-5">
-              {pastEvents.length > 0 ? (
-                <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1.5 scrollbar-thin">
-                  {pastEvents.map((evt) => {
-                    const eventLeads = recentLeads.filter(lead => 
-                      lead.openHouseId === evt.id || 
-                      (evt.listingId && lead.listingId === evt.listingId)
-                    );
-                    const visitsCount = eventLeads.length || (Math.floor(Math.abs((evt.id || "").charCodeAt(0) * 3) % 8) + 5);
-                    const hotCount = eventLeads.filter(l => l.mortgageInterest || l.mortgageOptIn || l.vip).length || Math.floor(visitsCount / 2) || 2;
-                    const qrScansCount = visitsCount * 2 + Math.floor(visitsCount / 3) + 3;
-                    const toursCount = visitsCount + 2;
-
+            <CardContent className="p-5 space-y-4">
+              {/* Month Filter Calendar Bar */}
+              <div className="p-3 bg-stone-50/90 rounded-xl border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-stone-700">
+                    <Calendar className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Filter by Month:</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-stone-500">
+                    {pastEventsSelectedMonth === "ALL" ? "All Months" : MONTHS_LIST.find(m => m.key === pastEventsSelectedMonth)?.label}
+                  </span>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-1">
+                  {MONTHS_LIST.map((m) => {
+                    const isSelected = pastEventsSelectedMonth === m.key;
                     return (
-                      <div 
-                        key={evt.id} 
-                        onClick={() => navigate(`/app/openhouses?tab=results&eventId=${evt.id}`)}
-                        className="p-4 border border-stone-200 rounded-xl bg-stone-50/40 hover:bg-stone-50 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer flex flex-col gap-4 group"
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => setPastEventsSelectedMonth(m.key)}
+                        className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer border ${
+                          isSelected
+                            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                            : "bg-white text-stone-600 border-stone-200 hover:bg-stone-100 hover:text-stone-900"
+                        }`}
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded mr-2">Completed</span>
-                            <strong className="text-xs font-bold text-stone-900 group-hover:text-blue-600 transition-colors uppercase tracking-wide">{evt.eventName}</strong>
-                            <p className="text-[11px] text-stone-500 mt-1 flex items-center gap-1">
-                              <Home className="h-3 w-3 text-stone-400" /> {evt.listingAddress}
-                            </p>
-                          </div>
-                          <div className="text-[10px] font-black uppercase text-stone-500 bg-stone-100 px-2.5 py-1 border border-stone-200 rounded-md shrink-0">
-                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3 text-stone-500" /> {formatDate(evt.eventDate)}</span>
-                          </div>
-                        </div>
-
-                        {/* Metrics Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-stone-150 rounded-xl text-left">
-                          <div className="space-y-0.5 text-center sm:text-left sm:border-r border-stone-100 sm:pr-2">
-                            <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
-                              <Users className="h-3 w-3 text-blue-600" /> Client Visits
-                            </span>
-                            <p className="text-base font-extrabold text-stone-900">{visitsCount} guests</p>
-                          </div>
-                          
-                          <div className="space-y-0.5 text-center sm:text-left sm:border-r border-stone-100 sm:px-2">
-                            <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
-                              <Zap className="h-3 w-3 text-amber-500" /> Hot Leads
-                            </span>
-                            <p className="text-base font-extrabold text-amber-600">{hotCount} identified</p>
-                          </div>
-
-                          <div className="space-y-0.5 text-center sm:text-left sm:border-r border-stone-100 sm:px-2">
-                            <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
-                              <QrCode className="h-3 w-3 text-emerald-600" /> QR Code Scans
-                            </span>
-                            <p className="text-base font-extrabold text-emerald-700">{qrScansCount} scans</p>
-                          </div>
-
-                          <div className="space-y-0.5 text-center sm:text-left sm:pl-2">
-                            <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
-                              <Sparkles className="h-3 w-3 text-purple-600" /> Sora AI Tours
-                            </span>
-                            <p className="text-base font-extrabold text-purple-700">{toursCount} plays</p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[11px] font-bold text-blue-600 pt-1 border-t border-stone-100">
-                          <span className="flex items-center gap-1.5 font-black uppercase text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-xs group-hover:bg-blue-700 transition-colors">
-                            <Activity className="h-3.5 w-3.5" /> View Event Analytics Report
-                          </span>
-                          <span className="group-hover:underline flex items-center gap-1">
-                            View in Past Exhibitions &amp; Results &rarr;
-                          </span>
-                        </div>
-                      </div>
+                        {m.short}
+                      </button>
                     );
                   })}
                 </div>
-              ) : (
-                <div className="text-center py-6 border border-dashed border-stone-200 rounded-xl">
-                  <p className="text-xs text-stone-500 italic">No past open house events found in history log database.</p>
-                </div>
-              )}
+              </div>
+
+              {(() => {
+                const filteredPastEvents = pastEvents.filter(evt => {
+                  if (pastEventsSelectedMonth === "ALL") return true;
+                  const std = getStandardDateStr(evt.eventDate);
+                  const parts = std.split("-");
+                  return parts.length >= 2 && parts[1] === pastEventsSelectedMonth;
+                });
+
+                return filteredPastEvents.length > 0 ? (
+                  <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1.5 scrollbar-thin">
+                    {filteredPastEvents.map((evt) => {
+                      const eventLeads = recentLeads.filter(lead => 
+                        lead.openHouseId === evt.id || 
+                        (evt.listingId && lead.listingId === evt.listingId)
+                      );
+                      const visitsCount = eventLeads.length || (Math.floor(Math.abs((evt.id || "").charCodeAt(0) * 3) % 8) + 5);
+                      const hotCount = eventLeads.filter(l => l.mortgageInterest || l.mortgageOptIn || l.vip).length || Math.floor(visitsCount / 2) || 2;
+                      const qrScansCount = visitsCount * 2 + Math.floor(visitsCount / 3) + 3;
+                      const toursCount = visitsCount + 2;
+
+                      return (
+                        <div 
+                          key={evt.id} 
+                          onClick={() => navigate(`/app/openhouses?tab=results&eventId=${evt.id}`)}
+                          className="p-4 border border-stone-200 rounded-xl bg-stone-50/40 hover:bg-stone-50 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer flex flex-col gap-4 group"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded mr-2">Completed</span>
+                              <strong className="text-xs font-bold text-stone-900 group-hover:text-blue-600 transition-colors uppercase tracking-wide">{evt.eventName}</strong>
+                              <p className="text-[11px] text-stone-500 mt-1 flex items-center gap-1">
+                                <Home className="h-3 w-3 text-stone-400" /> {evt.listingAddress}
+                              </p>
+                            </div>
+                            <div className="text-[10px] font-black uppercase text-stone-500 bg-stone-100 px-2.5 py-1 border border-stone-200 rounded-md shrink-0">
+                              <span className="flex items-center gap-1"><Calendar className="h-3 w-3 text-stone-500" /> {formatDate(evt.eventDate)}</span>
+                            </div>
+                          </div>
+
+                          {/* Metrics Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 border border-stone-150 rounded-xl text-left">
+                            <div className="space-y-0.5 text-center sm:text-left sm:border-r border-stone-100 sm:pr-2">
+                              <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
+                                <Users className="h-3 w-3 text-blue-600" /> Client Visits
+                              </span>
+                              <p className="text-base font-extrabold text-stone-900">{visitsCount} guests</p>
+                            </div>
+                            
+                            <div className="space-y-0.5 text-center sm:text-left sm:border-r border-stone-100 sm:px-2">
+                              <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
+                                <Zap className="h-3 w-3 text-amber-500" /> Hot Leads
+                              </span>
+                              <p className="text-base font-extrabold text-amber-600">{hotCount} identified</p>
+                            </div>
+
+                            <div className="space-y-0.5 text-center sm:text-left sm:border-r border-stone-100 sm:px-2">
+                              <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
+                                <QrCode className="h-3 w-3 text-emerald-600" /> QR Code Scans
+                              </span>
+                              <p className="text-base font-extrabold text-emerald-700">{qrScansCount} scans</p>
+                            </div>
+
+                            <div className="space-y-0.5 text-center sm:text-left sm:pl-2">
+                              <span className="text-[9px] font-black uppercase text-stone-400 tracking-wider flex items-center justify-center sm:justify-start gap-1">
+                                <Sparkles className="h-3 w-3 text-purple-600" /> Sora AI Tours
+                              </span>
+                              <p className="text-base font-extrabold text-purple-700">{toursCount} plays</p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[11px] font-bold text-blue-600 pt-1 border-t border-stone-100">
+                            <span className="flex items-center gap-1.5 font-black uppercase text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg shadow-xs group-hover:bg-blue-700 transition-colors">
+                              <Activity className="h-3.5 w-3.5" /> View Event Analytics Report
+                            </span>
+                            <span className="group-hover:underline flex items-center gap-1">
+                              View in Past Exhibitions &amp; Results &rarr;
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 border border-dashed border-stone-200 rounded-xl bg-stone-50/50">
+                    <p className="text-xs text-stone-500 italic">
+                      {pastEventsSelectedMonth === "ALL" 
+                        ? "No past open house events found in history log database." 
+                        : `No past open house events registered in ${MONTHS_LIST.find(m => m.key === pastEventsSelectedMonth)?.label}.`}
+                    </p>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -901,7 +1108,14 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
           {/* Mortgage pre-approved opt-ins (Pairing indicator) */}
           <Card className="border-stone-200 shadow-sm rounded-2xl bg-[#faf9f6]/40 p-5 space-y-3">
             <div>
-              <p className="text-[9px] font-black uppercase text-amber-700 tracking-wider">Premium Mortgage Router</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-[9px] font-black uppercase text-amber-700 tracking-wider">Premium Mortgage Router</p>
+                <HelpTooltip 
+                  title="Premium Mortgage Router & Financing Consents"
+                  content="Directs leads who explicitly requested mortgage and financing assistance to your paired lender in full compliance with RESPA. Co-branded notifications and automated draft follow-ups are triggered only upon verified borrower opt-in."
+                  iconClassName="h-3.5 w-3.5 text-amber-700/80 hover:text-amber-900 cursor-pointer transition-colors"
+                />
+              </div>
               <h3 className="text-sm font-bold text-stone-900 mt-1">Paired Financing Consents</h3>
               <p className="text-xs text-stone-500">Lender-paired leads matched with your active mortgage specialists for immediate follow-up drafts.</p>
             </div>
@@ -923,32 +1137,52 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
             </div>
           </Card>
 
-          {/* Recent Flyer Activity Tracker */}
-          <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white p-5 space-y-4">
+          {/* Recent Flyer Activity Tracker (Auto-expanding card) */}
+          <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white p-5 space-y-4 transition-all duration-300 h-auto">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xs font-black uppercase tracking-wider text-white">Recent Flyer Scans</CardTitle>
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="text-xs font-black uppercase tracking-wider text-white">Recent Flyer Scans</CardTitle>
+                  <HelpTooltip 
+                    title="Recent Flyer Scans & Printed QR Telemetry"
+                    content="Monitors real-time QR code scan activity from your printed yard signs, open house handouts, and window riders. Each scan immediately directs prospective buyers to Sora AI voice tours or mobile event sign-in."
+                    iconClassName="h-3.5 w-3.5 text-white/80 hover:text-white cursor-pointer transition-colors"
+                    darkTheme={true}
+                  />
+                </div>
                 <CardDescription className="text-xs text-blue-50">Scan events from printed show materials.</CardDescription>
               </div>
-              <span className="text-[10px] font-bold text-white bg-white/20 px-2 py-0.5 rounded border border-white/30">Active Flyers</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSimulateFlyerScan}
+                  className="text-[10px] font-bold text-white bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded border border-white/30 transition-all cursor-pointer flex items-center gap-1"
+                  title="Simulate a new flyer scan to test dynamic expansion"
+                >
+                  <Plus className="h-3 w-3" /> Test Scan
+                </button>
+                <span className="text-[10px] font-bold text-white bg-white/20 px-2 py-0.5 rounded border border-white/30">
+                  {flyerScans.length} Scans
+                </span>
+              </div>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="flex justify-between items-center text-[11px]">
-                <div className="space-y-0.5">
-                  <p className="font-bold text-white">Luxury QR Scan - flyer_888</p>
-                  <p className="text-[9px] text-blue-50">Sora Guided walking tour</p>
+            {/* Dynamic Auto-expanding list of flyer scans */}
+            <div className="space-y-3.5 text-xs transition-all duration-300">
+              {flyerScans.map((scan, idx) => (
+                <div 
+                  key={scan.id} 
+                  className={`flex justify-between items-center text-[11px] ${
+                    idx > 0 ? "border-t border-white/20 pt-3" : ""
+                  }`}
+                >
+                  <div className="space-y-0.5 text-left">
+                    <p className="font-bold text-white">{scan.title}</p>
+                    <p className="text-[9px] text-blue-50">{scan.subtitle} · {scan.property}</p>
+                  </div>
+                  <span className="font-bold text-white/90 shrink-0 ml-2">{scan.time}</span>
                 </div>
-                <span className="font-bold text-white/90">Just now</span>
-              </div>
-              
-              <div className="flex justify-between items-center text-[11px] border-t border-white/20 pt-3">
-                <div className="space-y-0.5">
-                  <p className="font-bold text-white">Exhibition Entry scan - stand_91</p>
-                  <p className="text-[9px] text-blue-50">Tablet kiosk prompt</p>
-                </div>
-                <span className="font-bold text-white/90">28 mins ago</span>
-              </div>
+              ))}
             </div>
           </Card>
 
@@ -1124,102 +1358,163 @@ Contact your admin Luc Valade at luc.valade@gmail.com for premium co-op question
         {/* Recently Captured Visitors log (Expanded to Full Width) */}
         <Card className="border-transparent shadow-sm rounded-2xl bg-[#50a2ff] text-white overflow-hidden w-full">
           <CardHeader className="pb-3 border-b border-white/10 bg-[#50a2ff]">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-base font-bold text-white">Recently Captured Visitors</CardTitle>
                 <CardDescription className="text-xs text-blue-50">Checked-in open house attendees and QR scan leads.</CardDescription>
               </div>
               <Button 
                 onClick={() => navigate("/app/leads")} 
-                className="bg-white hover:bg-stone-100 text-black font-extrabold text-xs h-8 gap-0.5 shadow-sm rounded-lg border-0 cursor-pointer"
+                className="bg-white hover:bg-stone-100 text-black font-extrabold text-xs h-8 gap-0.5 shadow-sm rounded-lg border-0 cursor-pointer self-start sm:self-auto"
               >
                 Manage Leads <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="p-5">
-            {recentLeads.length > 0 ? (
-              <>
-                <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                  {recentLeads.slice((recentLeadsPage - 1) * recentLeadsPerPage, recentLeadsPage * recentLeadsPerPage).map((ld) => (
-                    <div key={ld.id} className="p-3 border rounded-xl border-white/20 bg-white/15 flex items-center justify-between text-xs font-sans">
-                      <div className="space-y-0.5 text-left">
-                        <p className="font-extrabold text-white flex items-center gap-1.5 flex-wrap">
-                          {ld.name}
-                          {ld.mortgageInterest && (
-                            <span className="text-[8px] font-black uppercase bg-white text-black px-1 py-0.5 rounded border border-white/40">
-                              Lender Consent
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[10px] text-blue-50">{ld.email || 'No email provided'} · {ld.phone || 'No phone provided'}</p>
-                      </div>
-                      <div className="text-[10px] text-right font-medium text-white space-y-1">
-                        <span className="block italic text-[9px] text-black font-bold bg-white border border-white px-1.5 py-0.5 rounded uppercase">
-                          Source: {ld.source || ld.isOffline ? "Kiosk (Offline)" : "Sora Walkthrough"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+          <CardContent className="p-5 space-y-4">
+            {/* Month Filter Calendar Bar for Leads */}
+            <div className="p-3 bg-white/15 rounded-xl border border-white/20 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                  <Calendar className="h-3.5 w-3.5 text-amber-300" />
+                  <span>Filter Visitors by Month:</span>
                 </div>
+                <span className="text-[10px] font-bold text-blue-100">
+                  {leadsSelectedMonth === "ALL" ? "All Months" : MONTHS_LIST.find(m => m.key === leadsSelectedMonth)?.label}
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-1">
+                {MONTHS_LIST.map((m) => {
+                  const isSelected = leadsSelectedMonth === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => {
+                        setLeadsSelectedMonth(m.key);
+                        setRecentLeadsPage(1);
+                      }}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all cursor-pointer border ${
+                        isSelected
+                          ? "bg-white text-black border-white shadow-xs font-extrabold"
+                          : "bg-white/20 text-white border-white/25 hover:bg-white/30"
+                      }`}
+                    >
+                      {m.short}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                {recentLeads.length > recentLeadsPerPage && (
-                  <div className="mt-4 pt-4 border-t border-white/20 flex flex-col items-center gap-2.5 font-sans">
-                    <div className="text-[10px] font-bold text-white border border-white/20 px-2.5 py-0.5 rounded-full bg-white/10">
-                      {Math.min(recentLeadsPage * recentLeadsPerPage, recentLeads.length)} OF {recentLeads.length} Captured
-                    </div>
-                    
-                    {/* Numbered Pagination Control Panel */}
-                    <div className="flex items-center justify-center gap-1.5 w-full mt-1">
-                      <Button
-                        size="sm"
-                        disabled={recentLeadsPage === 1}
-                        className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
-                        onClick={() => setRecentLeadsPage(prev => Math.max(prev - 1, 1))}
-                      >
-                        <ChevronLeft className="h-3 w-3" /> Prev
-                      </Button>
+            {(() => {
+              const filteredRecentLeads = recentLeads.filter(lead => {
+                if (leadsSelectedMonth === "ALL") return true;
+                if (!lead.createdAt) return true;
+                try {
+                  const d = new Date(
+                    typeof lead.createdAt === 'number' 
+                      ? lead.createdAt 
+                      : (lead.createdAt.seconds ? lead.createdAt.seconds * 1000 : lead.createdAt)
+                  );
+                  if (isNaN(d.getTime())) return true;
+                  const m = String(d.getMonth() + 1).padStart(2, "0");
+                  return m === leadsSelectedMonth;
+                } catch {
+                  return true;
+                }
+              });
 
-                      {/* Page Numbers */}
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.ceil(recentLeads.length / recentLeadsPerPage) }).map((_, index) => {
-                          const pageNumber = index + 1;
-                          const isActive = pageNumber === recentLeadsPage;
-                          return (
-                            <button
-                              key={pageNumber}
-                              onClick={() => setRecentLeadsPage(pageNumber)}
-                              className={`h-6 min-w-6 px-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center border ${
-                                isActive
-                                  ? "bg-white border-white text-black font-extrabold scale-110 shadow-sm"
-                                  : "bg-white/20 border-white/20 text-white hover:bg-white/30"
-                              }`}
-                            >
-                              {pageNumber}
-                            </button>
-                          );
-                        })}
+              return filteredRecentLeads.length > 0 ? (
+                <>
+                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                    {filteredRecentLeads.slice((recentLeadsPage - 1) * recentLeadsPerPage, recentLeadsPage * recentLeadsPerPage).map((ld) => (
+                      <div key={ld.id} className="p-3 border rounded-xl border-white/20 bg-white/15 flex items-center justify-between text-xs font-sans">
+                        <div className="space-y-0.5 text-left">
+                          <p className="font-extrabold text-white flex items-center gap-1.5 flex-wrap">
+                            {ld.name}
+                            {ld.mortgageInterest && (
+                              <span className="text-[8px] font-black uppercase bg-white text-black px-1 py-0.5 rounded border border-white/40">
+                                Lender Consent
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-blue-50">{ld.email || 'No email provided'} · {ld.phone || 'No phone provided'}</p>
+                        </div>
+                        <div className="text-[10px] text-right font-medium text-white space-y-1">
+                          <span className="block italic text-[9px] text-black font-bold bg-white border border-white px-1.5 py-0.5 rounded uppercase">
+                            Source: {ld.source || ld.isOffline ? "Kiosk (Offline)" : "Sora Walkthrough"}
+                          </span>
+                        </div>
                       </div>
-
-                      <Button
-                        size="sm"
-                        disabled={recentLeadsPage === Math.ceil(recentLeads.length / recentLeadsPerPage)}
-                        className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
-                        onClick={() => setRecentLeadsPage(prev => Math.min(prev + 1, Math.ceil(recentLeads.length / recentLeadsPerPage)))}
-                      >
-                        Next <ChevronRight className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    
-                    <p className="text-[9.5px] text-white/95 font-bold uppercase tracking-widest">
-                      Page {recentLeadsPage} of {Math.ceil(recentLeads.length / recentLeadsPerPage)}
-                    </p>
+                    ))}
                   </div>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-blue-50 italic py-2">No guest registrations captured yet. Complete onboarding steps to capture leads.</p>
-            )}
+
+                  {filteredRecentLeads.length > recentLeadsPerPage && (
+                    <div className="mt-4 pt-4 border-t border-white/20 flex flex-col items-center gap-2.5 font-sans">
+                      <div className="text-[10px] font-bold text-white border border-white/20 px-2.5 py-0.5 rounded-full bg-white/10">
+                        {Math.min(recentLeadsPage * recentLeadsPerPage, filteredRecentLeads.length)} OF {filteredRecentLeads.length} Captured
+                      </div>
+                      
+                      {/* Numbered Pagination Control Panel */}
+                      <div className="flex items-center justify-center gap-1.5 w-full mt-1">
+                        <Button
+                          size="sm"
+                          disabled={recentLeadsPage === 1}
+                          className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
+                          onClick={() => setRecentLeadsPage(prev => Math.max(prev - 1, 1))}
+                        >
+                          <ChevronLeft className="h-3 w-3" /> Prev
+                        </Button>
+
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.ceil(filteredRecentLeads.length / recentLeadsPerPage) }).map((_, index) => {
+                            const pageNumber = index + 1;
+                            const isActive = pageNumber === recentLeadsPage;
+                            return (
+                              <button
+                                key={pageNumber}
+                                onClick={() => setRecentLeadsPage(pageNumber)}
+                                className={`h-6 min-w-6 px-1.5 rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center border ${
+                                  isActive
+                                    ? "bg-white border-white text-black font-extrabold scale-110 shadow-sm"
+                                    : "bg-white/20 border-white/20 text-white hover:bg-white/30"
+                                }`}
+                              >
+                                {pageNumber}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <Button
+                          size="sm"
+                          disabled={recentLeadsPage === Math.ceil(filteredRecentLeads.length / recentLeadsPerPage)}
+                          className="bg-white hover:bg-stone-100 text-black font-bold p-2 disabled:bg-white/40 disabled:text-black/45 disabled:opacity-50 h-7 text-[10px] uppercase tracking-wider gap-0.5 rounded-lg cursor-pointer shadow-sm border-0"
+                          onClick={() => setRecentLeadsPage(prev => Math.min(prev + 1, Math.ceil(filteredRecentLeads.length / recentLeadsPerPage)))}
+                        >
+                          Next <ChevronRight className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      <p className="text-[9.5px] text-white/95 font-bold uppercase tracking-widest">
+                        Page {recentLeadsPage} of {Math.ceil(filteredRecentLeads.length / recentLeadsPerPage)}
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-6 border border-dashed border-white/30 rounded-xl bg-white/10">
+                  <p className="text-xs text-blue-50 italic py-2">
+                    {leadsSelectedMonth === "ALL" 
+                      ? "No guest registrations captured yet. Complete onboarding steps to capture leads."
+                      : `No guest registrations captured in ${MONTHS_LIST.find(m => m.key === leadsSelectedMonth)?.label}.`}
+                  </p>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 

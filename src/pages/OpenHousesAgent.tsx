@@ -50,8 +50,107 @@ import {
   Award,
   Activity,
   Check,
-  DollarSign
+  DollarSign,
+  Info,
+  X
 } from "lucide-react";
+
+interface InfoGuideProps {
+  title?: string;
+  content: string;
+  className?: string;
+  iconClassName?: string;
+  darkTheme?: boolean;
+}
+
+function InfoGuide({ title, content, className = "", iconClassName = "h-4 w-4 text-stone-400 hover:text-stone-600", darkTheme = false }: InfoGuideProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    if (isOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
+  return (
+    <div className={`relative inline-flex items-center shrink-0 z-30 ${className}`}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className="p-0.5 rounded-full hover:bg-black/10 transition-colors cursor-pointer focus:outline-none shrink-0 inline-flex items-center"
+        title="Click for details"
+        aria-label="Information"
+      >
+        <HelpCircle className={iconClassName} />
+      </button>
+
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fade-in"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(false);
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-sm sm:max-w-md p-5 rounded-2xl shadow-2xl border space-y-3.5 animate-scale-in text-left ${
+              darkTheme 
+                ? "bg-slate-900 text-slate-100 border-slate-700 shadow-black/80" 
+                : "bg-stone-900 text-stone-100 border-stone-700 shadow-2xl"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-400">
+                  <Info className="h-4 w-4 shrink-0" />
+                </div>
+                <span className="font-bold text-sm text-white">
+                  {title || "Information Guide"}
+                </span>
+              </div>
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <p className="text-xs text-stone-300 leading-relaxed">
+              {content}
+            </p>
+
+            <div className="pt-2 flex justify-end">
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOpen(false);
+                }}
+                className="text-xs font-bold px-4 py-1.5 h-8 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+              >
+                Understood
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "Jun 15, 2026";
@@ -173,6 +272,9 @@ interface OpenHouseEvent {
   hostingAgentId?: string;
   leadRule?: string;
   lenderRule?: string;
+  isDummyData?: boolean;
+  demoLabel?: string;
+  otherAgentShowing?: string;
 }
 
 interface EmailLog {
@@ -582,6 +684,7 @@ AI Open House Connect Team`
   const [mortgageQuestion, setMortgageQuestion] = useState(true);
   const [agentNotes, setAgentNotes] = useState("");
   const [assistingNotes, setAssistingNotes] = useState(false);
+  const [otherAgentShowing, setOtherAgentShowing] = useState("");
 
   // Post Open House Recap Email states
   const [recapEmailEnabled, setRecapEmailEnabled] = useState(true);
@@ -722,6 +825,16 @@ AI Open House Connect Team`
   ]);
   const [newCustomQuestion, setNewCustomQuestion] = useState("");
   const [deleteConfirmIdx, setDeleteConfirmIdx] = useState<number | null>(null);
+  const [showAiQuestionSuggestions, setShowAiQuestionSuggestions] = useState(true);
+
+  const TOP_6_AUTO_QUESTIONS = [
+    "Do you currently own your home, or are you renting?",
+    "Are you currently pre-approved with a mortgage lender?",
+    "Are you actively working with a real estate agent?",
+    "What is your target timeframe for purchasing a home?",
+    "What price range are you most comfortable shopping within?",
+    "Would you like an invitation to private showings & off-market listings?"
+  ];
 
   // QR Branding options & validations
   const [qrBrandingOption, setQrBrandingOption] = useState<"logo" | "photo" | "none">("none");
@@ -1136,7 +1249,8 @@ AI Open House Connect Team`
       listingOwnerAgentId: isShared ? assignmentContext?.listingOwnerAgentId : undefined,
       hostingAgentId: isShared ? (user?.id || "host") : undefined,
       leadRule: isShared ? assignmentContext?.leadRule : undefined,
-      lenderRule: resolvedLenderRule
+      lenderRule: resolvedLenderRule,
+      otherAgentShowing: otherAgentShowing ? otherAgentShowing.trim() : undefined
     };
 
     const updated = [newOhEvent, ...events];
@@ -1725,18 +1839,18 @@ Thanks,
                   className="w-full text-xs font-black text-black border-2 border-black rounded-lg p-2.5 bg-white uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-black cursor-pointer"
                 >
                   <option value="all" className="font-black text-black uppercase bg-white">ALL MONTHS</option>
-                  <option value="01" className="font-black text-black uppercase bg-white">JANUARY (01)</option>
-                  <option value="02" className="font-black text-black uppercase bg-white">FEBRUARY (02)</option>
-                  <option value="03" className="font-black text-black uppercase bg-white">MARCH (03)</option>
-                  <option value="04" className="font-black text-black uppercase bg-white">APRIL (04)</option>
-                  <option value="05" className="font-black text-black uppercase bg-white">MAY (05)</option>
-                  <option value="06" className="font-black text-black uppercase bg-white">JUNE (06)</option>
-                  <option value="07" className="font-black text-black uppercase bg-white">JULY (07)</option>
-                  <option value="08" className="font-black text-black uppercase bg-white">AUGUST (08)</option>
-                  <option value="09" className="font-black text-black uppercase bg-white">SEPTEMBER (09)</option>
-                  <option value="10" className="font-black text-black uppercase bg-white">OCTOBER (10)</option>
-                  <option value="11" className="font-black text-black uppercase bg-white">NOVEMBER (11)</option>
-                  <option value="12" className="font-black text-black uppercase bg-white">DECEMBER (12)</option>
+                  <option value="01" className="font-black text-black uppercase bg-white">JANUARY</option>
+                  <option value="02" className="font-black text-black uppercase bg-white">FEBRUARY</option>
+                  <option value="03" className="font-black text-black uppercase bg-white">MARCH</option>
+                  <option value="04" className="font-black text-black uppercase bg-white">APRIL</option>
+                  <option value="05" className="font-black text-black uppercase bg-white">MAY</option>
+                  <option value="06" className="font-black text-black uppercase bg-white">JUNE</option>
+                  <option value="07" className="font-black text-black uppercase bg-white">JULY</option>
+                  <option value="08" className="font-black text-black uppercase bg-white">AUGUST</option>
+                  <option value="09" className="font-black text-black uppercase bg-white">SEPTEMBER</option>
+                  <option value="10" className="font-black text-black uppercase bg-white">OCTOBER</option>
+                  <option value="11" className="font-black text-black uppercase bg-white">NOVEMBER</option>
+                  <option value="12" className="font-black text-black uppercase bg-white">DECEMBER</option>
                 </select>
               </div>
 
@@ -1776,7 +1890,14 @@ Thanks,
                         <CardHeader className="pb-2">
                           <div className="flex justify-between items-start">
                             <div>
-                              <CardTitle className="text-base font-bold text-stone-900">{evt.eventName}</CardTitle>
+                              <div className="flex items-center gap-2">
+                                <CardTitle className="text-base font-bold text-stone-900">{evt.eventName}</CardTitle>
+                                {(evt.isDummyData || evt.eventName?.includes("[SAMPLE") || evt.listingAddress?.includes("Demo")) && (
+                                  <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1">
+                                    <Sparkles className="h-2.5 w-2.5 text-amber-600" /> Dummy / Sample Event
+                                  </span>
+                                )}
+                              </div>
                               <CardDescription className="text-xs font-medium text-black font-semibold mt-1 flex items-center gap-1">
                                 <MapPin className="h-3 w-3 text-black font-medium" /> {evt.listingAddress}
                               </CardDescription>
@@ -1846,9 +1967,14 @@ Thanks,
                           <CardHeader className="pb-2">
                             <div className="flex justify-between items-start">
                               <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-[9px] font-black uppercase text-white bg-blue-600 px-2 py-0.5 rounded-full">Completed</span>
                                   <CardTitle className="text-sm font-bold text-stone-900 group-hover:text-blue-600 transition-colors">{evt.eventName}</CardTitle>
+                                  {(evt.isDummyData || evt.eventName?.includes("[SAMPLE") || evt.listingAddress?.includes("Demo")) && (
+                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1">
+                                      <Sparkles className="h-2.5 w-2.5 text-amber-600" /> Dummy / Sample Event
+                                    </span>
+                                  )}
                                 </div>
                                 <CardDescription className="text-xs font-medium text-stone-700 mt-1 flex items-center gap-1">
                                   <MapPin className="h-3 w-3 text-stone-500" /> {evt.listingAddress}
@@ -1914,7 +2040,14 @@ Thanks,
           {selectedEvent ? (
             <Card className="blue-pulsating-border bg-white w-full mx-auto text-center flex flex-col items-center">
               <CardHeader className="pb-3 border-b border-light-divider w-full flex flex-col items-center justify-center text-center">
-                <p className="text-[10px] font-black uppercase text-black font-extrabold tracking-wider">Quick Actions for Current Event</p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <p className="text-[10px] font-black uppercase text-black font-extrabold tracking-wider">Quick Actions for Current Event</p>
+                  <InfoGuide
+                    title="Quick Actions for Current Event"
+                    content="Quick Actions provide 1-click access to launch the Guest-Facing Tablet Kiosk, generate Dynamic QR codes with custom branding, update private host notes, and manage live open house workflows for the currently selected event."
+                    iconClassName="h-3.5 w-3.5 text-stone-500 hover:text-blue-600"
+                  />
+                </div>
                 <CardTitle className="text-sm font-bold text-stone-900 mt-1">{selectedEvent.eventName}</CardTitle>
                 <p className="text-xs font-semibold text-black mt-1">Listing: {selectedEvent.listingAddress}</p>
               </CardHeader>
@@ -2206,11 +2339,14 @@ Thanks,
                   Event Date
                 </Label>
                 <div
-                  className="relative cursor-pointer"
-                  onClick={(e) => {
-                    const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                  className="relative cursor-pointer group"
+                  onClick={() => {
+                    const inputEl = document.getElementById("oh-date") as HTMLInputElement;
                     if (inputEl) {
-                      try { inputEl.showPicker(); } catch {}
+                      try { 
+                        if (typeof inputEl.showPicker === 'function') inputEl.showPicker();
+                        else inputEl.focus();
+                      } catch {}
                     }
                   }}
                 >
@@ -2224,10 +2360,18 @@ Thanks,
                       setEventDateError(""); // clear error while actively choosing
                     }}
                     onClick={(e) => {
-                      try { (e.currentTarget as HTMLInputElement).showPicker(); } catch {}
+                      try { 
+                        if (typeof (e.currentTarget as HTMLInputElement).showPicker === 'function') {
+                          (e.currentTarget as HTMLInputElement).showPicker(); 
+                        }
+                      } catch {}
                     }}
                     onFocus={(e) => {
-                      try { (e.currentTarget as HTMLInputElement).showPicker(); } catch {}
+                      try { 
+                        if (typeof (e.currentTarget as HTMLInputElement).showPicker === 'function') {
+                          (e.currentTarget as HTMLInputElement).showPicker(); 
+                        }
+                      } catch {}
                     }}
                     onBlur={() => {
                       if (!eventDate) {
@@ -2320,6 +2464,19 @@ Thanks,
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <Label htmlFor="oh-other-agent" className="text-xs font-bold uppercase text-black">
+                  Other Agent Showing / Co-Host (Optional)
+                </Label>
+                <Input 
+                  id="oh-other-agent"
+                  placeholder="e.g. Sarah Jenkins (Co-Listing Agent or Hosting Partner)" 
+                  value={otherAgentShowing} 
+                  onChange={(e) => setOtherAgentShowing(e.target.value)} 
+                  className="h-9 text-xs" 
+                />
               </div>
             </div>
 
@@ -2590,20 +2747,36 @@ Thanks,
             </div>
 
             <div className="space-y-3 pt-2">
-              <p className="text-[10px] font-black uppercase text-black">Custom Questions Panel</p>
+              <div className="flex items-center justify-between pb-1">
+                <p className="text-[10px] font-black uppercase text-black">Custom Questions Panel</p>
+                <button
+                  type="button"
+                  onClick={() => setShowAiQuestionSuggestions(!showAiQuestionSuggestions)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1.5 cursor-pointer py-0.5 px-2 rounded-md hover:bg-blue-50 transition-colors"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-blue-600 animate-pulse" />
+                  AI Suggestions {showAiQuestionSuggestions ? "▾" : "▸"}
+                </button>
+              </div>
               
               <div className="space-y-2">
-                {customQuestions.map((q, idx) => (
-                  <div key={idx} className="flex justify-between items-center bg-stone-50/50 p-2.5 rounded-lg border text-xs">
-                    <span className="font-bold text-stone-800">{q}</span>
-                    <button 
-                      onClick={() => setDeleteConfirmIdx(idx)}
-                      className="text-black hover:text-rose-600 font-bold underline"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
+                {customQuestions.length === 0 ? (
+                  <p className="text-xs text-stone-500 italic p-3 bg-stone-50 rounded-lg border border-dashed text-center">
+                    No custom questions added yet. Add your own or pick from the AI auto-questions below.
+                  </p>
+                ) : (
+                  customQuestions.map((q, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-stone-50/70 p-2.5 rounded-lg border text-xs gap-2">
+                      <span className="font-bold text-stone-800 leading-snug">{q}</span>
+                      <button 
+                        onClick={() => setDeleteConfirmIdx(idx)}
+                        className="text-black hover:text-rose-600 font-bold underline shrink-0 cursor-pointer text-xs"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="border-t pt-3 flex gap-2">
@@ -2619,10 +2792,68 @@ Thanks,
                   }}
                   className="h-9 text-xs" 
                 />
-                <Button onClick={handleAddQuestion} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold h-9">
+                <Button onClick={handleAddQuestion} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold h-9 shrink-0">
                   Add Question
                 </Button>
               </div>
+
+              {/* AI Suggestions & Top 6 Auto Questions Panel */}
+              {showAiQuestionSuggestions && (
+                <div className="mt-4 p-3.5 bg-gradient-to-br from-blue-50/90 via-indigo-50/40 to-slate-50 rounded-xl border border-blue-200/80 space-y-2.5 animate-fade-in">
+                  <div className="flex items-center justify-between pb-1 border-b border-blue-200/50">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-blue-600 shrink-0" />
+                      <span className="text-[11px] font-black uppercase tracking-wider text-blue-950">
+                        Top 6 High-Converting Auto Questions to Add
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">
+                      1-Click Add
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 font-normal leading-relaxed">
+                    Select any of Sora AI's top-performing qualifying questions to instantly append to your visitor registration form:
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {TOP_6_AUTO_QUESTIONS.map((autoQ, qIdx) => {
+                      const alreadyAdded = customQuestions.includes(autoQ);
+                      return (
+                        <div
+                          key={qIdx}
+                          className={`flex items-center justify-between p-2 rounded-lg text-left text-xs transition-all border ${
+                            alreadyAdded 
+                              ? 'bg-emerald-50/90 text-emerald-900 border-emerald-200 shadow-2xs' 
+                              : 'bg-white hover:bg-blue-50/70 text-stone-800 border-slate-200 hover:border-blue-300 shadow-2xs'
+                          }`}
+                        >
+                          <span className="font-semibold text-[11px] leading-snug pr-2 text-stone-900">
+                            {qIdx + 1}. {autoQ}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={alreadyAdded}
+                            onClick={() => {
+                              if (!alreadyAdded) {
+                                setCustomQuestions(prev => [...prev, autoQ]);
+                                toast.success(`Added: "${autoQ}"`);
+                              }
+                            }}
+                            className={`shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                              alreadyAdded 
+                                ? 'bg-emerald-200/80 text-emerald-900 cursor-default' 
+                                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs'
+                            }`}
+                          >
+                            {alreadyAdded ? '✓ Added' : '+ Add Question'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -2708,16 +2939,19 @@ Thanks,
                         }
                         const targetVal = qrBrandingOption === "logo" ? "none" : "logo";
                         setQrBrandingOption(targetVal);
-                        setTimeout(() => {
-                           if (selectedEvent) {
-                            const updatedEvent = { ...selectedEvent, qrBrandingOption: targetVal };
-                            setSelectedEvent(updatedEvent);
-                            const updatedEvents = events.map(evt => evt.id === selectedEvent.id ? updatedEvent : evt);
-                            setEvents(updatedEvents);
-                            localStorage.setItem("open_house_events", JSON.stringify(updatedEvents));
-                          }
-                          toast.success(targetVal === "logo" ? "Brokerage Logo selected for dynamic QR presentation!" : "Standard clean barcode presentation restored.");
-                        }, 500);
+                        localStorage.setItem("qrBrandingOption", targetVal);
+                        if (selectedEvent) {
+                          const updatedEvent = { ...selectedEvent, qrBrandingOption: targetVal };
+                          setSelectedEvent(updatedEvent);
+                          const updatedEvents = events.map(evt => evt.id === selectedEvent.id ? updatedEvent : evt);
+                          setEvents(updatedEvents);
+                          localStorage.setItem("open_house_events", JSON.stringify(updatedEvents));
+                        }
+                        toast.success(
+                          targetVal === "logo" 
+                            ? "Brokerage Logo selected for dynamic QR presentation! Auto-saved." 
+                            : "Standard clean barcode presentation restored. Auto-saved."
+                        );
                       }}
                       className={`h-4 w-4 text-blue-600 border-stone-300 rounded focus:ring-blue-500 ${(!brokerageLogo || qrBrandingOption === "photo") ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
                     />
@@ -2750,16 +2984,19 @@ Thanks,
                         }
                         const targetVal = qrBrandingOption === "photo" ? "none" : "photo";
                         setQrBrandingOption(targetVal);
-                        setTimeout(() => {
-                          if (selectedEvent) {
-                            const updatedEvent = { ...selectedEvent, qrBrandingOption: targetVal };
-                            setSelectedEvent(updatedEvent);
-                            const updatedEvents = events.map(evt => evt.id === selectedEvent.id ? updatedEvent : evt);
-                            setEvents(updatedEvents);
-                            localStorage.setItem("open_house_events", JSON.stringify(updatedEvents));
-                          }
-                          toast.success(targetVal === "photo" ? "Agent Photo selected for dynamic QR presentation!" : "Standard clean barcode presentation restored.");
-                        }, 500);
+                        localStorage.setItem("qrBrandingOption", targetVal);
+                        if (selectedEvent) {
+                          const updatedEvent = { ...selectedEvent, qrBrandingOption: targetVal };
+                          setSelectedEvent(updatedEvent);
+                          const updatedEvents = events.map(evt => evt.id === selectedEvent.id ? updatedEvent : evt);
+                          setEvents(updatedEvents);
+                          localStorage.setItem("open_house_events", JSON.stringify(updatedEvents));
+                        }
+                        toast.success(
+                          targetVal === "photo" 
+                            ? "Agent Photo selected for dynamic QR presentation! Auto-saved." 
+                            : "Standard clean barcode presentation restored. Auto-saved."
+                        );
                       }}
                       className={`h-4 w-4 text-blue-600 border-stone-300 rounded focus:ring-blue-500 ${(!agentPhoto || qrBrandingOption === "logo") ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
                     />
@@ -2797,16 +3034,15 @@ Thanks,
                       checked={qrBrandingOption === "none"}
                       onChange={() => {
                         setQrBrandingOption("none");
-                        setTimeout(() => {
-                          if (selectedEvent) {
-                            const updatedEvent = { ...selectedEvent, qrBrandingOption: "none" };
-                            setSelectedEvent(updatedEvent);
-                            const updatedEvents = events.map(evt => evt.id === selectedEvent.id ? updatedEvent : evt);
-                            setEvents(updatedEvents);
-                            localStorage.setItem("open_house_events", JSON.stringify(updatedEvents));
-                          }
-                          toast.success("No image overlay chosen. Standard clean barcode presentation restored.");
-                        }, 500);
+                        localStorage.setItem("qrBrandingOption", "none");
+                        if (selectedEvent) {
+                          const updatedEvent = { ...selectedEvent, qrBrandingOption: "none" };
+                          setSelectedEvent(updatedEvent);
+                          const updatedEvents = events.map(evt => evt.id === selectedEvent.id ? updatedEvent : evt);
+                          setEvents(updatedEvents);
+                          localStorage.setItem("open_house_events", JSON.stringify(updatedEvents));
+                        }
+                        toast.success("No image overlay chosen (None). Standard clean barcode presentation restored. Auto-saved.");
                       }}
                       className="h-4 w-4 text-blue-600 border-stone-300 rounded focus:ring-blue-500 cursor-pointer"
                     />
@@ -2886,6 +3122,27 @@ Thanks,
                   </div>
                 ) : !checkoutComplete ? (
                   <form onSubmit={handleGuestSubmit} className="space-y-4">
+                    {/* Presenting Agent Identifier Banner */}
+                    <div className="bg-blue-50/90 border border-blue-200/80 rounded-xl p-3 flex items-center justify-between text-xs shadow-xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                          {(selectedEvent?.hostAgent || user?.name || "Agent").charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-[9.5px] font-black uppercase tracking-wider text-blue-700">Presenting Agent</p>
+                          <p className="font-extrabold text-stone-900 text-xs">
+                            {selectedEvent?.hostAgent || user?.name || "Luc Valade"}
+                            {selectedEvent?.otherAgentShowing ? (
+                              <span className="text-stone-500 font-normal"> (Co-Host: {selectedEvent.otherAgentShowing})</span>
+                            ) : null}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[9.5px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                        Event Host
+                      </span>
+                    </div>
+
                     <div className="space-y-1">
                       <Label htmlFor="guest-name" className="text-xs font-bold text-stone-700 uppercase">Full Name <span className="text-rose-500">*</span></Label>
                       <Input 
@@ -3048,21 +3305,66 @@ Thanks,
                     )}
 
                     {/* Custom questions if configured */}
-                    {customQuestions.map((q, idx) => (
-                      <div key={idx} className="space-y-1">
-                        <Label className="text-xs font-bold text-stone-700 uppercase">{q}</Label>
-                         <Input 
-                          placeholder="Client, please provide your reply" 
-                          value={guestCustomAnswers[q] || ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            const capitalized = val.charAt(0).toUpperCase() + val.slice(1);
-                            setGuestCustomAnswers({ ...guestCustomAnswers, [q]: capitalized });
-                          }}
-                          className="h-9 text-xs" 
-                        />
-                      </div>
-                    ))}
+                    {customQuestions.map((q, idx) => {
+                      const lower = q.toLowerCase();
+                      const isPreApproved = lower.includes("pre-approved") || lower.includes("preapproved") || lower.includes("pre-approval") || lower.includes("mortgage pre-approved");
+                      const isTimeframe = lower.includes("when are you planning") || lower.includes("target timeframe") || lower.includes("timeframe") || lower.includes("plan to buy") || lower.includes("planning to buy");
+
+                      if (isPreApproved) {
+                        return (
+                          <div key={idx} className="space-y-1">
+                            <Label className="text-xs font-bold text-stone-700 uppercase">
+                              Mortgage Pre-Approved?
+                            </Label>
+                            <select
+                              value={guestCustomAnswers[q] || ""}
+                              onChange={(e) => setGuestCustomAnswers({ ...guestCustomAnswers, [q]: e.target.value })}
+                              className="bg-white border w-full h-10 rounded-md outline-none px-3 text-xs text-stone-800 focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="">Select an option...</option>
+                              <option value="Yes">Yes</option>
+                              <option value="No">No</option>
+                            </select>
+                          </div>
+                        );
+                      }
+
+                      if (isTimeframe) {
+                        return (
+                          <div key={idx} className="space-y-1">
+                            <Label className="text-xs font-bold text-stone-700 uppercase">
+                              When are you planning to buy a home?
+                            </Label>
+                            <select
+                              value={guestCustomAnswers[q] || ""}
+                              onChange={(e) => setGuestCustomAnswers({ ...guestCustomAnswers, [q]: e.target.value })}
+                              className="bg-white border w-full h-10 rounded-md outline-none px-3 text-xs text-stone-800 focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="">Select timeframe...</option>
+                              <option value="0 - 12 Months">0 - 12 Months</option>
+                              <option value="13 - 24 Months">13 - 24 Months</option>
+                              <option value="25 - 48 Months">25 - 48 Months</option>
+                            </select>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <Label className="text-xs font-bold text-stone-700 uppercase">{q}</Label>
+                          <Input 
+                            placeholder="Client, please provide your reply" 
+                            value={guestCustomAnswers[q] || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const capitalized = val.charAt(0).toUpperCase() + val.slice(1);
+                              setGuestCustomAnswers({ ...guestCustomAnswers, [q]: capitalized });
+                            }}
+                            className="h-9 text-xs" 
+                          />
+                        </div>
+                      );
+                    })}
 
                     <div className="pt-2">
                       <label className="flex items-start gap-2.5 cursor-pointer text-[10px] text-black font-semibold leading-normal">
@@ -3260,7 +3562,19 @@ Thanks,
 
               {/* Checkin List (with VIP toggling, Mortgage opt-in view, private notes) */}
               <div className="space-y-3 pt-2">
-                <p className="text-[10px] font-black uppercase text-black font-semibold">Live Visitor Feed</p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[10px] font-black uppercase text-black font-semibold">Live Visitor Feed</p>
+                    <InfoGuide
+                      title="Live Visitor Feed & SMS Notifications"
+                      content="The Live Visitor Feed displays real-time check-ins as attendees register on the kiosk or scan the QR code. You will automatically receive an SMS notification on your registered mobile number for each new visitor, alerting you to hot buyer intent, mortgage interest, and contact details."
+                      iconClassName="h-3.5 w-3.5 text-stone-500 hover:text-blue-600"
+                    />
+                  </div>
+                  <span className="text-[9px] font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
+                    {liveLog.length} Registered
+                  </span>
+                </div>
                 
                 <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                   {liveLog.map((log, idx) => (

@@ -349,7 +349,6 @@ export default function ProtectedLayout() {
         { label: "Active Listings", path: "/app/listings?tab=active", icon: CheckCircle2 },
         { label: "Listings Performance", path: "/app/agent-listings", icon: Activity },
         { label: "Expired Listings", path: "/app/listings?tab=expired", icon: Clock },
-        { label: "Photo Enhancer / Declutter", path: "/app/listings/photo-enhancer", icon: Sparkles },
       ]
     },
     { label: "Open Houses", icon: Home, path: "/app/openhouses" },

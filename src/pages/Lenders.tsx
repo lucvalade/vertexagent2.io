@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { 
   Building2, 
@@ -688,20 +689,32 @@ export default function Lenders() {
                   <p className="text-[10px] text-slate-500 max-w-[240px] mt-1">
                     Upgrade to a <strong>Team or Brokerage Plan</strong> to manage compliance overrides and lock global office default sponsors.
                   </p>
+                  <Link
+                    to="/pricing"
+                    className="mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-8 px-4 rounded-xl shadow-md inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    Upgrade to Team / Brokerage Plan
+                  </Link>
                 </div>
               )}
               <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5">
-                <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <FolderLock className="h-4 w-4 text-pink-600" />
-                  Office Override Rules Policy
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <FolderLock className="h-4 w-4 text-pink-600" />
+                    Office Override Rules Policy
+                  </CardTitle>
+                </div>
                 <CardDescription className="text-xs text-slate-500">
                   Specify whether administrators enforce global co-branding or if individual listing overrides take precedence.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-5 space-y-4">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] uppercase font-black text-slate-600">Admin Preference Override Option</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] uppercase font-black text-slate-600 flex items-center gap-1.5">
+                      Admin Preference Override Option
+                    </Label>
+                  </div>
                   <select
                     value={adminPolicy.overrideOption}
                     onChange={(e) => {
@@ -713,6 +726,28 @@ export default function Lenders() {
                     <option value="listing_specific">Allow Listing-level Override (Default)</option>
                     <option value="enforced_office">Enforce Global Office Policy Lender</option>
                   </select>
+                </div>
+
+                {/* Explanatory Policy Guide Card with (?) Icon */}
+                <div className="p-3.5 bg-blue-50/60 border border-blue-100 rounded-xl text-left space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-blue-900 text-xs font-bold">
+                    <HelpCircle className="h-4 w-4 text-blue-600 shrink-0" />
+                    <span>Understanding Override Policy Options:</span>
+                  </div>
+                  <div className="space-y-2 text-[11px] text-slate-600 leading-relaxed">
+                    <div className="p-2 bg-white/80 rounded-lg border border-blue-100/50">
+                      <strong className="text-slate-900 font-bold block mb-0.5">
+                        1. Allow Listing-level Override (Default):
+                      </strong>
+                      Individual listing agents maintain autonomy to assign specific lender partners to individual listings. If no listing sponsor is set, the system falls back to the agent's preferred paired lender.
+                    </div>
+                    <div className="p-2 bg-white/80 rounded-lg border border-blue-100/50">
+                      <strong className="text-slate-900 font-bold block mb-0.5">
+                        2. Enforce Global Office Policy Lender:
+                      </strong>
+                      Locks a single, verified brokerage-wide corporate sponsor across all team listings and open house kiosks. Individual agent overrides are suppressed to guarantee uniform corporate compliance.
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">

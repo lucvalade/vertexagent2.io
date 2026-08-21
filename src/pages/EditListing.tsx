@@ -3174,6 +3174,51 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
         console.error("Failed to update listing on session update:", err);
       }
       setOpenHouseDate(dateLocalStr);
+
+      // Realtime synchronization to open_house_events, openHouseEvents collection, and window event listeners
+      try {
+        let localEvents: any[] = [];
+        const saved = localStorage.getItem("open_house_events");
+        if (saved) {
+          try { localEvents = JSON.parse(saved); } catch (e) {}
+        }
+        const existingIndex = localEvents.findIndex((evt: any) => evt.listingId === targetListingId || evt.sessionId === targetSession.session_id);
+        const eventPayload = {
+          id: targetSession.session_id || `event_${targetListingId}_${Date.now()}`,
+          sessionId: targetSession.session_id,
+          eventName: address ? `${address} Open House` : "Open House Session",
+          listingId: targetListingId,
+          listingAddress: address || "Listing Property",
+          eventDate: dateLocalStr,
+          startTime: formatTimeLocal(startDate),
+          endTime: formatTimeLocal(endDate),
+          hostAgent: agentName || user?.name || "Agent",
+          eventMode: "Hybrid",
+          gateToggle: !!enforcePhoneGate || !!enforceOptInConsent,
+          qrBrandingOption: qrBrandingOption || "none",
+          aiTourLinked: true,
+          lenderShown: true,
+          mortgageQuestion: true,
+          createdAt: Date.now()
+        };
+        if (existingIndex > -1) {
+          localEvents[existingIndex] = { ...localEvents[existingIndex], ...eventPayload };
+        } else {
+          localEvents.unshift(eventPayload);
+        }
+        localStorage.setItem("open_house_events", JSON.stringify(localEvents));
+
+        try {
+          await setDoc(doc(db, "openHouseEvents", eventPayload.id), eventPayload, { merge: true });
+        } catch (dbErr) {
+          console.warn("Could not save to openHouseEvents doc", dbErr);
+        }
+
+        window.dispatchEvent(new CustomEvent("openHouseEventsUpdated", { detail: eventPayload }));
+        window.dispatchEvent(new Event("storage"));
+      } catch (syncErr) {
+        console.error("Failed to sync open house event on session update:", syncErr);
+      }
     } else {
       try {
         const listingDoc = await getDoc(doc(db, "listings", targetListingId));
@@ -3193,6 +3238,18 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
         console.error("Failed to clear listing open house dates:", err);
       }
       setOpenHouseDate("");
+
+      try {
+        let localEvents: any[] = [];
+        const saved = localStorage.getItem("open_house_events");
+        if (saved) {
+          try { localEvents = JSON.parse(saved); } catch (e) {}
+        }
+        localEvents = localEvents.filter((evt: any) => evt.listingId !== targetListingId);
+        localStorage.setItem("open_house_events", JSON.stringify(localEvents));
+        window.dispatchEvent(new CustomEvent("openHouseEventsUpdated", { detail: { listingId: targetListingId, deleted: true } }));
+        window.dispatchEvent(new Event("storage"));
+      } catch (e) {}
     }
   };
 
@@ -4657,26 +4714,39 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
                   <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-left">
                     <h4 className="text-sm font-extrabold text-slate-800">Add Open House Session</h4>
                     <div className="space-y-2">
-                      <Label>Session Date</Label>
+                      <Label htmlFor="session-date-picker" className="cursor-pointer">Session Date</Label>
                       <div 
-                        className="relative cursor-pointer"
+                        className="relative cursor-pointer group"
                         onClick={(e) => {
-                          const inputEl = e.currentTarget.querySelector('input[type="date"]') as HTMLInputElement;
+                          const inputEl = document.getElementById('session-date-picker') as HTMLInputElement;
                           if (inputEl) {
                             try {
-                              inputEl.showPicker();
+                              inputEl.focus();
+                              if (typeof inputEl.showPicker === 'function') {
+                                inputEl.showPicker();
+                              }
                             } catch {}
                           }
                         }}
                       >
                         <Input
+                          id="session-date-picker"
                           type="date"
-                          className="h-10 text-sm font-medium border border-slate-200 focus-visible:ring-blue-500 bg-white cursor-pointer w-full"
+                          className="h-10 text-sm font-medium border border-slate-200 focus-visible:ring-blue-500 bg-white cursor-pointer w-full pr-10"
                           value={openHouseDate}
                           min={getTodayDateString()}
                           onClick={(e) => {
                             try {
-                              (e.currentTarget as HTMLInputElement).showPicker();
+                              if (typeof (e.currentTarget as HTMLInputElement).showPicker === 'function') {
+                                (e.currentTarget as HTMLInputElement).showPicker();
+                              }
+                            } catch {}
+                          }}
+                          onFocus={(e) => {
+                            try {
+                              if (typeof (e.currentTarget as HTMLInputElement).showPicker === 'function') {
+                                (e.currentTarget as HTMLInputElement).showPicker();
+                              }
                             } catch {}
                           }}
                           onChange={e => {
@@ -4692,6 +4762,11 @@ Format the revised description clearly in clean paragraphs (maximum 3 sentences 
                             setOpenHouseDate(nextDate);
                           }}
                         />
+                        <div 
+                          className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-blue-600 transition-colors"
+                        >
+                          <Calendar className="h-4 w-4" />
+                        </div>
                       </div>
                     </div>
 

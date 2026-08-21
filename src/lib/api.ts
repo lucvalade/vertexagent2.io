@@ -25,6 +25,9 @@ export interface Listing {
   team_id?: string;
   brokerage_id?: string;
   address: string;
+  title?: string;
+  isDummyData?: boolean;
+  demoLabel?: string;
   city?: string;
   province?: string;
   postalCode?: string;

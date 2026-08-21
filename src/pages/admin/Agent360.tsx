@@ -239,10 +239,20 @@ export default function Agent360() {
   const [searchQuery, setSearchQuery] = useState("");
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "ytd">("30d");
 
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId);
+  // Determine if the viewer has super admin privileges
+  const isSuperAdmin = user?.role === "ADMIN" && (user?.email === "luc.valade@gmail.com" || user?.accountType === "platform_admin");
+  const userBrokerage = user?.brokerage || (user as any)?.brokerageName || "Apex Realty Group";
+
+  // Filter agents by brokerage if not super admin, or allow scoped view
+  const scopedAgents = agents.filter((a) => {
+    if (isSuperAdmin) return true;
+    return a.brokerage.toLowerCase() === userBrokerage.toLowerCase() || a.email.toLowerCase() === user?.email?.toLowerCase();
+  });
+
+  const selectedAgent = scopedAgents.find((a) => a.id === selectedAgentId);
 
   // Filtered agents for selector dropdown / search
-  const filteredAgents = agents.filter(
+  const filteredAgents = scopedAgents.filter(
     (a) =>
       a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       a.brokerage.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -252,22 +262,76 @@ export default function Agent360() {
   // Metrics calculation
   const totalLeads = selectedAgent
     ? selectedAgent.totalLeads
-    : agents.reduce((acc, a) => acc + a.totalLeads, 0);
+    : scopedAgents.reduce((acc, a) => acc + a.totalLeads, 0);
 
   const activeTours = selectedAgent
     ? selectedAgent.activeTours
-    : agents.reduce((acc, a) => acc + a.activeTours, 0);
+    : scopedAgents.reduce((acc, a) => acc + a.activeTours, 0);
 
   const avgConversion = selectedAgent
     ? selectedAgent.conversionRate
-    : (agents.reduce((acc, a) => acc + a.conversionRate, 0) / agents.length).toFixed(1);
+    : scopedAgents.length > 0 
+      ? (scopedAgents.reduce((acc, a) => acc + a.conversionRate, 0) / scopedAgents.length).toFixed(1)
+      : "0.0";
 
   const totalListings = selectedAgent
     ? selectedAgent.totalListings
-    : agents.reduce((acc, a) => acc + a.totalListings, 0);
+    : scopedAgents.reduce((acc, a) => acc + a.totalListings, 0);
 
   const handleExportReport = () => {
-    toast.success(`Agent 360 Performance Report exported for ${selectedAgent ? selectedAgent.name : "All Agents"}`);
+    const exportTarget = selectedAgent ? [selectedAgent] : filteredAgents;
+    if (exportTarget.length === 0) {
+      toast.error("No agent records available to export.");
+      return;
+    }
+
+    const headers = [
+      "Agent ID",
+      "Agent Name",
+      "Email",
+      "Phone",
+      "Brokerage",
+      "Tier",
+      "CRM System",
+      "CRM Status",
+      "Paired Lender",
+      "Total Listings",
+      "Total Leads",
+      "Active AI Tours",
+      "Conversion Rate (%)"
+    ];
+
+    const csvRows = [
+      headers.join(","),
+      ...exportTarget.map(a => [
+        `"${a.id}"`,
+        `"${(a.name || '').replace(/"/g, '""')}"`,
+        `"${a.email || ''}"`,
+        `"${a.phone || ''}"`,
+        `"${(a.brokerage || '').replace(/"/g, '""')}"`,
+        `"${a.tier || 'Agent Pro'}"`,
+        `"${a.crmType || 'Follow Up Boss'}"`,
+        `"${a.crmConnected ? 'Connected' : 'Pending'}"`,
+        `"${(a.pairedLender || '').replace(/"/g, '""')}"`,
+        a.totalListings || 0,
+        a.totalLeads || 0,
+        a.activeTours || 0,
+        a.conversionRate || 0
+      ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvRows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = `Agent_360_Summary_${selectedAgent ? selectedAgent.name.replace(/\s+/g, '_') : 'Brokerage_Agents'}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`✨ Exported 360 Summary (${exportTarget.length} agents) to ${filename}`);
   };
 
   return (

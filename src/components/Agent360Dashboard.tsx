@@ -25,10 +25,12 @@ import {
   FileText,
   PieChart,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Download
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { toast } from "sonner";
@@ -64,6 +66,7 @@ export interface Agent360Record {
 
 export default function Agent360Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [agents, setAgents] = useState<Agent360Record[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -74,6 +77,9 @@ export default function Agent360Dashboard() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isMessageOpen, setIsMessageOpen] = useState(false);
   const [messageText, setMessageText] = useState("");
+
+  const isSuperAdmin = user?.role === "ADMIN" && (user?.email === "luc.valade@gmail.com" || user?.accountType === "platform_admin");
+  const userBrokerage = user?.brokerage || (user as any)?.brokerageName || "Vertex Realty Group";
 
   // Seed data merged with real Firestore user records
   useEffect(() => {
@@ -276,7 +282,16 @@ export default function Agent360Dashboard() {
           }
         });
 
-        setAgents(combinedList);
+        // Filter by user's brokerage if not super admin
+        const filteredByBrokerage = combinedList.filter(a => {
+          if (isSuperAdmin) return true;
+          return (
+            a.brokerage.toLowerCase() === userBrokerage.toLowerCase() ||
+            a.email.toLowerCase() === user?.email?.toLowerCase()
+          );
+        });
+
+        setAgents(filteredByBrokerage);
       } catch (err) {
         console.error("Error loading Agent 360 data:", err);
       } finally {
@@ -285,7 +300,7 @@ export default function Agent360Dashboard() {
     };
 
     fetchAgentData();
-  }, []);
+  }, [user, isSuperAdmin, userBrokerage]);
 
   // Calculate aggregates
   const totalAgentsCount = agents.length;
@@ -341,6 +356,67 @@ export default function Agent360Dashboard() {
     setMessageText("");
   };
 
+  const handleExportSummaryCSV = () => {
+    if (filteredAgents.length === 0) {
+      toast.error("No agent records available to export.");
+      return;
+    }
+
+    const headers = [
+      "Agent ID",
+      "Agent Name",
+      "Email",
+      "Phone",
+      "Brokerage",
+      "Team",
+      "Status",
+      "Leads Captured",
+      "Active AI Tours",
+      "Listings",
+      "Mortgage Opt-Ins",
+      "Conversion Rate (%)",
+      "Sora Interactions",
+      "CRM System",
+      "CRM Sync Status",
+      "Last Active"
+    ];
+
+    const csvRows = [
+      headers.join(","),
+      ...filteredAgents.map(a => [
+        `"${a.id}"`,
+        `"${(a.name || '').replace(/"/g, '""')}"`,
+        `"${a.email || ''}"`,
+        `"${a.phone || ''}"`,
+        `"${(a.brokerage || '').replace(/"/g, '""')}"`,
+        `"${(a.team || '').replace(/"/g, '""')}"`,
+        `"${a.status}"`,
+        a.leadsCaptured || 0,
+        a.activeTours || 0,
+        a.listingsCount || 0,
+        a.mortgageOptInCount || 0,
+        a.conversionRate || 0,
+        a.soraInteractions || 0,
+        `"${a.crmConnected || 'None'}"`,
+        `"${a.crmSyncStatus || 'Synced'}"`,
+        `"${a.lastActive || ''}"`
+      ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvRows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = `Agent_360_Telemetry_${userBrokerage.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`✨ Exported 360 Summary (${filteredAgents.length} agents) to ${filename}`);
+  };
+
   return (
     <div className="space-y-8 text-left">
       {/* Header Banner */}
@@ -355,14 +431,20 @@ export default function Agent360Dashboard() {
               Agent 360 Dashboard
             </h1>
             <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-              Complete multi-agent performance hub. Track lead generation volume, active AI Walkthrough Voice tours, mortgage consent conversions, and live CRM sync velocity across your entire team.
+              Complete multi-agent performance hub for <span className="font-bold text-white underline decoration-blue-400">{userBrokerage}</span>. Track lead generation volume, active AI Walkthrough Voice tours, mortgage consent conversions, and live CRM sync velocity.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <Button
+              onClick={handleExportSummaryCSV}
+              className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs px-4 py-3 rounded-xl border border-white/20 shadow-sm flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <Download className="h-4 w-4 text-blue-300" /> Export 360 Summary
+            </Button>
             <Button
               onClick={() => navigate("/app/admin/users/invite")}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-lg shadow-blue-900/50 flex items-center gap-2"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl shadow-lg shadow-blue-900/50 flex items-center gap-2 cursor-pointer"
             >
               <Users className="h-4 w-4" /> Onboard New Agent
             </Button>
@@ -373,7 +455,7 @@ export default function Agent360Dashboard() {
                 setLoading(true);
                 setTimeout(() => setLoading(false), 600);
               }}
-              className="bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-200 font-bold text-xs px-4 py-3 rounded-xl"
+              className="bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-200 font-bold text-xs px-4 py-3 rounded-xl cursor-pointer"
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
